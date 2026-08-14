@@ -1,0 +1,35 @@
+name: Build Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build universal .app (Intel + Apple Silicon)
+        run: ./scripts/make-app.sh --universal
+
+      - name: Package zip
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          STAGE="dist/拉比克-${TAG}"
+          mkdir -p "$STAGE"
+          cp -R "build/拉比克.app" "$STAGE/"
+          cp Resources/安装说明.txt "$STAGE/"
+          ditto -c -k --sequesterRsrc --keepParent "$STAGE" "dist/拉比克-${TAG}-macOS.zip"
+          shasum -a 256 "dist/拉比克-${TAG}-macOS.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RubickBoard-${{ github.ref_name }}
+          path: dist/*.zip
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
