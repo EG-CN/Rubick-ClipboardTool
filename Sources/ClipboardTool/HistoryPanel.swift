@@ -232,6 +232,8 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
                 }
                 return nil
             }
+            if pk.matches(.translate, event: event) { self.translateSelected(); return nil }
+            if pk.matches(.ocr, event: event) { self.ocrSelected(); return nil }
             if pk.matches(.quick, event: event), let n = pk.quickDigit(event) {
                 self.activate(at: n - 1)
                 return nil
@@ -370,6 +372,47 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         if selectedIndex >= filteredItems().count { selectedIndex = max(0, filteredItems().count - 1) }
         notifySelection()
         Toast.shared.show("已钉在桌面 · 双击贴图取消")
+    }
+
+    // MARK: v2.0 翻译 / OCR
+
+    func translateSelected() {
+        let items = filteredItems()
+        guard items.indices.contains(selectedIndex) else { return }
+        translate(items[selectedIndex])
+    }
+
+    func translate(_ item: ClipboardItem) {
+        guard item.kind == .text, let text = item.text, !text.isEmpty else {
+            Toast.shared.show("该条目不是文本")
+            return
+        }
+        Toast.shared.show("翻译中…（\(TranslationService.shared.engineLabel)）")
+        TranslationService.shared.translate(text) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let translated):
+                    TextResultPanel.shared.show(kind: .translation, source: text, result: translated)
+                case .failure(let err):
+                    Toast.shared.show("翻译失败：\(err.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    func ocrSelected() {
+        let items = filteredItems()
+        guard items.indices.contains(selectedIndex) else { return }
+        ocr(items[selectedIndex])
+    }
+
+    func ocr(_ item: ClipboardItem) {
+        guard item.kind == .image, let img = store.imageFor(item) else {
+            Toast.shared.show("该条目不是图片")
+            return
+        }
+        close()
+        ImageOCRController.shared.show(image: img)
     }
 
     private func notifySelection() {
@@ -584,6 +627,16 @@ struct HistoryPanelView: View {
                     HistoryPanelController.shared.activate(at: index, copyOnly: true)
                 }
             )
+            .contextMenu {
+                if item.kind == .text {
+                    Button("翻译") { HistoryPanelController.shared.translate(item) }
+                } else {
+                    Button("识别文字…") { HistoryPanelController.shared.ocr(item) }
+                    Button("钉图") { HistoryPanelController.shared.pin(item) }
+                }
+                Divider()
+                Button("删除", role: .destructive) { HistoryPanelController.shared.delete(at: index) }
+            }
 
             // 悬停操作按钮（独立命中区域）
             VStack(spacing: 4) {
@@ -646,7 +699,7 @@ struct HistoryPanelView: View {
 
     private var footer: some View {
         VStack(spacing: 4) {
-            Text(panelKeys.hintText() + " · ⌥点=仅复制")
+            Text(panelKeys.hintText() + " · ⌥点=仅复制 · 右键=翻译/识别")
                 .font(.system(size: 9.5))
                 .foregroundStyle(RubickTheme.muted(scheme).opacity(0.8))
                 .lineLimit(1)

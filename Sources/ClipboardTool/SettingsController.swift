@@ -46,6 +46,7 @@ final class SettingsController {
 enum RecorderTarget: Equatable {
     case global(HotkeyManager.Action)
     case panel(PanelKeyConfig.PanelAction)
+    case annotate(AnnotateKeyConfig.Action)
 }
 
 final class HotkeyRecorder: ObservableObject {
@@ -97,6 +98,8 @@ final class HotkeyRecorder: ObservableObject {
             recordGlobal(action, event: event, mods: mods, keyCode: keyCode, display: display)
         case .panel(let action):
             recordPanel(action, event: event, mods: mods, keyCode: keyCode, display: display)
+        case .annotate(let action):
+            recordAnnotate(action, event: event, mods: mods, keyCode: keyCode, display: display)
         }
     }
 
@@ -163,6 +166,19 @@ final class HotkeyRecorder: ObservableObject {
         Toast.shared.show("已更新：\(PanelKeyConfig.shared.label(action)) → \(display)")
         stop()
     }
+
+    // MARK: 标注编辑器快捷键校验（仅标注编辑器内生效，独立上下文不与其他类交叉冲突）
+
+    private func recordAnnotate(_ action: AnnotateKeyConfig.Action, event: NSEvent, mods: UInt32, keyCode: UInt32, display: String) {
+        for (other, k) in AnnotateKeyConfig.shared.keys
+        where other != action && k.keyCode == UInt16(keyCode) && k.mods == mods {
+            fail("与「\(AnnotateKeyConfig.shared.label(other))」冲突，请换一个")
+            return
+        }
+        AnnotateKeyConfig.shared.update(action, keyCode: UInt16(keyCode), mods: mods, display: display)
+        Toast.shared.show("已更新：\(AnnotateKeyConfig.shared.label(action)) → \(display)")
+        stop()
+    }
 }
 
 func actionLabel(_ action: HotkeyManager.Action) -> String {
@@ -187,15 +203,26 @@ struct SettingsView: View {
     @State private var keepOpen = UserDefaults.standard.object(forKey: "keepPanelOpen") as? Bool ?? true
     @State private var limit: Int = HistoryStore.shared.limit
     @State private var trusted = AXIsProcessTrusted()
+    @State private var translateEngine = UserDefaults.standard.string(forKey: "translate.engine") ?? "apple"
+    @State private var translateDirection = UserDefaults.standard.string(forKey: "translate.direction") ?? "auto"
+    @State private var llmBaseURL = UserDefaults.standard.string(forKey: "llm.baseURL") ?? ""
+    @State private var llmModel = UserDefaults.standard.string(forKey: "llm.model") ?? ""
+    @State private var llmKey = UserDefaults.standard.string(forKey: "llm.apiKey") ?? ""
+    @State private var ocrLang = UserDefaults.standard.string(forKey: "ocr.language") ?? "auto"
+    @State private var snapOn = UserDefaults.standard.object(forKey: "capture.snap") as? Bool ?? true
+    @State private var snapThreshold: Double = UserDefaults.standard.object(forKey: "capture.snapThreshold") as? Double ?? 8
+    @State private var captureMode = UserDefaults.standard.string(forKey: "capture.mode") ?? "auto"
+    @State private var llmTesting = false
 
     enum Pane: String, CaseIterable {
-        case general = "通用", hotkeys = "快捷键", history = "历史", about = "关于"
+        case general = "通用", hotkeys = "快捷键", history = "历史", smart = "智能识别", about = "关于"
 
         var icon: String {
             switch self {
             case .general: return "gearshape"
             case .hotkeys: return "keyboard"
             case .history: return "clock.arrow.circlepath"
+            case .smart: return "text.viewfinder"
             case .about: return "info.circle"
             }
         }
@@ -321,6 +348,7 @@ struct SettingsView: View {
         case .general: generalPane
         case .hotkeys: hotkeysPane
         case .history: historyPane
+        case .smart: smartPane
         case .about: aboutPane
         }
     }
@@ -428,6 +456,35 @@ struct SettingsView: View {
                     }
                 }
                 settingCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("屏幕录制权限（自绘截图 + 窗口吸附）")
+                                    .font(.system(size: 12.5))
+                                Text(CaptureController.screenRecordingAllowed()
+                                     ? "已授权，截图使用自绘选框并支持窗口吸附"
+                                     : "未授权，截图自动回退系统框选（无吸附）；重新授权后打开设置页刷新")
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(RubickTheme.muted(scheme))
+                            }
+                            Spacer()
+                            if CaptureController.screenRecordingAllowed() {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(RubickTheme.emerald)
+                            } else {
+                                Button("打开系统设置") {
+                                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .tint(RubickTheme.emerald)
+                            }
+                        }
+                    }
+                }
+                settingCard {
                     HStack {
                         Text("外观").font(.system(size: 12.5))
                         Spacer()
@@ -483,6 +540,16 @@ struct SettingsView: View {
                     }
                     .background(RoundedRectangle(cornerRadius: 8).fill(RubickTheme.surfaceHigh(scheme)))
                 }
+                VStack(alignment: .leading, spacing: 4) {
+                    sectionLabel("标注编辑器快捷键（截图标注时生效）")
+                    VStack(spacing: 0) {
+                        ForEach(AnnotateKeyConfig.Action.allCases, id: \.rawValue) { action in
+                            annotateRow(action)
+                            Divider().opacity(0.4)
+                        }
+                    }
+                    .background(RoundedRectangle(cornerRadius: 8).fill(RubickTheme.surfaceHigh(scheme)))
+                }
                 if let err = recorder.errorMessage {
                     Text(err)
                         .font(.system(size: 11.5))
@@ -496,6 +563,9 @@ struct SettingsView: View {
                         }
                         for action in PanelKeyConfig.PanelAction.allCases {
                             PanelKeyConfig.shared.reset(action)
+                        }
+                        for action in AnnotateKeyConfig.Action.allCases {
+                            AnnotateKeyConfig.shared.reset(action)
                         }
                         recorder.stop()
                     }
@@ -574,6 +644,30 @@ struct SettingsView: View {
         .padding(.vertical, 7)
     }
 
+    private func annotateRow(_ action: AnnotateKeyConfig.Action) -> some View {
+        let key = AnnotateKeyConfig.shared.keys[action]!
+        let isRec = recorder.target == .annotate(action)
+        return HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(AnnotateKeyConfig.shared.label(action)).font(.system(size: 12.5))
+                Text("标注内").font(.system(size: 10)).foregroundStyle(RubickTheme.muted(scheme))
+            }
+            Spacer()
+            keyDisplay(isRec ? "请按下新快捷键…" : key.display, recording: isRec)
+            Button(isRec ? "取消" : "录制") {
+                if isRec { recorder.stop() } else { recorder.start(.annotate(action)) }
+            }
+            .buttonStyle(.bordered).controlSize(.small).tint(RubickTheme.emerald)
+            Button("恢复默认") {
+                AnnotateKeyConfig.shared.reset(action)
+                recorder.stop()
+            }
+            .buttonStyle(.bordered).controlSize(.small)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+    }
+
     // MARK: 历史
 
     private var historyPane: some View {
@@ -619,6 +713,160 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: 智能识别（v2.0）
+
+    private var smartPane: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                paneHeader("智能识别", subtitle: "翻译与 OCR 均本地优先；大模型为可选增强。")
+                settingCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("翻译引擎").font(.system(size: 12.5))
+                            Spacer()
+                            Picker("", selection: $translateEngine) {
+                                Text("Apple 离线").tag("apple")
+                                Text("大模型").tag("llm")
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 180)
+                            .onChange(of: translateEngine) { v in
+                                UserDefaults.standard.set(v, forKey: "translate.engine")
+                            }
+                        }
+                        HStack {
+                            Text("翻译方向").font(.system(size: 12.5))
+                            Spacer()
+                            Picker("", selection: $translateDirection) {
+                                Text(TranslateDirection.auto.label).tag(TranslateDirection.auto.rawValue)
+                                Text(TranslateDirection.zhToEn.label).tag(TranslateDirection.zhToEn.rawValue)
+                                Text(TranslateDirection.enToZh.label).tag(TranslateDirection.enToZh.rawValue)
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 180)
+                            .onChange(of: translateDirection) { v in
+                                UserDefaults.standard.set(v, forKey: "translate.direction")
+                            }
+                        }
+                        Text("Apple 离线翻译完全免费、不上传；大模型翻译质量更高，需自行配置接口。")
+                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
+                    }
+                }
+                settingCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("大模型接口（OpenAI 兼容）")
+                            .font(.system(size: 12.5, weight: .semibold))
+                        TextField("接口地址（如 https://api.xiaomimimo.com/v1）", text: $llmBaseURL)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 11))
+                            .onChange(of: llmBaseURL) { v in UserDefaults.standard.set(v, forKey: "llm.baseURL") }
+                        TextField("模型名（如 mimo-v2.5）", text: $llmModel)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 11))
+                            .onChange(of: llmModel) { v in UserDefaults.standard.set(v, forKey: "llm.model") }
+                        SecureField("API Key", text: $llmKey)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 11))
+                            .onChange(of: llmKey) { v in UserDefaults.standard.set(v, forKey: "llm.apiKey") }
+                        HStack {
+                            Text("Key 仅保存在本机 UserDefaults，不随历史同步。")
+                                .font(.system(size: 10)).foregroundStyle(RubickTheme.muted(scheme).opacity(0.8))
+                            Spacer()
+                            Button(llmTesting ? "测试中…" : "测试连接") {
+                                testLLM()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .tint(RubickTheme.emerald)
+                            .disabled(llmTesting || llmBaseURL.isEmpty || llmModel.isEmpty || llmKey.isEmpty)
+                        }
+                    }
+                }
+                settingCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("OCR 识别语言").font(.system(size: 12.5))
+                            Spacer()
+                            Picker("", selection: $ocrLang) {
+                                ForEach(OCRLanguage.allCases, id: \.rawValue) { l in
+                                    Text(l.label).tag(l.rawValue)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 150)
+                            .onChange(of: ocrLang) { v in
+                                UserDefaults.standard.set(v, forKey: "ocr.language")
+                            }
+                        }
+                        Text("OCR 由系统 Vision 引擎在本机完成，离线、免费、无次数限制。")
+                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
+                    }
+                }
+                settingCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle("窗口吸附", isOn: $snapOn)
+                            .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
+                            .onChange(of: snapOn) { v in UserDefaults.standard.set(v, forKey: "capture.snap") }
+                        Text("悬停窗口高亮、单击直截整窗；选框边缘自动吸附窗口边界。")
+                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
+                        HStack {
+                            Text("吸附阈值").font(.system(size: 12.5))
+                            Spacer()
+                            Slider(value: $snapThreshold, in: 2...16, step: 1)
+                                .frame(width: 180)
+                                .onChange(of: snapThreshold) { v in
+                                    UserDefaults.standard.set(v, forKey: "capture.snapThreshold")
+                                }
+                            Text("\(Int(snapThreshold)) pt")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(RubickTheme.muted(scheme))
+                                .frame(width: 40)
+                        }
+                        HStack {
+                            Text("截图模式").font(.system(size: 12.5))
+                            Spacer()
+                            Picker("", selection: $captureMode) {
+                                Text("自动").tag("auto")
+                                Text("自绘选框").tag("custom")
+                                Text("系统框选").tag("system")
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 220)
+                            .onChange(of: captureMode) { v in
+                                UserDefaults.standard.set(v, forKey: "capture.mode")
+                            }
+                        }
+                        Text("自动：已授权屏幕录制 → 自绘（含吸附），否则回退系统框选；标注编辑器两种模式都可用。")
+                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
+                    }
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private func testLLM() {
+        llmTesting = true
+        let cfg = LLMConfig(baseURL: llmBaseURL, model: llmModel, apiKey: llmKey)
+        guard let req = try? TranslationService.llmRequest(config: cfg, systemPrompt: "ping", userText: "ping") else {
+            llmTesting = false
+            Toast.shared.show("接口地址无效")
+            return
+        }
+        URLSession.shared.dataTask(with: req) { data, _, err in
+            DispatchQueue.main.async {
+                llmTesting = false
+                if err == nil, let data = data,
+                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   obj["choices"] != nil {
+                    Toast.shared.show("连接成功 · 大模型可用")
+                } else {
+                    Toast.shared.show("连接失败：\(err?.localizedDescription ?? "响应异常")")
+                }
+            }
+        }.resume()
+    }
+
     // MARK: 关于
 
     private var aboutPane: some View {
@@ -631,7 +879,7 @@ struct SettingsView: View {
                 .tracking(1.2)
                 .textCase(.uppercase)
                 .foregroundStyle(RubickTheme.primary(scheme).opacity(0.85))
-            Text("版本 1.1.0")
+            Text("版本 2.0.0")
                 .font(.system(size: 11))
                 .foregroundStyle(RubickTheme.muted(scheme))
             Text("菜单栏常驻的剪贴板历史与截图钉图工具。\n偷取（复制）、施展（粘贴）、铭刻（钉图），尽在魔典之中。\nSwift + SwiftUI 原生开发，数据仅保存在本机。")

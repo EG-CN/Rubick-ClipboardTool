@@ -5,7 +5,7 @@ import Carbon.HIToolbox
 
 final class PanelKeyConfig: ObservableObject {
     enum PanelAction: String, CaseIterable {
-        case navUp, navDown, paste, close, deleteItem, pin, quick
+        case navUp, navDown, paste, close, deleteItem, pin, translate, ocr, quick
     }
 
     struct Key {
@@ -33,6 +33,8 @@ final class PanelKeyConfig: ObservableObject {
         keys[.close] = read(d, "pk.close", keyCode: UInt16(kVK_Escape), mods: 0, display: "⎋")
         keys[.deleteItem] = read(d, "pk.delete", keyCode: UInt16(kVK_Delete), mods: 0, display: "⌫")
         keys[.pin] = read(d, "pk.pin", keyCode: UInt16(kVK_ANSI_P), mods: 0, display: "P")
+        keys[.translate] = read(d, "pk.translate", keyCode: UInt16(kVK_ANSI_T), mods: 0, display: "T")
+        keys[.ocr] = read(d, "pk.ocr", keyCode: UInt16(kVK_ANSI_O), mods: 0, display: "O")
         keys[.quick] = read(d, "pk.quick", keyCode: UInt16(kVK_ANSI_1), mods: UInt32(cmdKey), display: "⌘1–9", quick: true)
     }
 
@@ -61,6 +63,8 @@ final class PanelKeyConfig: ObservableObject {
         case .close: def = Key(keyCode: UInt16(kVK_Escape), mods: 0, display: "⎋", quick: false)
         case .deleteItem: def = Key(keyCode: UInt16(kVK_Delete), mods: 0, display: "⌫", quick: false)
         case .pin: def = Key(keyCode: UInt16(kVK_ANSI_P), mods: 0, display: "P", quick: false)
+        case .translate: def = Key(keyCode: UInt16(kVK_ANSI_T), mods: 0, display: "T", quick: false)
+        case .ocr: def = Key(keyCode: UInt16(kVK_ANSI_O), mods: 0, display: "O", quick: false)
         case .quick: def = Key(keyCode: UInt16(kVK_ANSI_1), mods: UInt32(cmdKey), display: "⌘1–9", quick: true)
         }
         update(action, keyCode: def.keyCode, mods: def.mods, display: def.display, quick: def.quick)
@@ -74,6 +78,8 @@ final class PanelKeyConfig: ObservableObject {
         case .close: return "pk.close"
         case .deleteItem: return "pk.delete"
         case .pin: return "pk.pin"
+        case .translate: return "pk.translate"
+        case .ocr: return "pk.ocr"
         case .quick: return "pk.quick"
         }
     }
@@ -110,6 +116,8 @@ final class PanelKeyConfig: ObservableObject {
         case .close: return "关闭面板"
         case .deleteItem: return "删除所选条目"
         case .pin: return "钉图"
+        case .translate: return "翻译所选条目"
+        case .ocr: return "识别图片文字"
         case .quick: return "快速选择前 9 条"
         }
     }
@@ -123,6 +131,8 @@ final class PanelKeyConfig: ObservableObject {
         let del = k[.deleteItem]?.display ?? "⌫"
         let close = k[.close]?.display ?? "⎋"
         let quick = k[.quick]?.display ?? "⌘1–9"
-        return "\(up) \(down) 选择 · \(paste) 粘贴 · \(del) 删除 · \(close) 关闭 · \(quick) 快速选择"
+        let translate = k[.translate]?.display ?? "T"
+        let ocr = k[.ocr]?.display ?? "O"
+        return "\(up) \(down) 选择 · \(paste) 粘贴 · \(del) 删除 · \(translate) 翻译 · \(ocr) 识别 · \(close) 关闭 · \(quick) 快选"
     }
 }

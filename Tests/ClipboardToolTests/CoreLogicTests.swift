@@ -73,11 +73,11 @@ final class PanelKeyConfigTests: XCTestCase {
 
     func testDefaultsPresent() {
         let cfg = PanelKeyConfig()
-        XCTAssertEqual(cfg.keys.count, 7)
+        XCTAssertEqual(cfg.keys.count, 9)
         XCTAssertEqual(cfg.keys[.navUp]?.display, "↑")
         XCTAssertEqual(cfg.keys[.paste]?.display, "↵")
         XCTAssertTrue(cfg.hintText().contains("选择"))
-        XCTAssertTrue(cfg.hintText().contains("快速选择"))
+        XCTAssertTrue(cfg.hintText().contains("快选"))
     }
 
     func testArrowKeyMatching() {

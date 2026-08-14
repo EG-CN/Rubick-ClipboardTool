@@ -93,6 +93,7 @@ struct PinImageView: View {
 
     @State private var fitScale: CGFloat = 1
     @State private var hovering = false
+    @State private var ocrMode = false
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -126,12 +127,22 @@ struct PinImageView: View {
 
                 Divider().opacity(0.4)
 
-                Image(nsImage: image)
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: image.size.width * fitScale * model.zoom,
-                           height: image.size.height * fitScale * model.zoom)
-                    .padding(10)
+                ZStack {
+                    Image(nsImage: image)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: image.size.width * fitScale * model.zoom,
+                               height: image.size.height * fitScale * model.zoom)
+                    if ocrMode {
+                        OCRPinOverlay(scale: fitScale * model.zoom) { rect in
+                            ocrMode = false
+                            runPinOCR(rect)
+                        } onExit: {
+                            ocrMode = false
+                        }
+                    }
+                }
+                .padding(10)
             }
             .background(
                 RoundedRectangle(cornerRadius: 12)
@@ -147,6 +158,7 @@ struct PinImageView: View {
             .contentShape(Rectangle())
             .onTapGesture(count: 2) { onClose() }
             .contextMenu {
+                Button("识别文字…") { ocrMode = true }
                 Button("复制图片") { writeImageToPasteboard(image) }
                 Button("另存为 PNG…") { saveImageAsPng(image) }
                 Divider()
@@ -186,6 +198,40 @@ struct PinImageView: View {
         .animation(.easeOut(duration: 0.2), value: hovering)
     }
 
+    /// 钉图 OCR：显示坐标 → 图片点坐标 → 像素坐标 → Vision 识别（功能清单 12.2.1）
+    private func runPinOCR(_ displayRect: CGRect?) {
+        guard let cg = image.cgImage() else {
+            Toast.shared.show("无法读取图片")
+            return
+        }
+        let displayScale = max(fitScale * model.zoom, 0.001)
+        let pixelScale = CGFloat(cg.width) / max(image.size.width, 1)
+        let rectInPixels: CGRect?
+        if let r = displayRect {
+            let inPoints = CGRect(x: r.minX / displayScale, y: r.minY / displayScale,
+                                  width: r.width / displayScale, height: r.height / displayScale)
+            rectInPixels = CGRect(x: inPoints.minX * pixelScale, y: inPoints.minY * pixelScale,
+                                  width: inPoints.width * pixelScale, height: inPoints.height * pixelScale)
+        } else {
+            rectInPixels = nil
+        }
+        Toast.shared.show("正在识别文字…")
+        OCRService.shared.recognize(image: image, rect: rectInPixels) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let r):
+                    guard !r.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                        Toast.shared.show("该区域未识别到文字")
+                        return
+                    }
+                    TextResultPanel.shared.show(kind: .ocr, source: "", result: r.text)
+                case .failure(let err):
+                    Toast.shared.show("识别失败：\(err.localizedDescription)")
+                }
+            }
+        }
+    }
+
     private func hoverAction(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
@@ -205,5 +251,74 @@ struct PinImageView: View {
         let imgH = image.size.height * fitScale * model.zoom
         return CGSize(width: max(imgW, 120) + inner + padding,
                       height: imgH + header + inner + padding)
+    }
+}
+
+// MARK: - 钉图 OCR 划选覆盖层
+
+struct OCRPinOverlay: View {
+    let scale: CGFloat
+    let onDone: (CGRect?) -> Void
+    let onExit: () -> Void
+
+    @State private var start: CGPoint?
+    @State private var current: CGPoint?
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.28)
+            if let sel = selectionRect {
+                Rectangle()
+                    .strokeBorder(RubickTheme.emeraldBright, lineWidth: 1.5)
+                    .background(Rectangle().fill(RubickTheme.emerald.opacity(0.15)))
+                    .frame(width: sel.width, height: sel.height)
+                    .position(x: sel.midX, y: sel.midY)
+            }
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: onExit) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 13))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white.opacity(0.85))
+                    .help("退出识别")
+                    .padding(6)
+                }
+                Spacer()
+                Text("拖拽划选 · 点一下识别整图")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(.black.opacity(0.55)))
+                    .padding(.bottom, 6)
+            }
+        }
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { v in
+                    start = start ?? v.startLocation
+                    current = v.location
+                }
+                .onEnded { _ in
+                    let sel = selectionRect
+                    start = nil
+                    current = nil
+                    if let s = sel, s.width >= 4, s.height >= 4 {
+                        onDone(s)
+                    } else {
+                        onDone(nil)   // 单击 = 整图识别
+                    }
+                }
+        )
+    }
+
+    private var selectionRect: CGRect? {
+        guard let a = start, let b = current else { return nil }
+        return CGRect(x: min(a.x, b.x), y: min(a.y, b.y),
+                      width: abs(a.x - b.x), height: abs(a.y - b.y))
     }
 }
