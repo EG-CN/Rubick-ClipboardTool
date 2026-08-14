@@ -75,10 +75,10 @@ Utilities.swift            剪贴板写入 / 模拟粘贴 / 权限引导 / 另�
 
 ## 分发与共享（GitHub Releases）
 
-1. 在 GitHub 新建空仓库（如 `sunrunyu/ClipboardTool`），不要勾选 README；
+1. 在 GitHub 新建空仓库（如 `EG-CN/Rubick-ClipboardTool`），不要勾选 README；
 2. 推送本仓库（用 HTTPS 地址；首次推送要「密码」时粘贴 Personal Access Token，见下）：
    ```bash
-   git remote add origin https://github.com/<你的用户名>/ClipboardTool.git
+   git remote add origin https://github.com/EG-CN/Rubick-ClipboardTool.git
    git push -u origin main
    ```
    > Token 创建：github.com → 头像 → Settings → 最底部 Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic) → 勾选 `repo` → Generate → 复制 `ghp_` 开头的串。
