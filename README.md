@@ -76,11 +76,13 @@ Utilities.swift            剪贴板写入 / 模拟粘贴 / 权限引导 / 另�
 ## 分发与共享（GitHub Releases）
 
 1. 在 GitHub 新建空仓库（如 `sunrunyu/ClipboardTool`），不要勾选 README；
-2. 推送本仓库：
+2. 推送本仓库（用 HTTPS 地址；首次推送要「密码」时粘贴 Personal Access Token，见下）：
    ```bash
-   git remote add origin git@github.com:<你的用户名>/ClipboardTool.git
+   git remote add origin https://github.com/<你的用户名>/ClipboardTool.git
    git push -u origin main
    ```
+   > Token 创建：github.com → 头像 → Settings → 最底部 Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic) → 勾选 `repo` → Generate → 复制 `ghp_` 开头的串。
+   > 配置过 SSH 密钥的话，也可把地址换成 `git@github.com:<你的用户名>/ClipboardTool.git`。
 3. 打 tag 自动发版（Actions 会构建 Intel + Apple Silicon 通用安装包并挂到 Release 页面）：
    ```bash
    git tag v1.1.0 && git push origin v1.1.0
