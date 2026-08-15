@@ -40,6 +40,7 @@ struct Annotation: Identifiable, Equatable {
     var text: String = ""
     var colorIndex: Int = 0
     var lineWidth: CGFloat = 4        // 创建时的显示点宽
+    var cornerRadius: CGFloat = 0     // 矩形圆角（显示点，0 = 直角）
     var fontSize: CGFloat = 16        // 文字工具字号（显示点）
     var displaySize: CGSize = .zero   // 创建时图片显示尺寸（用于展平缩放）
 }
@@ -51,6 +52,7 @@ final class AnnotateModel: ObservableObject {
     @Published var tool: Annotation.Tool? = nil
     @Published var colorIndex = 0
     @Published var lineWidth: CGFloat = 4
+    @Published var cornerRadius: CGFloat = 0
     @Published var annotations: [Annotation] = []
     @Published var redoStack: [Annotation] = []
     @Published var textEditing: (id: UUID, position: CGPoint)?
@@ -394,7 +396,14 @@ final class AnnotationController {
 
         switch a.tool {
         case .rect:
-            ctx.stroke(r.insetBy(dx: lw / 2, dy: lw / 2))
+            let rad = a.cornerRadius * scale
+            if rad > 0.5 {
+                ctx.addPath(CGPath(roundedRect: r.insetBy(dx: lw / 2, dy: lw / 2),
+                                   cornerWidth: rad, cornerHeight: rad, transform: nil))
+                ctx.strokePath()
+            } else {
+                ctx.stroke(r.insetBy(dx: lw / 2, dy: lw / 2))
+            }
         case .ellipse:
             ctx.strokeEllipse(in: r.insetBy(dx: lw / 2, dy: lw / 2))
         case .arrow:
@@ -581,6 +590,7 @@ struct AnnotateEditorView: View {
                                         width: w, height: h)
                         a.colorIndex = model.colorIndex
                         a.lineWidth = model.lineWidth
+                        a.cornerRadius = tool == .rect ? model.cornerRadius : 0
                         a.fontSize = model.lineWidth * 4
                         a.displaySize = displaySize
                         model.commit(a)
@@ -653,6 +663,7 @@ struct AnnotateEditorView: View {
                         width: abs(n2.x - n1.x), height: abs(n2.y - n1.y))
         a.colorIndex = model.colorIndex
         a.lineWidth = model.lineWidth
+        a.cornerRadius = tool == .rect ? model.cornerRadius : 0
         a.fontSize = model.lineWidth * 4
         a.displaySize = displaySize
         return a
@@ -666,7 +677,12 @@ struct AnnotateEditorView: View {
         let color = Color(AnnotationController.palette[a.colorIndex])
         switch a.tool {
         case .rect:
-            ctx.stroke(Path(r), with: .color(color), lineWidth: a.lineWidth)
+            let rad = a.cornerRadius * (imageRect.width / max(a.displaySize.width, 1))
+            if rad > 0.5 {
+                ctx.stroke(Path(roundedRect: r, cornerRadius: rad), with: .color(color), lineWidth: a.lineWidth)
+            } else {
+                ctx.stroke(Path(r), with: .color(color), lineWidth: a.lineWidth)
+            }
         case .ellipse:
             ctx.stroke(Path(ellipseIn: r), with: .color(color), lineWidth: a.lineWidth)
         case .arrow:
@@ -717,6 +733,20 @@ struct AnnotateEditorView: View {
                 }
                 .buttonStyle(.plain)
                 .help("识图（\(keyDisplay(.ocr))）")
+                if model.tool == .rect {
+                    Picker("", selection: $model.cornerRadius) {
+                        Text("直角").tag(CGFloat(0))
+                        Text("圆角").tag(CGFloat(8))
+                        Text("大圆角").tag(CGFloat(16))
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 150)
+                    .onChange(of: model.cornerRadius) { newValue in
+                        if let idx = model.annotations.lastIndex(where: { $0.tool == .rect }) {
+                            model.annotations[idx].cornerRadius = newValue
+                        }
+                    }
+                }
                 Spacer()
                 ForEach(0..<AnnotationController.palette.count, id: \.self) { i in
                     colorDot(i)
