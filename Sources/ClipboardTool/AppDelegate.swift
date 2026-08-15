@@ -90,13 +90,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             let img = Self.debugTestImage()
             AnnotationController.shared.show(image: img) { _ in }
-            AnnotationController.shared.debugAddSampleAnnotations()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            // 等视图 onAppear 设置 imageRect 后再注入（displaySize 需正确）
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                AnnotationController.shared.debugAddSampleAnnotations()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
                 let screen = NSScreen.main ?? NSScreen.screens.first
                 if let sid = screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
                    let cg = CGDisplayCreateImage(CGDirectDisplayID(sid.uint32Value)) {
                     let ns = NSImage(cgImage: cg, size: screen?.frame.size ?? .zero)
                     try? ns.pngData()?.write(to: URL(fileURLWithPath: "/tmp/rubick-editor.png"))
+                }
+                // 展平成品的验证图
+                if let flat = AnnotationController.shared.debugFlattenedImage() {
+                    try? flat.pngData()?.write(to: URL(fileURLWithPath: "/tmp/rubick-flattened.png"))
                 }
                 NSApp.terminate(nil)
             }
@@ -115,6 +122,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSColor(hue: CGFloat(i) / 12.0, saturation: 0.65, brightness: 0.9, alpha: 1).setFill()
             NSRect(x: CGFloat(i % 4) * 225, y: CGFloat(i / 4) * 190, width: 225, height: 190).fill()
         }
+        // 右下区域：平滑渐变 + 细字（马赛克/模糊效果验证区）
+        let grad = NSGradient(colors: [NSColor.red, NSColor.blue, NSColor.yellow])!
+        grad.draw(in: NSRect(x: 500, y: 30, width: 380, height: 200), angle: -45)
+        let smallAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 15),
+            .foregroundColor: NSColor.black
+        ]
+        ("SECRET 12345 TOP SECRET" as NSString).draw(at: NSPoint(x: 520, y: 120), withAttributes: smallAttrs)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.boldSystemFont(ofSize: 42),
             .foregroundColor: NSColor.white

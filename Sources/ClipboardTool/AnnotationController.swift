@@ -387,6 +387,12 @@ final class AnnotationController {
         }
     }
 
+    /// 调试用：展平当前标注为成品图
+    func debugFlattenedImage() -> NSImage? {
+        guard let m = model, let img = currentImage else { return nil }
+        return Self.flatten(image: img, annotations: m.annotations)
+    }
+
     /// 调试用：注入样例标注（箭头/马赛克/文字），供自拍验证渲染
     func debugAddSampleAnnotations() {
         guard let m = model else { return }
@@ -402,6 +408,11 @@ final class AnnotationController {
         mos.mosaicStyle = 0
         mos.displaySize = m.imageRect.size
         m.commit(mos)
+        var blurAnn = Annotation(tool: .mosaic)
+        blurAnn.rect = CGRect(x: 0.2, y: 0.02, width: 0.25, height: 0.18)
+        blurAnn.mosaicStyle = 1
+        blurAnn.displaySize = m.imageRect.size
+        m.commit(blurAnn)
         var txt = Annotation(tool: .text)
         txt.rect = CGRect(origin: CGPoint(x: 0.05, y: 0.08), size: .zero)
         txt.text = "你好世界 Hello"
@@ -561,8 +572,8 @@ final class AnnotationController {
         if blur {
             ci = ci.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 12])
         } else {
-            // 像素块 ≈ 18pt，与预览观感一致
-            let blockPx = max(18 * scalePx, 8)
+            // 像素块 ≈ 22pt，与预览观感一致
+            let blockPx = max(22 * scalePx, 8)
             ci = ci.applyingFilter("CIPixellate", parameters: [kCIInputScaleKey: blockPx])
         }
         if let cg = CIContext().createCGImage(ci, from: ci.extent) {
@@ -663,7 +674,6 @@ struct AnnotateEditorView: View {
                         let p = clamp(v.startLocation)
                         // 首次按下：未选工具或文字工具时，命中已有文字 → 拖动它
                         if dragStart == nil, dragTextID == nil,
-                           (model.tool == nil || model.tool == .text),
                            let hit = hitTextAnnotation(at: normalize(p)) {
                             dragTextID = hit.id
                             dragTextStart = p
@@ -1144,8 +1154,8 @@ struct AnnotateEditorView: View {
         let from = CGRect(x: srcTop.minX,
                           y: image.size.height - srcTop.maxY,
                           width: srcTop.width, height: srcTop.height)
-        let cols = max(Int(rect.width / 18), 6)
-        let rows = max(Int(rect.height / 18), 6)
+        let cols = max(Int(rect.width / 22), 5)
+        let rows = max(Int(rect.height / 22), 5)
         let out = NSImage(size: NSSize(width: cols, height: rows))
         out.lockFocus()
         image.draw(in: NSRect(x: 0, y: 0, width: cols, height: rows),
