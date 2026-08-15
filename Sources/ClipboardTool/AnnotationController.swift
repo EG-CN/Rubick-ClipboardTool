@@ -347,8 +347,7 @@ final class AnnotationController {
             }
             let toolMap: [(AnnotateKeyConfig.Action, Annotation.Tool)] = [
                 (.toolRect, .rect), (.toolEllipse, .ellipse), (.toolArrow, .arrow),
-                (.toolPen, .pen), (.toolText, .text), (.toolMosaic, .mosaic),
-                (.toolHighlight, .highlight)
+                (.toolPen, .pen), (.toolText, .text), (.toolMosaic, .mosaic)
             ]
             for (action, tool) in toolMap where ak.matches(action, event: event) {
                 model.tool = tool
