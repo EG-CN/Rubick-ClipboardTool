@@ -134,7 +134,7 @@ struct PinImageView: View {
                         .frame(width: image.size.width * fitScale * model.zoom,
                                height: image.size.height * fitScale * model.zoom)
                     if ocrMode {
-                        OCRPinOverlay(scale: fitScale * model.zoom) { rect in
+                        OCRPinOverlay { rect in
                             ocrMode = false
                             runPinOCR(rect)
                         } onExit: {
@@ -257,7 +257,6 @@ struct PinImageView: View {
 // MARK: - 钉图 OCR 划选覆盖层
 
 struct OCRPinOverlay: View {
-    let scale: CGFloat
     let onDone: (CGRect?) -> Void
     let onExit: () -> Void
 

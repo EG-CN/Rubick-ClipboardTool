@@ -175,6 +175,23 @@ final class V2FeatureTests: XCTestCase {
         XCTAssertEqual(back, v)
     }
 
+    // MARK: 「所见即所截」端到端（视图选区 → 全局 → 裁剪）
+
+    func testWYSIWYGSelectionTopLeftYieldsRed() {
+        // 四象限合成图：内容上=红、下=蓝（与视图所见一致）
+        let cg = syntheticImage(top: NSColor.red, bottom: NSColor.blue, width: 200, height: 100)
+        let shot = ScreenShot(frame: CGRect(x: 0, y: 0, width: 200, height: 100), image: cg)
+        let union = CGRect(x: 0, y: 0, width: 200, height: 100)
+        let composite = ImageCompose.composite([shot], union: union)!
+        // 用户在视图里选「上半部分」：视图坐标（左上原点）y = 0..50
+        let viewSel = CGRect(x: 0, y: 0, width: 200, height: 50)
+        let globalSel = SnapLogic.appKitRect(fromViewRect: viewSel, viewHeight: 100, windowOrigin: .zero)
+        let crop = ImageCompose.crop(composite, rectInUnion: globalSel, union: union)!
+        let c = topColorOf(crop)
+        XCTAssertGreaterThan(c.redComponent, 0.8, "视图选区上半 → 裁剪结果应为红色（所见即所截）")
+        XCTAssertLessThan(c.blueComponent, 0.3)
+    }
+
     // MARK: 合成/裁剪方向性（防「截到背景桌面」回归）
 
     func testCompositeOrientationTopRedBottomBlue() {

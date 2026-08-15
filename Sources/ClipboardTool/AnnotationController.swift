@@ -351,8 +351,8 @@ struct AnnotateEditorView: View {
                         .padding(6)
                         .frame(width: 220)
                         .background(RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.55)))
-                        .position(x: imageRect.minX + editing.position.x * imageRect.width + 110,
-                                  y: imageRect.minY + editing.position.y * imageRect.height)
+                        .position(x: min(imageRect.maxX - 110, imageRect.minX + editing.position.x * imageRect.width + 110),
+                                  y: min(imageRect.maxY, imageRect.minY + editing.position.y * imageRect.height))
                         .onSubmit { model.commitText() }
                 }
 
@@ -372,12 +372,10 @@ struct AnnotateEditorView: View {
                     .padding(.bottom, 92)
             }
             .contentShape(Rectangle())
-            .onTapGesture {
-                model.textEditing = nil
-            }
             .gesture(
                 DragGesture(minimumDistance: 1)
                     .onChanged { v in
+                        model.textEditing = nil
                         let p = clamp(v.startLocation, to: imageRect)
                         dragStart = dragStart ?? p
                         dragCurrent = clamp(v.location, to: imageRect)
@@ -511,7 +509,8 @@ struct AnnotateEditorView: View {
                                           y: pt.y * imageRect.height))
                 }
             }
-            ctx.stroke(p, with: .color(color), lineWidth: a.lineWidth)
+            ctx.stroke(p, with: .color(color),
+                       style: StrokeStyle(lineWidth: a.lineWidth, lineCap: .round, lineJoin: .round))
         case .text:
             ctx.draw(Text(a.text).font(.system(size: a.fontSize, weight: .semibold)).foregroundStyle(color),
                      at: CGPoint(x: r.minX, y: r.minY), anchor: .bottomLeading)
