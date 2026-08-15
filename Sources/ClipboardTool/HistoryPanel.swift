@@ -122,6 +122,14 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         p.setFrameOrigin(f.origin)
     }
 
+    /// 面板当前全局 frame（拖动用）
+    var currentFrame: CGRect? { panel?.frame }
+
+    /// 直接定位：跟随鼠标实时坐标（1:1 跟手）
+    func moveTo(x: CGFloat, y: CGFloat) {
+        panel?.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+
     func windowDidResignKey(_ notification: Notification) {
         if !suppressAutoClose { close() }
     }
@@ -477,7 +485,7 @@ struct HistoryPanelView: View {
 
     // MARK: 头部
 
-    @State private var moveLast: CGPoint?
+    @State private var grabOffset: CGPoint?
 
     private var header: some View {
         HStack(spacing: 8) {
@@ -528,14 +536,15 @@ struct HistoryPanelView: View {
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 1)
-                .onChanged { v in
-                    let t = CGPoint(x: v.translation.width, y: v.translation.height)
-                    if let last = moveLast {
-                        HistoryPanelController.shared.move(by: CGPoint(x: t.x - last.x, y: t.y - last.y))
+                .onChanged { _ in
+                    let m = NSEvent.mouseLocation
+                    if let off = grabOffset {
+                        HistoryPanelController.shared.moveTo(x: m.x - off.x, y: m.y - off.y)
+                    } else if let f = HistoryPanelController.shared.currentFrame {
+                        grabOffset = CGPoint(x: m.x - f.minX, y: m.y - f.minY)
                     }
-                    moveLast = t
                 }
-                .onEnded { _ in moveLast = nil }
+                .onEnded { _ in grabOffset = nil }
         )
     }
 

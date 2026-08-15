@@ -267,6 +267,9 @@ final class AnnotationController {
                 f.origin.y -= delta.y   // 视图坐标 y 向下 → 窗口坐标 y 向上
                 w.setFrameOrigin(f.origin)
             },
+            onMoveTo: { [weak self] x, y in
+                self?.window?.setFrameOrigin(NSPoint(x: x, y: y))
+            },
             onConfirm: { [weak self] annotated in self?.finish(annotated) },
             onCancel: { [weak self] in self?.cancel() }
         )
@@ -300,6 +303,9 @@ final class AnnotationController {
         window?.makeKeyAndOrderFront(nil)
         installKeyMonitor(model: m)
     }
+
+    /// 编辑器窗口当前全局 frame（拖动用）
+    var currentFrame: CGRect? { window?.frame }
 
     private func installKeyMonitor(model: AnnotateModel) {
         if let mk = keyMonitor { NSEvent.removeMonitor(mk) }
@@ -589,13 +595,14 @@ struct AnnotateEditorView: View {
     let displaySize: CGSize      // 图片显示尺寸
     @ObservedObject var model: AnnotateModel
     let onMove: (CGPoint) -> Void
+    let onMoveTo: (CGFloat, CGFloat) -> Void
     let onConfirm: (NSImage) -> Void
     let onCancel: () -> Void
 
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
     @State private var penPath: [CGPoint] = []
-    @State private var moveLast: CGPoint?
+    @State private var grabOffset: CGPoint?
     @State private var hoveredHelp: String?
     @State private var dragTextID: UUID?
     @State private var dragTextStart: CGPoint?
@@ -811,14 +818,15 @@ struct AnnotateEditorView: View {
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 1)
-                .onChanged { v in
-                    let t = CGPoint(x: v.translation.width, y: v.translation.height)
-                    if let last = moveLast {
-                        onMove(CGPoint(x: t.x - last.x, y: t.y - last.y))
+                .onChanged { _ in
+                    let m = NSEvent.mouseLocation
+                    if let off = grabOffset {
+                        onMoveTo(m.x - off.x, m.y - off.y)
+                    } else if let f = AnnotationController.shared.currentFrame {
+                        grabOffset = CGPoint(x: m.x - f.minX, y: m.y - f.minY)
                     }
-                    moveLast = t
                 }
-                .onEnded { _ in moveLast = nil }
+                .onEnded { _ in grabOffset = nil }
         )
     }
 

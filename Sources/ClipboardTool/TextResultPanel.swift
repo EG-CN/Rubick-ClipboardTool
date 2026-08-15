@@ -84,6 +84,12 @@ final class TextResultPanel {
         p.setFrameOrigin(f.origin)
     }
 
+    var currentFrame: CGRect? { panel?.frame }
+
+    func moveTo(x: CGFloat, y: CGFloat) {
+        panel?.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+
     private func translateThenShow(_ text: String) {
         Toast.shared.show("翻译中…（\(TranslationService.shared.engineLabel)）")
         TranslationService.shared.translate(text) { result in
@@ -196,7 +202,7 @@ struct TextResultView: View {
         .shadow(color: RubickTheme.emerald.opacity(0.15), radius: 10)
     }
 
-    @State private var moveLast: CGPoint?
+    @State private var grabOffset: CGPoint?
 
     private var header: some View {
         HStack(spacing: 8) {
@@ -229,14 +235,15 @@ struct TextResultView: View {
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 1)
-                .onChanged { v in
-                    let t = CGPoint(x: v.translation.width, y: v.translation.height)
-                    if let last = moveLast {
-                        TextResultPanel.shared.move(by: CGPoint(x: t.x - last.x, y: t.y - last.y))
+                .onChanged { _ in
+                    let m = NSEvent.mouseLocation
+                    if let off = grabOffset {
+                        TextResultPanel.shared.moveTo(x: m.x - off.x, y: m.y - off.y)
+                    } else if let f = TextResultPanel.shared.currentFrame {
+                        grabOffset = CGPoint(x: m.x - f.minX, y: m.y - f.minY)
                     }
-                    moveLast = t
                 }
-                .onEnded { _ in moveLast = nil }
+                .onEnded { _ in grabOffset = nil }
         )
     }
 
