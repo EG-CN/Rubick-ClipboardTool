@@ -14,10 +14,15 @@ final class TextResultPanel {
 
     private var panel: NSPanel?
     private var keyMonitor: Any?
+    private var panelTextView: NSTextView?
+    private var currentKind: Kind = .ocr
+    private var currentResult = ""
 
     private init() {}
 
     func show(kind: Kind, source: String, result: String) {
+        currentKind = kind
+        currentResult = result
         let view = TextResultView(
             kind: kind,
             source: source,
@@ -99,12 +104,31 @@ final class TextResultPanel {
     private func installKeyMonitor() {
         removeKeyMonitor()
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return event }
             if event.keyCode == 53 {
-                self?.hide()
+                self.hide()
+                return nil
+            }
+            // 翻译键（面板内「翻译所选条目」同款配置）：优先翻译选中的文字
+            if PanelKeyConfig.shared.matches(.translate, event: event), self.currentKind == .ocr {
+                self.translateSelection()
                 return nil
             }
             return event
         }
+    }
+
+    /// 翻译选中文字；无选中则翻译全部
+    private func translateSelection() {
+        var text = currentResult
+        if let tv = panelTextView {
+            let full = tv.string as NSString
+            let sel = tv.selectedRange()
+            if sel.length > 0 && NSMaxRange(sel) <= full.length {
+                text = full.substring(with: sel)
+            }
+        }
+        translateThenShow(text)
     }
 
     private func removeKeyMonitor() {
@@ -134,14 +158,13 @@ struct TextResultView: View {
         VStack(spacing: 10) {
             header
             Divider().opacity(0.4)
-            ScrollView {
-                Text(result)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(RubickTheme.onSurface(scheme))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            SelectableTextView(text: result) { tv in
+                TextResultPanel.shared.registerTextView(tv)
             }
             .frame(maxHeight: .infinity)
+            Text("选中文字按 T 翻译 · ⌘C 复制")
+                .font(.system(size: 9.5))
+                .foregroundStyle(RubickTheme.muted(scheme).opacity(0.7))
             Divider().opacity(0.4)
             footer
         }
@@ -211,6 +234,45 @@ struct TextResultView: View {
                     .font(.system(size: 10))
                     .foregroundStyle(RubickTheme.muted(scheme).opacity(0.8))
             }
+        }
+    }
+}
+
+// MARK: - 可选中文本视图（支持 ⌘C 复制与选区读取）
+
+extension TextResultPanel {
+    func registerTextView(_ tv: NSTextView?) {
+        panelTextView = tv
+    }
+}
+
+struct SelectableTextView: NSViewRepresentable {
+    let text: String
+    var onTextView: ((NSTextView?) -> Void)? = nil
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let tv = NSTextView()
+        tv.string = text
+        tv.isEditable = false
+        tv.isSelectable = true
+        tv.isRichText = false
+        tv.font = .systemFont(ofSize: 12.5)
+        tv.textColor = .labelColor
+        tv.backgroundColor = .clear
+        tv.drawsBackground = false
+        tv.textContainerInset = NSSize(width: 4, height: 8)
+        let sv = NSScrollView()
+        sv.documentView = tv
+        sv.hasVerticalScroller = true
+        sv.autohidesScrollers = true
+        sv.drawsBackground = false
+        onTextView?(tv)
+        return sv
+    }
+
+    func updateNSView(_ sv: NSScrollView, context: Context) {
+        if let tv = sv.documentView as? NSTextView, tv.string != text {
+            tv.string = text
         }
     }
 }

@@ -307,15 +307,14 @@ struct CaptureOverlayView: View {
                 .resizable()
                 .frame(width: unionRect.width, height: unionRect.height)
                 .ignoresSafeArea()
-            Color.black.opacity(0.48)
 
+            // 挖孔遮罩：选区处透出原图（零裁剪开销，跟手）
             if let sel = snappedSelection?.rect ?? selectionRect {
-                // 选中区域亮显（原画面亮度）
-                Image(nsImage: ImageCompose.crop(composite, rectInUnion: globalRect(sel), union: unionRect) ?? composite)
-                    .resizable()
-                    .frame(width: sel.width, height: sel.height)
-                    .position(x: sel.midX, y: sel.midY)
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                DimWithHole(hole: sel)
+                    .fill(Color.black.opacity(0.5), style: FillStyle(eoFill: true))
+                    .allowsHitTesting(false)
+            } else {
+                Color.black.opacity(0.5)
             }
 
             // 窗口高亮（吸附目标 / 悬停窗口）
@@ -374,6 +373,7 @@ struct CaptureOverlayView: View {
             }
         }
         .onContinuousHover { phase in
+            guard !dragged else { return }
             switch phase {
             case .active(let p): hoverPoint = p
             case .ended: hoverPoint = nil
@@ -449,6 +449,18 @@ struct CaptureOverlayView: View {
             p.addLine(to: CGPoint(x: r.maxX, y: r.maxY - l))
         }
         .stroke(Color.white, lineWidth: 2)
+    }
+}
+
+/// 全屏遮罩挖孔（选区亮显，偶奇填充）
+struct DimWithHole: Shape {
+    var hole: CGRect
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.addRect(rect)
+        p.addRect(hole)
+        return p
     }
 }
 

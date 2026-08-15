@@ -118,6 +118,13 @@ final class V2FeatureTests: XCTestCase {
         XCTAssertEqual(AnnotateKeyConfig.shared.keys[.undo]?.display, "⌘Z")
     }
 
+    func testAnnotateKeysOCRAndTranslateDefaults() {
+        let ak = AnnotateKeyConfig.shared
+        XCTAssertEqual(ak.keys[.ocr]?.display, "O")
+        XCTAssertEqual(ak.keys[.translate]?.display, "T")
+        XCTAssertEqual(ak.keys.count, AnnotateKeyConfig.Action.allCases.count)
+    }
+
     func testPanelKeysHaveV2Actions() {
         let pk = PanelKeyConfig.shared
         XCTAssertNotNil(pk.keys[.translate])

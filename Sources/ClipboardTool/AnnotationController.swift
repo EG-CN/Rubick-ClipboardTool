@@ -55,6 +55,9 @@ final class AnnotateModel: ObservableObject {
     @Published var textEditing: (id: UUID, position: CGPoint)?
     @Published var textDraft = ""
     @Published var imageRect: CGRect = .zero
+    @Published var ocrText: String?
+    @Published var translatedText: String?
+    weak var panelTextView: NSTextView?
 
     func commit(_ a: Annotation) {
         annotations.append(a)
@@ -71,6 +74,69 @@ final class AnnotateModel: ObservableObject {
         textEditing = nil
         guard let last = redoStack.popLast() else { return }
         annotations.append(last)
+    }
+
+    var sidePanelText: String? {
+        translatedText ?? ocrText
+    }
+
+    func closeSidePanel() {
+        ocrText = nil
+        translatedText = nil
+    }
+
+    /// 识图：对原始截图整图做 OCR，结果显示在侧面板
+    func runOCR(on image: NSImage) {
+        closeSidePanel()
+        Toast.shared.show("正在识别文字…")
+        OCRService.shared.recognize(image: image) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                switch result {
+                case .success(let r):
+                    let text = r.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !text.isEmpty else {
+                        Toast.shared.show("未识别到文字")
+                        return
+                    }
+                    self.ocrText = text
+                    self.translatedText = nil
+                case .failure(let err):
+                    Toast.shared.show("识别失败：\(err.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    /// 翻译：优先翻译侧面板文本视图中选中的文字，否则翻译全部识别文本
+    func translateSideSelection() {
+        let whole = sidePanelText
+        var text: String?
+        if let tv = panelTextView {
+            let full = tv.string as NSString
+            let sel = tv.selectedRange()
+            if sel.length > 0 && NSMaxRange(sel) <= full.length {
+                text = full.substring(with: sel)
+            }
+        }
+        let target = text ?? whole
+        guard let target = target, !target.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            Toast.shared.show("没有可翻译的文字")
+            return
+        }
+        Toast.shared.show("翻译中…（\(TranslationService.shared.engineLabel)）")
+        TranslationService.shared.translate(target) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                switch result {
+                case .success(let t):
+                    self.ocrText = self.ocrText ?? target
+                    self.translatedText = t
+                case .failure(let err):
+                    Toast.shared.show("翻译失败：\(err.localizedDescription)")
+                }
+            }
+        }
     }
 
     func commitText() {
@@ -141,19 +207,46 @@ final class AnnotationController {
         if let mk = keyMonitor { NSEvent.removeMonitor(mk) }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.window?.isVisible == true else { return event }
-            // 文本框输入中：放行（Esc 取消输入）
-            if let fr = NSApp.keyWindow?.firstResponder, fr is NSTextView {
+            let fr = NSApp.keyWindow?.firstResponder
+            let ak = AnnotateKeyConfig.shared
+
+            // 侧面板文本视图：T 翻译选中 / Esc 关面板 / 其余放行（⌘C 可用）
+            if let tv = fr as? NSTextView, tv === model.panelTextView {
+                if ak.matches(.translate, event: event) {
+                    model.translateSideSelection()
+                    return nil
+                }
+                if event.keyCode == 53 {
+                    model.closeSidePanel()
+                    return nil
+                }
+                return event
+            }
+            // 文字标注输入中：放行（Esc 取消输入）
+            if fr is NSTextView {
                 if event.keyCode == 53 {
                     model.textEditing = nil
                     return nil
                 }
                 return event
             }
-            let ak = AnnotateKeyConfig.shared
+            // 侧面板打开时 Esc 先关面板
+            if event.keyCode == 53 && model.sidePanelText != nil {
+                model.closeSidePanel()
+                return nil
+            }
             if ak.matches(.confirm, event: event) { self.confirm(); return nil }
             if ak.matches(.cancel, event: event) { self.cancel(); return nil }
             if ak.matches(.undo, event: event) { model.undo(); return nil }
             if ak.matches(.redo, event: event) { model.redo(); return nil }
+            if ak.matches(.ocr, event: event) {
+                if let img = self.currentImage { model.runOCR(on: img) }
+                return nil
+            }
+            if ak.matches(.translate, event: event) {
+                model.translateSideSelection()
+                return nil
+            }
             let toolMap: [(AnnotateKeyConfig.Action, Annotation.Tool)] = [
                 (.toolRect, .rect), (.toolEllipse, .ellipse), (.toolArrow, .arrow),
                 (.toolPen, .pen), (.toolText, .text), (.toolMosaic, .mosaic),
@@ -356,13 +449,23 @@ struct AnnotateEditorView: View {
                         .onSubmit { model.commitText() }
                 }
 
+                if model.sidePanelText != nil {
+                    HStack {
+                        Spacer()
+                        EditorSidePanel(model: model)
+                    }
+                    .padding(.trailing, 26)
+                    .padding(.vertical, 56)
+                    .transition(.opacity)
+                }
+
                 VStack {
                     Spacer()
                     toolbar
                 }
                 .padding(.bottom, 26)
 
-                Text("\(keyDisplay(.toolRect))–\(keyDisplay(.toolHighlight)) 工具 · \(keyDisplay(.undo)) 撤销 · \(keyDisplay(.redo)) 重做 · \(keyDisplay(.confirm)) 确认 · \(keyDisplay(.cancel)) 取消")
+                Text("\(keyDisplay(.toolRect))–\(keyDisplay(.toolHighlight)) 工具 · \(keyDisplay(.ocr)) 识图 · \(keyDisplay(.translate)) 翻译 · \(keyDisplay(.undo)) 撤销 · \(keyDisplay(.confirm)) 确认 · \(keyDisplay(.cancel)) 取消")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.white.opacity(0.65))
                     .padding(.horizontal, 10)
@@ -528,6 +631,18 @@ struct AnnotateEditorView: View {
             ForEach(Annotation.Tool.allCases, id: \.self) { t in
                 toolButton(t)
             }
+            Button {
+                model.runOCR(on: image)
+            } label: {
+                Image(systemName: "text.viewfinder")
+                    .font(.system(size: 15))
+                    .frame(width: 36, height: 36)
+                    .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.06)))
+                    .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.12), lineWidth: 1))
+                    .foregroundStyle(RubickTheme.emeraldBright)
+            }
+            .buttonStyle(.plain)
+            .help("识图（\\(keyDisplay(.ocr))）")
             Divider().frame(height: 22).opacity(0.5)
             ForEach(0..<AnnotationController.palette.count, id: \.self) { i in
                 colorDot(i)
@@ -627,5 +742,93 @@ struct AnnotateEditorView: View {
         .buttonStyle(.plain)
         .disabled(!enabled)
         .help(help)
+    }
+}
+
+// MARK: - 标注编辑器侧面板（OCR 结果 / 翻译，选中文字按 T 翻译，⌘C 复制）
+
+struct EditorSidePanel: View {
+    @ObservedObject var model: AnnotateModel
+
+    private var isTranslation: Bool { model.translatedText != nil }
+    private var text: String { model.sidePanelText ?? "" }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: isTranslation ? "character.bubble.fill" : "doc.text.viewfinder")
+                    .font(.system(size: 13))
+                    .foregroundStyle(RubickTheme.emeraldBright)
+                Text(isTranslation ? "翻译结果" : "识别文字")
+                    .font(.system(size: 13, weight: .bold))
+                if isTranslation {
+                    Text(TranslationService.shared.engineLabel)
+                        .font(.system(size: 9.5))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(RubickTheme.emerald.opacity(0.14)))
+                        .foregroundStyle(RubickTheme.emeraldBright)
+                }
+                Spacer()
+                Button {
+                    model.closeSidePanel()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white.opacity(0.7))
+                .help("关闭（⎋）")
+            }
+
+            SelectableTextView(text: text) { tv in
+                model.panelTextView = tv
+            }
+            .frame(maxHeight: .infinity)
+
+            Text("选中文字按 T 翻译 · ⌘C 复制")
+                .font(.system(size: 9.5))
+                .foregroundStyle(.white.opacity(0.5))
+
+            HStack(spacing: 8) {
+                Button {
+                    writeTextToPasteboard(text)
+                    Toast.shared.show("已复制")
+                } label: {
+                    Label("复制", systemImage: "doc.on.doc")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(RubickTheme.emerald)
+                if !isTranslation {
+                    Button {
+                        model.translateSideSelection()
+                    } label: {
+                        Label("翻译", systemImage: "character.bubble")
+                            .font(.system(size: 11))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(RubickTheme.emerald)
+                }
+                Button {
+                    HistoryStore.shared.addText(text)
+                    Toast.shared.show("已存入历史")
+                } label: {
+                    Label("存入历史", systemImage: "book.closed")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(RubickTheme.emerald)
+                Spacer()
+            }
+        }
+        .padding(12)
+        .frame(width: 330, height: 420)
+        .background(RoundedRectangle(cornerRadius: 12).fill(.black.opacity(0.82)))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(RubickTheme.emerald.opacity(0.35), lineWidth: 0.8))
+        .shadow(color: RubickTheme.emerald.opacity(0.2), radius: 10)
     }
 }

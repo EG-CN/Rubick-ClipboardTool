@@ -8,6 +8,7 @@ final class AnnotateKeyConfig: ObservableObject {
     enum Action: String, CaseIterable {
         case confirm, cancel, undo, redo
         case toolRect, toolEllipse, toolArrow, toolPen, toolText, toolMosaic, toolHighlight
+        case ocr, translate
     }
 
     struct Key {
@@ -37,6 +38,8 @@ final class AnnotateKeyConfig: ObservableObject {
         keys[.toolText] = read(d, "ak.toolText", UInt16(kVK_ANSI_5), 0, "5")
         keys[.toolMosaic] = read(d, "ak.toolMosaic", UInt16(kVK_ANSI_6), 0, "6")
         keys[.toolHighlight] = read(d, "ak.toolHighlight", UInt16(kVK_ANSI_7), 0, "7")
+        keys[.ocr] = read(d, "ak.ocr", UInt16(kVK_ANSI_O), 0, "O")
+        keys[.translate] = read(d, "ak.translate", UInt16(kVK_ANSI_T), 0, "T")
     }
 
     private func read(_ d: UserDefaults, _ key: String, _ keyCode: UInt16, _ mods: UInt32, _ display: String) -> Key {
@@ -71,6 +74,8 @@ final class AnnotateKeyConfig: ObservableObject {
         case .toolText: return Key(keyCode: UInt16(kVK_ANSI_5), mods: 0, display: "5")
         case .toolMosaic: return Key(keyCode: UInt16(kVK_ANSI_6), mods: 0, display: "6")
         case .toolHighlight: return Key(keyCode: UInt16(kVK_ANSI_7), mods: 0, display: "7")
+        case .ocr: return Key(keyCode: UInt16(kVK_ANSI_O), mods: 0, display: "O")
+        case .translate: return Key(keyCode: UInt16(kVK_ANSI_T), mods: 0, display: "T")
         }
     }
 
@@ -97,6 +102,8 @@ final class AnnotateKeyConfig: ObservableObject {
         case .toolText: return "文字"
         case .toolMosaic: return "马赛克"
         case .toolHighlight: return "高亮"
+        case .ocr: return "识别图中文字"
+        case .translate: return "翻译选中文字"
         }
     }
 }
