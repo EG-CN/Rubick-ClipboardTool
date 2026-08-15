@@ -199,6 +199,32 @@ final class V2FeatureTests: XCTestCase {
         XCTAssertLessThan(c.blueComponent, 0.3)
     }
 
+    // MARK: 标注几何工具
+
+    func testSquareRectLock() {
+        let r = AnnotationController.squareRect(from: .zero, to: CGPoint(x: 60, y: 30))
+        XCTAssertEqual(r.width, 60)
+        XCTAssertEqual(r.height, 60)
+    }
+
+    func testSquareRectReverseDirection() {
+        let r = AnnotationController.squareRect(from: CGPoint(x: 100, y: 100), to: CGPoint(x: 60, y: 80))
+        XCTAssertEqual(r.width, 40)
+        XCTAssertEqual(r.height, 40)
+    }
+
+    func testSnap45Horizontal() {
+        let p = AnnotationController.snap45(from: .zero, to: CGPoint(x: 100, y: 12))
+        let angle = atan2(p.y, p.x) * 180 / .pi
+        XCTAssertEqual(abs(angle), 0, accuracy: 1.0)
+    }
+
+    func testSnap45Diagonal() {
+        let p = AnnotationController.snap45(from: .zero, to: CGPoint(x: 90, y: 100))
+        let angle = atan2(p.y, p.x) * 180 / .pi
+        XCTAssertEqual(abs(angle), 45, accuracy: 1.0)
+    }
+
     // MARK: 标注默认状态
 
     func testAnnotateModelStartsWithNoTool() {

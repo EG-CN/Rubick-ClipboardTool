@@ -52,6 +52,7 @@ final class AnnotateModel: ObservableObject {
     @Published var tool: Annotation.Tool? = nil
     @Published var colorIndex = 0
     @Published var lineWidth: CGFloat = 4
+    @Published var fontSize: CGFloat = 16
     @Published var cornerRadius: CGFloat = 0
     @Published var annotations: [Annotation] = []
     @Published var redoStack: [Annotation] = []
@@ -152,7 +153,7 @@ final class AnnotateModel: ObservableObject {
         a.text = text
         a.colorIndex = colorIndex
         a.lineWidth = lineWidth
-        a.fontSize = 16
+        a.fontSize = fontSize
         a.displaySize = imageRect.size
         commit(a)
     }
@@ -160,6 +161,25 @@ final class AnnotateModel: ObservableObject {
 
 final class AnnotationController {
     static let shared = AnnotationController()
+
+    /// Shift 锁定：以起点为锚的正方形
+    static func squareRect(from a: CGPoint, to b: CGPoint) -> CGRect {
+        let side = max(abs(b.x - a.x), abs(b.y - a.y))
+        return CGRect(x: b.x >= a.x ? a.x : a.x - side,
+                      y: b.y >= a.y ? a.y : a.y - side,
+                      width: side, height: side)
+    }
+
+    /// Shift 锁定：箭头方向对齐 45° 倍角
+    static func snap45(from a: CGPoint, to b: CGPoint) -> CGPoint {
+        let dx = b.x - a.x
+        let dy = b.y - a.y
+        let len = hypot(dx, dy)
+        guard len > 0.5 else { return b }
+        let angle = atan2(dy, dx)
+        let snapped = (angle / (.pi / 4)).rounded() * (.pi / 4)
+        return CGPoint(x: a.x + cos(snapped) * len, y: a.y + sin(snapped) * len)
+    }
 
     private var window: NSWindow?
     private var keyMonitor: Any?
@@ -437,7 +457,7 @@ final class AnnotationController {
         ctx.addLine(to: end)
         ctx.strokePath()
         let angle = atan2(end.y - start.y, end.x - start.x)
-        let headLen = max(r.width * 0.22, 10)
+        let headLen = max(r.width * 0.28, 12)
         for da in [CGFloat.pi * 5 / 6, -CGFloat.pi * 5 / 6] {
             let hp = CGPoint(x: end.x + cos(angle + da) * headLen,
                              y: end.y + sin(angle + da) * headLen)
@@ -555,17 +575,32 @@ struct AnnotateEditorView: View {
                         dragCurrent = clamp(v.location)
                         defer { dragStart = nil; dragCurrent = nil; penPath = [] }
                         guard let start = dragStart else { return }
-                        let end = dragCurrent ?? start
-                        let normStart = normalize(start)
-                        let normEnd = normalize(end)
+                        var end = dragCurrent ?? start
                         if model.tool == .text {
+                            let normStart = normalize(start)
                             if hypot(start.x - end.x, start.y - end.y) < 6 {
                                 model.textDraft = ""
                                 model.textEditing = (UUID(), normStart)
                             }
                             return
                         }
-                        if model.tool == .pen {
+                        guard let tool = model.tool else { return }
+                        // Shift 锁定：形状→正方形/正圆；箭头→45°；画笔→直线
+                        if NSEvent.modifierFlags.contains(.shift) {
+                            switch tool {
+                            case .rect, .ellipse, .highlight:
+                                let sq = AnnotationController.squareRect(from: start, to: end)
+                                end = CGPoint(x: sq.maxX, y: sq.maxY)
+                            case .arrow:
+                                end = AnnotationController.snap45(from: start, to: end)
+                            case .pen:
+                                penPath = [normalize(start), normalize(end)]
+                            default: break
+                            }
+                        }
+                        let normStart = normalize(start)
+                        let normEnd = normalize(end)
+                        if tool == .pen {
                             var pts = penPath
                             if pts.count < 2 { pts = [normStart, normEnd] }
                             guard pts.count >= 2 else { return }
@@ -581,7 +616,6 @@ struct AnnotateEditorView: View {
                             model.commit(a)
                             return
                         }
-                        guard let tool = model.tool else { return }
                         let w = abs(normEnd.x - normStart.x)
                         let h = abs(normEnd.y - normStart.y)
                         guard w > 0.004 || h > 0.004 else { return }
@@ -591,7 +625,7 @@ struct AnnotateEditorView: View {
                         a.colorIndex = model.colorIndex
                         a.lineWidth = model.lineWidth
                         a.cornerRadius = tool == .rect ? model.cornerRadius : 0
-                        a.fontSize = model.lineWidth * 4
+                        a.fontSize = tool == .text ? model.fontSize : model.lineWidth * 4
                         a.displaySize = displaySize
                         model.commit(a)
                     }
@@ -655,7 +689,17 @@ struct AnnotateEditorView: View {
 
     private func inProgress() -> Annotation? {
         guard let tool = model.tool, let start = dragStart else { return nil }
-        let end = dragCurrent ?? start
+        var end = dragCurrent ?? start
+        if NSEvent.modifierFlags.contains(.shift) {
+            switch tool {
+            case .rect, .ellipse, .highlight:
+                let sq = AnnotationController.squareRect(from: start, to: end)
+                end = CGPoint(x: sq.maxX, y: sq.maxY)
+            case .arrow:
+                end = AnnotationController.snap45(from: start, to: end)
+            default: break
+            }
+        }
         let n1 = normalize(start)
         let n2 = normalize(end)
         var a = Annotation(tool: tool)
@@ -707,7 +751,11 @@ struct AnnotateEditorView: View {
             ctx.draw(Text(a.text).font(.system(size: a.fontSize, weight: .semibold)).foregroundStyle(color),
                      at: CGPoint(x: r.minX, y: r.minY), anchor: .bottomLeading)
         case .mosaic:
-            ctx.fill(Path(r), with: .color(.gray.opacity(0.45)))
+            if let tiny = mosaicTiny(for: r) {
+                ctx.draw(Image(nsImage: tiny).interpolation(.none), in: r)
+            } else {
+                ctx.fill(Path(r), with: .color(.gray.opacity(0.45)))
+            }
         case .highlight:
             ctx.fill(Path(r), with: .color(color.opacity(0.3)))
         }
@@ -746,6 +794,15 @@ struct AnnotateEditorView: View {
                             model.annotations[idx].cornerRadius = newValue
                         }
                     }
+                }
+                if model.tool == .text {
+                    Picker("", selection: $model.fontSize) {
+                        Text("小").tag(CGFloat(12))
+                        Text("中").tag(CGFloat(16))
+                        Text("大").tag(CGFloat(22))
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 110)
                 }
                 Spacer()
                 ForEach(0..<AnnotationController.palette.count, id: \.self) { i in
@@ -834,6 +891,26 @@ struct AnnotateEditorView: View {
                 .shadow(color: model.colorIndex == i ? Color(AnnotationController.palette[i]).opacity(0.8) : .clear, radius: 3)
         }
         .buttonStyle(.plain)
+    }
+
+    /// 马赛克预览：把区域压成 14×14 小图再放大 → 像素块效果（实时、廉价）
+    private func mosaicTiny(for rect: CGRect) -> NSImage? {
+        guard rect.width > 2, rect.height > 2 else { return nil }
+        let sx = displaySize.width / max(image.size.width, 1)
+        let sy = displaySize.height / max(image.size.height, 1)
+        let srcTop = CGRect(x: rect.minX / sx,
+                            y: rect.minY / sy,
+                            width: rect.width / sx,
+                            height: rect.height / sy)
+        let from = CGRect(x: srcTop.minX,
+                          y: image.size.height - srcTop.maxY,
+                          width: srcTop.width, height: srcTop.height)
+        let out = NSImage(size: NSSize(width: 14, height: 14))
+        out.lockFocus()
+        image.draw(in: NSRect(x: 0, y: 0, width: 14, height: 14),
+                   from: from, operation: .copy, fraction: 1)
+        out.unlockFocus()
+        return out
     }
 
     private func toolbarAction(_ symbol: String, help: String, enabled: Bool, action: @escaping () -> Void) -> some View {
