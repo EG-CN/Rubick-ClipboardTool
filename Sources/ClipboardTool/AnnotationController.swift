@@ -174,23 +174,37 @@ final class AnnotationController {
 
     private init() {}
 
-    func show(image: NSImage, completion: @escaping (NSImage) -> Void) {
+    /// at：截图选区（AppKit 全局坐标，左下原点）——编辑器原地弹出；nil 时贴鼠标
+    func show(image: NSImage, at rect: CGRect? = nil, completion: @escaping (NSImage) -> Void) {
         self.completion = completion
         self.currentImage = image
         let m = AnnotateModel()
         model = m
+
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        let vis = screen.visibleFrame
+        let toolbarH: CGFloat = 118
+        let pad: CGFloat = 24
+        let maxW = min(vis.width * 0.88, image.size.width)
+        let maxH = min(vis.height * 0.8, image.size.height + toolbarH)
+        let s = min(maxW / max(image.size.width, 1), maxH / max(image.size.height, 1), 1)
+        let dispW = max(image.size.width * s, 60)
+        let dispH = max(image.size.height * s, 40)
+        let winW = max(dispW + pad, 540)
+        let winH = dispH + toolbarH + pad
+
         let view = AnnotateEditorView(
             image: image,
+            displaySize: CGSize(width: dispW, height: dispH),
             model: m,
             onConfirm: { [weak self] annotated in self?.finish(annotated) },
             onCancel: { [weak self] in self?.cancel() }
         )
         if window == nil {
-            guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
-            let w = KeyablePanel(contentRect: screen.frame,
-                            styleMask: [.borderless, .nonactivatingPanel],
-                            backing: .buffered, defer: false)
-            w.level = .screenSaver
+            let w = KeyablePanel(contentRect: NSRect(x: 0, y: 0, width: winW, height: winH),
+                                 styleMask: [.borderless, .nonactivatingPanel],
+                                 backing: .buffered, defer: false)
+            w.level = .floating
             w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             w.backgroundColor = .clear
             w.isOpaque = false
@@ -198,7 +212,21 @@ final class AnnotationController {
             w.isReleasedWhenClosed = false
             window = w
         }
+        window?.setContentSize(NSSize(width: winW, height: winH))
         window?.contentView = NSHostingView(rootView: view)
+
+        // 定位：优先选区原地（含工具栏下方空间）；无选区贴鼠标
+        let origin: NSPoint
+        if let r = rect {
+            origin = NSPoint(x: r.minX - 12, y: r.minY - toolbarH - 12)
+        } else {
+            let mp = NSEvent.mouseLocation
+            origin = NSPoint(x: mp.x - winW / 2, y: mp.y - winH + 20)
+        }
+        var o = origin
+        o.x = min(max(o.x, vis.minX + 8), vis.maxX - winW - 8)
+        o.y = min(max(o.y, vis.minY + 8), vis.maxY - winH - 8)
+        window?.setFrameOrigin(o)
         window?.makeKeyAndOrderFront(nil)
         installKeyMonitor(model: m)
     }
@@ -421,35 +449,35 @@ final class AnnotationController {
     }
 }
 
-// MARK: - 编辑器视图
+// MARK: - 编辑器视图（紧凑悬浮卡片：原地弹出 + 祖母绿荧光，非全屏）
 
 struct AnnotateEditorView: View {
     let image: NSImage
+    let displaySize: CGSize      // 图片显示尺寸
     @ObservedObject var model: AnnotateModel
     let onConfirm: (NSImage) -> Void
     let onCancel: () -> Void
 
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
-    @State private var penPath: [CGPoint] = []   // 画笔实时轨迹（归一化）
+    @State private var penPath: [CGPoint] = []
 
     @ObservedObject private var keys = AnnotateKeyConfig.shared
+
+    private var imageRect: CGRect { CGRect(origin: .zero, size: displaySize) }
 
     private func keyDisplay(_ action: AnnotateKeyConfig.Action) -> String {
         keys.keys[action]?.display ?? "?"
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let imageRect = fitRect(in: geo.size)
+        VStack(spacing: 8) {
             ZStack {
-                RubickTheme.darkBackground.opacity(0.82)
                 Image(nsImage: image)
                     .resizable()
                     .interpolation(.high)
-                    .frame(width: imageRect.width, height: imageRect.height)
-                    .position(x: imageRect.midX, y: imageRect.midY)
-                    .shadow(color: .black.opacity(0.5), radius: 12, y: 4)
+                    .frame(width: displaySize.width, height: displaySize.height)
+                    .shadow(color: .black.opacity(0.4), radius: 6, y: 2)
 
                 Canvas { ctx, _ in
                     for a in model.annotations { drawPreview(&ctx, a, imageRect: imageRect) }
@@ -458,14 +486,13 @@ struct AnnotateEditorView: View {
                         a.points = penPath
                         a.colorIndex = model.colorIndex
                         a.lineWidth = model.lineWidth
-                        a.displaySize = imageRect.size
+                        a.displaySize = displaySize
                         drawPreview(&ctx, a, imageRect: imageRect)
-                    } else if let p = inProgress(imageRect: imageRect) {
+                    } else if let p = inProgress() {
                         drawPreview(&ctx, p, imageRect: imageRect)
                     }
                 }
-                .frame(width: imageRect.width, height: imageRect.height)
-                .position(x: imageRect.midX, y: imageRect.midY)
+                .frame(width: displaySize.width, height: displaySize.height)
                 .allowsHitTesting(false)
 
                 if let editing = model.textEditing {
@@ -476,46 +503,27 @@ struct AnnotateEditorView: View {
                         .padding(6)
                         .frame(width: 220)
                         .background(RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.55)))
-                        .position(x: min(imageRect.maxX - 110, imageRect.minX + editing.position.x * imageRect.width + 110),
-                                  y: min(imageRect.maxY, imageRect.minY + editing.position.y * imageRect.height))
+                        .position(x: min(displaySize.width - 110, editing.position.x * displaySize.width + 110),
+                                  y: min(displaySize.height, editing.position.y * displaySize.height))
                         .onSubmit { model.commitText() }
                 }
 
                 if model.sidePanelText != nil {
-                    HStack {
-                        Spacer()
-                        EditorSidePanel(model: model)
-                    }
-                    .padding(.trailing, 26)
-                    .padding(.vertical, 56)
-                    .transition(.opacity)
+                    EditorSidePanel(model: model)
+                        .frame(width: min(330, displaySize.width), height: displaySize.height)
                 }
-
-                VStack {
-                    Spacer()
-                    toolbar
-                }
-                .padding(.bottom, 26)
-
-                Text("\(keyDisplay(.toolRect))–\(keyDisplay(.toolHighlight)) 工具 · \(keyDisplay(.ocr)) 识图 · \(keyDisplay(.translate)) 翻译 · \(keyDisplay(.undo)) 撤销 · \(keyDisplay(.confirm)) 确认 · \(keyDisplay(.cancel)) 取消")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.white.opacity(0.65))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(.black.opacity(0.5)))
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, 92)
             }
+            .frame(width: displaySize.width, height: displaySize.height)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { v in
                         model.textEditing = nil
-                        let p = clamp(v.startLocation, to: imageRect)
+                        let p = clamp(v.startLocation)
                         dragStart = dragStart ?? p
-                        dragCurrent = clamp(v.location, to: imageRect)
+                        dragCurrent = clamp(v.location)
                         if model.tool == .pen {
-                            let n = normalize(clamp(v.location, to: imageRect), in: imageRect)
+                            let n = normalize(clamp(v.location))
                             if let last = penPath.last {
                                 if hypot(n.x - last.x, n.y - last.y) > 0.002 { penPath.append(n) }
                             } else {
@@ -524,12 +532,12 @@ struct AnnotateEditorView: View {
                         }
                     }
                     .onEnded { v in
-                        dragCurrent = clamp(v.location, to: imageRect)
+                        dragCurrent = clamp(v.location)
                         defer { dragStart = nil; dragCurrent = nil; penPath = [] }
                         guard let start = dragStart else { return }
                         let end = dragCurrent ?? start
-                        let normStart = normalize(start, in: imageRect)
-                        let normEnd = normalize(end, in: imageRect)
+                        let normStart = normalize(start)
+                        let normEnd = normalize(end)
                         if model.tool == .text {
                             if hypot(start.x - end.x, start.y - end.y) < 6 {
                                 model.textDraft = ""
@@ -539,9 +547,7 @@ struct AnnotateEditorView: View {
                         }
                         if model.tool == .pen {
                             var pts = penPath
-                            if pts.count < 2 {
-                                pts = [normStart, normEnd]
-                            }
+                            if pts.count < 2 { pts = [normStart, normEnd] }
                             guard pts.count >= 2 else { return }
                             var a = Annotation(tool: .pen)
                             a.points = pts
@@ -551,7 +557,7 @@ struct AnnotateEditorView: View {
                                             width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
                             a.colorIndex = model.colorIndex
                             a.lineWidth = model.lineWidth
-                            a.displaySize = imageRect.size
+                            a.displaySize = displaySize
                             model.commit(a)
                             return
                         }
@@ -564,56 +570,47 @@ struct AnnotateEditorView: View {
                         a.colorIndex = model.colorIndex
                         a.lineWidth = model.lineWidth
                         a.fontSize = model.lineWidth * 4
-                        a.displaySize = imageRect.size
+                        a.displaySize = displaySize
                         model.commit(a)
                     }
             )
-            .onChange(of: imageRect) { newValue in
-                model.imageRect = newValue
-            }
+
+            toolbar
         }
-        .onAppear { NSCursor.crosshair.set() }
+        .padding(12)
+        .frame(width: displaySize.width + 24, height: displaySize.height + 142)
+        .background(RoundedRectangle(cornerRadius: 14).fill(RubickTheme.darkBackground.opacity(0.97)))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(RubickTheme.emerald.opacity(0.45), lineWidth: 1))
+        .shadow(color: RubickTheme.emerald.opacity(0.35), radius: 18)   // 祖母绿荧光
+        .onAppear {
+            model.imageRect = imageRect
+            NSCursor.crosshair.set()
+        }
         .onDisappear { NSCursor.arrow.set() }
     }
 
-    private func fitRect(in container: CGSize) -> CGRect {
-        let padH: CGFloat = 60
-        let padTop: CGFloat = 40
-        let padBottom: CGFloat = 150
-        let avail = CGSize(width: max(container.width - padH * 2, 100),
-                           height: max(container.height - padTop - padBottom, 100))
-        guard image.size.width > 0, image.size.height > 0 else {
-            return CGRect(origin: CGPoint(x: padH, y: padTop), size: avail)
-        }
-        let s = min(avail.width / image.size.width, avail.height / image.size.height)
-        let size = CGSize(width: image.size.width * s, height: image.size.height * s)
-        return CGRect(x: (container.width - size.width) / 2,
-                      y: padTop + (avail.height - size.height) / 2,
-                      width: size.width, height: size.height)
+    private func normalize(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: p.x / max(displaySize.width, 1),
+                y: p.y / max(displaySize.height, 1))
     }
 
-    private func normalize(_ p: CGPoint, in rect: CGRect) -> CGPoint {
-        CGPoint(x: (p.x - rect.minX) / max(rect.width, 1),
-                y: (p.y - rect.minY) / max(rect.height, 1))
+    private func clamp(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: min(max(p.x, 0), displaySize.width),
+                y: min(max(p.y, 0), displaySize.height))
     }
 
-    private func clamp(_ p: CGPoint, to rect: CGRect) -> CGPoint {
-        CGPoint(x: min(max(p.x, rect.minX), rect.maxX),
-                y: min(max(p.y, rect.minY), rect.maxY))
-    }
-
-    private func inProgress(imageRect: CGRect) -> Annotation? {
+    private func inProgress() -> Annotation? {
         guard let start = dragStart else { return nil }
         let end = dragCurrent ?? start
-        let n1 = normalize(start, in: imageRect)
-        let n2 = normalize(end, in: imageRect)
+        let n1 = normalize(start)
+        let n2 = normalize(end)
         var a = Annotation(tool: model.tool)
         a.rect = CGRect(x: min(n1.x, n2.x), y: min(n1.y, n2.y),
                         width: abs(n2.x - n1.x), height: abs(n2.y - n1.y))
         a.colorIndex = model.colorIndex
         a.lineWidth = model.lineWidth
         a.fontSize = model.lineWidth * 4
-        a.displaySize = imageRect.size
+        a.displaySize = displaySize
         return a
     }
 
@@ -656,70 +653,73 @@ struct AnnotateEditorView: View {
         }
     }
 
-    // MARK: 工具栏
+    // MARK: 工具栏（两行紧凑）
 
     private var toolbar: some View {
-        HStack(spacing: 8) {
-            ForEach(Annotation.Tool.allCases, id: \.self) { t in
-                toolButton(t)
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                ForEach(Annotation.Tool.allCases, id: \.self) { t in
+                    toolButton(t)
+                }
+                Button {
+                    model.runOCR(on: image)
+                } label: {
+                    Image(systemName: "text.viewfinder")
+                        .font(.system(size: 14))
+                        .frame(width: 32, height: 32)
+                        .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.06)))
+                        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.12), lineWidth: 1))
+                        .foregroundStyle(RubickTheme.emeraldBright)
+                }
+                .buttonStyle(.plain)
+                .help("识图（\(keyDisplay(.ocr))）")
+                Spacer()
+                ForEach(0..<AnnotationController.palette.count, id: \.self) { i in
+                    colorDot(i)
+                }
+                Picker("", selection: $model.lineWidth) {
+                    Text("细").tag(CGFloat(2))
+                    Text("中").tag(CGFloat(4))
+                    Text("粗").tag(CGFloat(6))
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 104)
             }
-            Button {
-                model.runOCR(on: image)
-            } label: {
-                Image(systemName: "text.viewfinder")
-                    .font(.system(size: 15))
-                    .frame(width: 36, height: 36)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.06)))
-                    .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.12), lineWidth: 1))
-                    .foregroundStyle(RubickTheme.emeraldBright)
+            HStack(spacing: 8) {
+                toolbarAction("arrow.uturn.backward", help: "撤销 \(keyDisplay(.undo))", enabled: !model.annotations.isEmpty) {
+                    model.undo()
+                }
+                toolbarAction("arrow.uturn.forward", help: "重做 \(keyDisplay(.redo))", enabled: !model.redoStack.isEmpty) {
+                    model.redo()
+                }
+                Text("\(keyDisplay(.toolRect))–\(keyDisplay(.toolHighlight)) 工具 · \(keyDisplay(.ocr)) 识图 · \(keyDisplay(.translate)) 翻译 · \(keyDisplay(.undo)) 撤销 · \(keyDisplay(.confirm)) 确认 · ⎋ 取消")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
+                Spacer()
+                Button {
+                    model.textEditing = nil
+                    onConfirm(AnnotationController.flatten(image: image, annotations: model.annotations) ?? image)
+                } label: {
+                    Label("确认", systemImage: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(RubickTheme.emerald)
+                Button {
+                    onCancel()
+                } label: {
+                    Label("取消", systemImage: "xmark")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
-            .buttonStyle(.plain)
-            .help("识图（\\(keyDisplay(.ocr))）")
-            Divider().frame(height: 22).opacity(0.5)
-            ForEach(0..<AnnotationController.palette.count, id: \.self) { i in
-                colorDot(i)
-            }
-            Divider().frame(height: 22).opacity(0.5)
-            Picker("", selection: $model.lineWidth) {
-                Text("细").tag(CGFloat(2))
-                Text("中").tag(CGFloat(4))
-                Text("粗").tag(CGFloat(6))
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 120)
-            Divider().frame(height: 22).opacity(0.5)
-            toolbarAction("arrow.uturn.backward", help: "撤销 \(keyDisplay(.undo))", enabled: !model.annotations.isEmpty) {
-                model.undo()
-            }
-            toolbarAction("arrow.uturn.forward", help: "重做 \(keyDisplay(.redo))", enabled: !model.redoStack.isEmpty) {
-                model.redo()
-            }
-            Spacer()
-            Button {
-                model.textEditing = nil
-                onConfirm(AnnotationController.flatten(image: image, annotations: model.annotations) ?? image)
-            } label: {
-                Label("确认", systemImage: "checkmark")
-                    .font(.system(size: 11.5, weight: .semibold))
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.regular)
-            .tint(RubickTheme.emerald)
-            Button {
-                onCancel()
-            } label: {
-                Label("取消", systemImage: "xmark")
-                    .font(.system(size: 11.5))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 12).fill(.black.opacity(0.75)))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(RubickTheme.emerald.opacity(0.35), lineWidth: 0.8))
-        .shadow(color: RubickTheme.emerald.opacity(0.2), radius: 10)
-        .padding(.horizontal, 20)
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(.black.opacity(0.55)))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(RubickTheme.emerald.opacity(0.3), lineWidth: 0.8))
     }
 
     private func toolButton(_ t: Annotation.Tool) -> some View {
@@ -727,8 +727,8 @@ struct AnnotateEditorView: View {
             model.tool = t
         } label: {
             Image(systemName: t.symbol)
-                .font(.system(size: 15))
-                .frame(width: 36, height: 36)
+                .font(.system(size: 13))
+                .frame(width: 32, height: 32)
                 .background(RoundedRectangle(cornerRadius: 7).fill(model.tool == t
                                                                    ? RubickTheme.emerald.opacity(0.22)
                                                                    : .white.opacity(0.06)))
@@ -755,7 +755,7 @@ struct AnnotateEditorView: View {
         } label: {
             Circle()
                 .fill(Color(AnnotationController.palette[i]))
-                .frame(width: 16, height: 16)
+                .frame(width: 15, height: 15)
                 .overlay(Circle().strokeBorder(model.colorIndex == i ? .white : .clear, lineWidth: 1.5))
                 .shadow(color: model.colorIndex == i ? Color(AnnotationController.palette[i]).opacity(0.8) : .clear, radius: 3)
         }
@@ -765,10 +765,10 @@ struct AnnotateEditorView: View {
     private func toolbarAction(_ symbol: String, help: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 13))
-                .frame(width: 30, height: 30)
-                .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.06)))
-                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.12), lineWidth: 1))
+                .font(.system(size: 12))
+                .frame(width: 26, height: 26)
+                .background(RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.06)))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.12), lineWidth: 1))
                 .foregroundStyle(enabled ? .white.opacity(0.85) : .white.opacity(0.3))
         }
         .buttonStyle(.plain)
@@ -858,7 +858,7 @@ struct EditorSidePanel: View {
             }
         }
         .padding(12)
-        .frame(width: 330, height: 420)
+        .frame(width: 330)
         .background(RoundedRectangle(cornerRadius: 12).fill(.black.opacity(0.82)))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(RubickTheme.emerald.opacity(0.35), lineWidth: 0.8))
         .shadow(color: RubickTheme.emerald.opacity(0.2), radius: 10)

@@ -256,17 +256,17 @@ final class CaptureController {
             systemFallback()
             return
         }
-        handleCapturedImage(cropped)
+        handleCapturedImage(cropped, at: rect)
     }
 
-    /// 截图产物分发：普通截图 → 标注编辑器；划图翻译 → OCR+翻译
-    private func handleCapturedImage(_ image: NSImage) {
+    /// 截图产物分发：普通截图 → 标注编辑器（选区原地弹出）；划图翻译 → OCR+翻译
+    private func handleCapturedImage(_ image: NSImage, at rect: CGRect? = nil) {
         let purpose = pendingPurpose
         pendingPurpose = .normal
         if purpose == .translate {
             runOCRTranslate(image)
         } else {
-            AnnotationController.shared.show(image: image) { [weak self] result in
+            AnnotationController.shared.show(image: image, at: rect) { [weak self] result in
                 self?.onCaptured?(result)
             }
         }
