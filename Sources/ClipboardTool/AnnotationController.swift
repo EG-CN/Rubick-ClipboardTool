@@ -41,6 +41,8 @@ struct Annotation: Identifiable, Equatable {
     var colorIndex: Int = 0
     var lineWidth: CGFloat = 4        // 创建时的显示点宽
     var cornerRadius: CGFloat = 0     // 矩形圆角（显示点，0 = 直角）
+    var blockSize: CGFloat = 16       // 马赛克颗粒（像素）
+    var fillOpacity: CGFloat = 0.35   // 高亮透明度
     var fontSize: CGFloat = 16        // 文字工具字号（显示点）
     var displaySize: CGSize = .zero   // 创建时图片显示尺寸（用于展平缩放）
 }
@@ -54,6 +56,8 @@ final class AnnotateModel: ObservableObject {
     @Published var lineWidth: CGFloat = 4
     @Published var fontSize: CGFloat = 16
     @Published var cornerRadius: CGFloat = 0
+    @Published var blockSize: CGFloat = 16     // 马赛克颗粒
+    @Published var fillOpacity: CGFloat = 0.35 // 高亮透明度
     @Published var annotations: [Annotation] = []
     @Published var redoStack: [Annotation] = []
     @Published var textEditing: (id: UUID, position: CGPoint)?
@@ -427,7 +431,7 @@ final class AnnotationController {
         case .ellipse:
             ctx.strokeEllipse(in: r.insetBy(dx: lw / 2, dy: lw / 2))
         case .arrow:
-            drawArrow(r, ctx: ctx)
+            drawArrow(r, ctx: ctx, color: color)
         case .pen:
             guard a.points.count > 1 else { break }
             let path = CGMutablePath()
@@ -444,30 +448,37 @@ final class AnnotationController {
             let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
             (a.text as NSString).draw(at: CGPoint(x: r.minX, y: r.minY), withAttributes: attrs)
         case .mosaic:
-            drawMosaic(r, imageSize: imageSize, baseCG: baseCG)
+            drawMosaic(r, imageSize: imageSize, baseCG: baseCG, blockSize: a.blockSize)
         case .highlight:
+            ctx.setFillColor(color.withAlphaComponent(a.fillOpacity).cgColor)
             ctx.fill(r)
         }
     }
 
-    private static func drawArrow(_ r: CGRect, ctx: CGContext) {
+    private static func drawArrow(_ r: CGRect, ctx: CGContext, color: NSColor) {
         let start = CGPoint(x: r.minX, y: r.minY)
-        let end = CGPoint(x: r.maxX, y: r.maxY)
+        let tip = CGPoint(x: r.maxX, y: r.maxY)
+        let angle = atan2(tip.y - start.y, tip.x - start.x)
+        let headLen = max(r.width * 0.3, 16)
+        let headHalf = headLen * 0.42
+        let base = CGPoint(x: tip.x - cos(angle) * headLen, y: tip.y - sin(angle) * headLen)
+        // 箭杆画到三角根部
         ctx.move(to: start)
-        ctx.addLine(to: end)
+        ctx.addLine(to: base)
         ctx.strokePath()
-        let angle = atan2(end.y - start.y, end.x - start.x)
-        let headLen = max(r.width * 0.28, 12)
-        for da in [CGFloat.pi * 5 / 6, -CGFloat.pi * 5 / 6] {
-            let hp = CGPoint(x: end.x + cos(angle + da) * headLen,
-                             y: end.y + sin(angle + da) * headLen)
-            ctx.move(to: end)
-            ctx.addLine(to: hp)
-        }
-        ctx.strokePath()
+        // 实心三角箭头
+        let perp = angle + .pi / 2
+        let p1 = CGPoint(x: base.x + cos(perp) * headHalf, y: base.y + sin(perp) * headHalf)
+        let p2 = CGPoint(x: base.x - cos(perp) * headHalf, y: base.y - sin(perp) * headHalf)
+        ctx.move(to: p1)
+        ctx.addLine(to: tip)
+        ctx.addLine(to: p2)
+        ctx.closePath()
+        ctx.setFillColor(color.cgColor)
+        ctx.fillPath()
     }
 
-    private static func drawMosaic(_ r: CGRect, imageSize: CGSize, baseCG: CGImage?) {
+    private static func drawMosaic(_ r: CGRect, imageSize: CGSize, baseCG: CGImage?, blockSize: CGFloat = 16) {
         guard let baseCG = baseCG else {
             NSColor.gray.withAlphaComponent(0.5).setFill()
             NSBezierPath(rect: r).fill()
@@ -479,7 +490,7 @@ final class AnnotationController {
                             width: r.width * scalePx,
                             height: r.height * scalePx)
         let ci = CIImage(cgImage: baseCG).cropped(to: cropPx)
-            .applyingFilter("CIPixellate", parameters: [kCIInputScaleKey: 16])
+            .applyingFilter("CIPixellate", parameters: [kCIInputScaleKey: max(blockSize, 4)])
         if let cg = CIContext().createCGImage(ci, from: ci.extent) {
             NSImage(cgImage: cg, size: r.size).draw(in: r)
         }
@@ -500,6 +511,8 @@ struct AnnotateEditorView: View {
     @State private var dragCurrent: CGPoint?
     @State private var penPath: [CGPoint] = []
     @State private var moveLast: CGPoint?
+    @State private var hoveredHelp: String?
+    @FocusState private var textFocused: Bool
 
     @ObservedObject private var keys = AnnotateKeyConfig.shared
 
@@ -531,6 +544,15 @@ struct AnnotateEditorView: View {
                     } else if let p = inProgress() {
                         drawPreview(&ctx, p, imageRect: imageRect)
                     }
+                    if let editing = model.textEditing, !model.textDraft.isEmpty {
+                        var a = Annotation(tool: .text)
+                        a.rect = CGRect(origin: editing.position, size: .zero)
+                        a.text = model.textDraft
+                        a.colorIndex = model.colorIndex
+                        a.fontSize = model.fontSize
+                        a.displaySize = displaySize
+                        drawPreview(&ctx, a, imageRect: imageRect)
+                    }
                 }
                 .frame(width: displaySize.width, height: displaySize.height)
                 .allowsHitTesting(false)
@@ -538,13 +560,16 @@ struct AnnotateEditorView: View {
                 if let editing = model.textEditing {
                     TextField("输入文字…", text: $model.textDraft)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: model.fontSize, weight: .semibold))
                         .foregroundStyle(Color(AnnotationController.palette[model.colorIndex]))
-                        .padding(6)
-                        .frame(width: 220)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.55)))
-                        .position(x: min(displaySize.width - 110, editing.position.x * displaySize.width + 110),
-                                  y: min(displaySize.height, editing.position.y * displaySize.height))
+                        .focused($textFocused)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .frame(width: 240, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.7)))
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(RubickTheme.emerald, lineWidth: 1))
+                        .position(x: min(displaySize.width - 120, max(120, editing.position.x * displaySize.width + 120)),
+                                  y: min(displaySize.height - 12, max(14, editing.position.y * displaySize.height + 10)))
                         .onSubmit { model.commitText() }
                 }
 
@@ -581,6 +606,7 @@ struct AnnotateEditorView: View {
                             if hypot(start.x - end.x, start.y - end.y) < 6 {
                                 model.textDraft = ""
                                 model.textEditing = (UUID(), normStart)
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { textFocused = true }
                             }
                             return
                         }
@@ -625,6 +651,8 @@ struct AnnotateEditorView: View {
                         a.colorIndex = model.colorIndex
                         a.lineWidth = model.lineWidth
                         a.cornerRadius = tool == .rect ? model.cornerRadius : 0
+                        a.blockSize = model.blockSize
+                        a.fillOpacity = model.fillOpacity
                         a.fontSize = tool == .text ? model.fontSize : model.lineWidth * 4
                         a.displaySize = displaySize
                         model.commit(a)
@@ -757,7 +785,7 @@ struct AnnotateEditorView: View {
                 ctx.fill(Path(r), with: .color(.gray.opacity(0.45)))
             }
         case .highlight:
-            ctx.fill(Path(r), with: .color(color.opacity(0.3)))
+            ctx.fill(Path(r), with: .color(color.opacity(a.fillOpacity)))
         }
     }
 
@@ -780,7 +808,9 @@ struct AnnotateEditorView: View {
                         .foregroundStyle(RubickTheme.emeraldBright)
                 }
                 .buttonStyle(.plain)
-                .help("识图（\(keyDisplay(.ocr))）")
+                .onHover { hovering in
+                    hoveredHelp = hovering ? "识图（\(keyDisplay(.ocr))）" : nil
+                }
                 if model.tool == .rect {
                     Picker("", selection: $model.cornerRadius) {
                         Text("直角").tag(CGFloat(0))
@@ -823,9 +853,9 @@ struct AnnotateEditorView: View {
                 toolbarAction("arrow.uturn.forward", help: "重做 \(keyDisplay(.redo))", enabled: !model.redoStack.isEmpty) {
                     model.redo()
                 }
-                Text("\(keyDisplay(.toolRect))–\(keyDisplay(.toolHighlight)) 工具 · \(keyDisplay(.ocr)) 识图 · \(keyDisplay(.translate)) 翻译 · \(keyDisplay(.undo)) 撤销 · \(keyDisplay(.confirm)) 确认 · ⎋ 取消")
+                Text(hoveredHelp ?? "\(keyDisplay(.toolRect))–\(keyDisplay(.toolHighlight)) 工具 · \(keyDisplay(.ocr)) 识图 · \(keyDisplay(.translate)) 翻译 · \(keyDisplay(.undo)) 撤销 · \(keyDisplay(.confirm)) 确认 · ⎋ 取消")
                     .font(.system(size: 9.5))
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(hoveredHelp != nil ? RubickTheme.emeraldBright : .white.opacity(0.55))
                     .lineLimit(1)
                 Spacer()
                 Button {
@@ -868,7 +898,9 @@ struct AnnotateEditorView: View {
                 .foregroundStyle(model.tool == t ? RubickTheme.emeraldBright : .white.opacity(0.85))
         }
         .buttonStyle(.plain)
-        .help(t.label + "（\(keyForTool(t) ?? "")）")
+        .onHover { hovering in
+            hoveredHelp = hovering ? "\(t.label)（\(keyForTool(t) ?? "点击")）" : nil
+        }
     }
 
     private func keyForTool(_ t: Annotation.Tool) -> String? {
@@ -891,6 +923,9 @@ struct AnnotateEditorView: View {
                 .shadow(color: model.colorIndex == i ? Color(AnnotationController.palette[i]).opacity(0.8) : .clear, radius: 3)
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            hoveredHelp = hovering ? "标注颜色" : nil
+        }
     }
 
     /// 马赛克预览：把区域压成 14×14 小图再放大 → 像素块效果（实时、廉价）
@@ -924,7 +959,9 @@ struct AnnotateEditorView: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        .help(help)
+        .onHover { hovering in
+            hoveredHelp = hovering ? help : nil
+        }
     }
 }
 
