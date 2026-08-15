@@ -54,7 +54,7 @@ final class CaptureController {
 
     // MARK: 配置
 
-    var snapEnabled: Bool { UserDefaults.standard.object(forKey: "capture.snap") as? Bool ?? true }
+    var snapEnabled: Bool { UserDefaults.standard.object(forKey: "capture.snap") as? Bool ?? false }
     var snapThreshold: CGFloat { CGFloat(UserDefaults.standard.object(forKey: "capture.snapThreshold") as? Double ?? 8) }
     var mode: String { UserDefaults.standard.string(forKey: "capture.mode") ?? "auto" }   // auto / custom / system
 
@@ -179,9 +179,6 @@ final class CaptureController {
         let view = CaptureOverlayView(
             composite: composite,
             unionRect: unionRect,
-            windows: windows,
-            snapEnabled: snapEnabled,
-            snapThreshold: snapThreshold,
             onCancel: { [weak self] in self?.teardown(restoreFocus: true) },
             onConfirm: { [weak self] rect in
                 self?.finish(rect: rect, composite: composite, unionRect: unionRect)
@@ -244,32 +241,11 @@ final class CaptureController {
 struct CaptureOverlayView: View {
     let composite: NSImage
     let unionRect: CGRect
-    let windows: [(frame: CGRect, title: String)]
-    let snapEnabled: Bool
-    let snapThreshold: CGFloat
     let onCancel: () -> Void
     let onConfirm: (CGRect) -> Void
 
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
-    @State private var hoverPoint: CGPoint?
-    @State private var dragged = false
-    @State private var hoverAtDragStart: CGRect? = nil
-
-    private var windowFrames: [CGRect] { windows.map { $0.frame } }
-
-    /// SwiftUI 视图点（左上原点）→ AppKit 全局点（左下原点）
-    private func global(_ p: CGPoint) -> CGPoint {
-        let r = SnapLogic.appKitRect(fromViewRect: CGRect(origin: p, size: .zero),
-                                     viewHeight: unionRect.height,
-                                     windowOrigin: unionRect.origin)
-        return r.origin
-    }
-
-    /// AppKit 全局矩形 → 视图坐标（左上原点）
-    private func local(_ r: CGRect) -> CGRect {
-        SnapLogic.viewRect(fromAppKitRect: r, viewHeight: unionRect.height, windowOrigin: unionRect.origin)
-    }
 
     /// 视图矩形（左上原点）→ AppKit 全局矩形（左下原点）
     private func globalRect(_ r: CGRect) -> CGRect {
@@ -282,25 +258,6 @@ struct CaptureOverlayView: View {
                       width: abs(a.x - b.x), height: abs(a.y - b.y))
     }
 
-    /// 实时吸附后的全局选区（本地坐标输出）
-    private var snappedSelection: (rect: CGRect, window: CGRect?)? {
-        guard let sel = selectionRect, snapEnabled else { return nil }
-        let globalSel = CGRect(x: sel.minX + unionRect.minX, y: sel.minY + unionRect.minY,
-                               width: sel.width, height: sel.height)
-        let (r, w) = SnapLogic.snappedRect(globalSel, windows: windowFrames, threshold: snapThreshold)
-        return (local(r), w.map(local))
-    }
-
-    /// 悬停窗口（未拖动时）
-    private var hoverWindow: CGRect? {
-        guard snapEnabled, !dragged, let hp = hoverPoint else { return nil }
-        return SnapLogic.window(under: global(hp), windows: windowFrames).map(local)
-    }
-
-    private func title(for frame: CGRect) -> String? {
-        windows.first(where: { $0.frame == frame })?.title
-    }
-
     var body: some View {
         ZStack {
             Image(nsImage: composite)
@@ -308,8 +265,8 @@ struct CaptureOverlayView: View {
                 .frame(width: unionRect.width, height: unionRect.height)
                 .ignoresSafeArea()
 
-            // 挖孔遮罩：选区处透出原图（零裁剪开销，跟手）
-            if let sel = snappedSelection?.rect ?? selectionRect {
+            // 挖孔遮罩：选区处透出原图（跟手、所见即所截）
+            if let sel = selectionRect {
                 DimWithHole(hole: sel)
                     .fill(Color.black.opacity(0.5), style: FillStyle(eoFill: true))
                     .allowsHitTesting(false)
@@ -317,45 +274,21 @@ struct CaptureOverlayView: View {
                 Color.black.opacity(0.5)
             }
 
-            // 窗口高亮（吸附目标 / 悬停窗口）
-            if let w = snappedSelection?.window ?? hoverWindow {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(RubickTheme.emerald.opacity(0.10))
-                    RoundedRectangle(cornerRadius: 7)
-                        .strokeBorder(RubickTheme.emeraldBright, lineWidth: 2)
-                    if let t = title(for: globalRect(w)), !t.isEmpty {
-                        Text(t)
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(RubickTheme.emerald.opacity(0.9)))
-                            .frame(maxHeight: .infinity, alignment: .top)
-                            .padding(.top, -14)
-                    }
-                }
-                .frame(width: w.width, height: w.height)
-                .position(x: w.midX, y: w.midY)
-                .shadow(color: RubickTheme.emerald.opacity(0.35), radius: 6)
-            }
-
-            // 选区描边 + 角标 + 尺寸
-            if let sel = snappedSelection?.rect ?? selectionRect {
-                RoundedRectangle(cornerRadius: 3)
+            if let sel = selectionRect {
+                // 仅一个绿色细框
+                Rectangle()
                     .strokeBorder(RubickTheme.emeraldBright, lineWidth: 1.5)
                     .frame(width: sel.width, height: sel.height)
                     .position(x: sel.midX, y: sel.midY)
-                cornerBrackets(sel)
                 Text("\(Int(sel.width)) × \(Int(sel.height))")
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
-                    .background(Capsule().fill(RubickTheme.emerald.opacity(0.9)))
+                    .background(Capsule().fill(.black.opacity(0.7)))
                     .position(x: sel.minX + 6, y: max(sel.minY - 15, 14))
             } else {
-                hintPill("拖拽框选 · 悬停窗口单击直截 · ↵ 确认 · ⎋ 取消")
+                hintPill("拖拽框选 · ↵ 确认 · ⎋ 取消")
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.top, 18)
             }
@@ -363,54 +296,23 @@ struct CaptureOverlayView: View {
         .contentShape(Rectangle())
         .onReceive(NotificationCenter.default.publisher(for: .init("cbt.captureConfirm"))) { _ in
             if let sel = selectionRect, sel.width > 3, sel.height > 3 {
-                if let snapped = snappedSelection?.rect {
-                    onConfirm(globalRect(snapped))
-                } else {
-                    onConfirm(globalRect(sel))
-                }
-            } else if let hw = hoverWindow {
-                onConfirm(globalRect(hw))
-            }
-        }
-        .onContinuousHover { phase in
-            guard !dragged else { return }
-            switch phase {
-            case .active(let p): hoverPoint = p
-            case .ended: hoverPoint = nil
+                onConfirm(globalRect(sel))
             }
         }
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { v in
-                    if dragStart == nil {
-                        hoverAtDragStart = hoverWindow   // 记住按下瞬间悬停的窗口
-                    }
-                    dragged = true
                     dragStart = dragStart ?? v.startLocation
                     dragCurrent = v.location
                 }
                 .onEnded { v in
                     dragCurrent = v.location
-                    defer {
-                        dragStart = nil
-                        dragCurrent = nil
-                        dragged = false
-                        hoverAtDragStart = nil
-                    }
+                    defer { dragStart = nil; dragCurrent = nil }
                     guard let sel = selectionRect, sel.width > 3, sel.height > 3 else {
-                        // 单击：按下瞬间悬停窗口 → 直截整窗；否则取消
-                        if let hw = hoverAtDragStart {
-                            onConfirm(globalRect(hw))
-                        } else {
-                            onCancel()
-                        }
+                        onCancel()   // 单击空白 = 取消
                         return
                     }
-                    if let snapped = snappedSelection?.rect {
-                        onConfirm(globalRect(snapped))
-                    } else {
-                        onConfirm(globalRect(sel))
-                    }
+                    onConfirm(globalRect(sel))
                 }
         )
         .onAppear { NSCursor.crosshair.set() }
@@ -425,30 +327,6 @@ struct CaptureOverlayView: View {
             .padding(.vertical, 7)
             .background(Capsule().fill(.black.opacity(0.65)))
             .overlay(Capsule().strokeBorder(RubickTheme.emerald.opacity(0.35), lineWidth: 0.8))
-            .shadow(color: RubickTheme.emerald.opacity(0.15), radius: 6)
-    }
-
-    private func cornerBrackets(_ r: CGRect) -> some View {
-        let l: CGFloat = 14
-        return Path { p in
-            // 左上
-            p.move(to: CGPoint(x: r.minX, y: r.minY + l))
-            p.addLine(to: CGPoint(x: r.minX, y: r.minY))
-            p.addLine(to: CGPoint(x: r.minX + l, y: r.minY))
-            // 右上
-            p.move(to: CGPoint(x: r.maxX - l, y: r.minY))
-            p.addLine(to: CGPoint(x: r.maxX, y: r.minY))
-            p.addLine(to: CGPoint(x: r.maxX, y: r.minY + l))
-            // 左下
-            p.move(to: CGPoint(x: r.minX, y: r.maxY - l))
-            p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
-            p.addLine(to: CGPoint(x: r.minX + l, y: r.maxY))
-            // 右下
-            p.move(to: CGPoint(x: r.maxX - l, y: r.maxY))
-            p.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
-            p.addLine(to: CGPoint(x: r.maxX, y: r.maxY - l))
-        }
-        .stroke(Color.white, lineWidth: 2)
     }
 }
 

@@ -209,7 +209,7 @@ struct SettingsView: View {
     @State private var llmModel = UserDefaults.standard.string(forKey: "llm.model") ?? ""
     @State private var llmKey = UserDefaults.standard.string(forKey: "llm.apiKey") ?? ""
     @State private var ocrLang = UserDefaults.standard.string(forKey: "ocr.language") ?? "auto"
-    @State private var snapOn = UserDefaults.standard.object(forKey: "capture.snap") as? Bool ?? true
+    @State private var snapOn = UserDefaults.standard.object(forKey: "capture.snap") as? Bool ?? false
     @State private var snapThreshold: Double = UserDefaults.standard.object(forKey: "capture.snapThreshold") as? Double ?? 8
     @State private var captureMode = UserDefaults.standard.string(forKey: "capture.mode") ?? "auto"
     @State private var llmTesting = false
@@ -807,7 +807,7 @@ struct SettingsView: View {
                         Toggle("窗口吸附", isOn: $snapOn)
                             .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
                             .onChange(of: snapOn) { v in UserDefaults.standard.set(v, forKey: "capture.snap") }
-                        Text("悬停窗口高亮、单击直截整窗；选框边缘自动吸附窗口边界。")
+                        Text("实验性功能，默认关闭。开启后：悬停窗口高亮、单击直截整窗、选框边缘自动吸附窗口边界。")
                             .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
                         HStack {
                             Text("吸附阈值").font(.system(size: 12.5))
