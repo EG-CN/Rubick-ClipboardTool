@@ -881,7 +881,7 @@ struct SettingsView: View {
                 .tracking(1.2)
                 .textCase(.uppercase)
                 .foregroundStyle(RubickTheme.primary(scheme).opacity(0.85))
-            Text("版本 2.0.0")
+            Text("版本 1.1.1")
                 .font(.system(size: 11))
                 .foregroundStyle(RubickTheme.muted(scheme))
             Text("菜单栏常驻的剪贴板历史与截图钉图工具。\n偷取（复制）、施展（粘贴）、铭刻（钉图），尽在魔典之中。\nSwift + SwiftUI 原生开发，数据仅保存在本机。")
