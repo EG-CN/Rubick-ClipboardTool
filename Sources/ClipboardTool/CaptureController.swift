@@ -452,17 +452,23 @@ final class PermissionGuide {
     }
 
     private func requestAndWait() {
+        // 点击后立即收起弹窗，直接带用户去系统设置的屏幕录制页
+        panel?.orderOut(nil)
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
+        }
         _ = CGRequestScreenCaptureAccess()
         var attempts = 0
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] t in
+        timer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { [weak self] t in
             attempts += 1
             if CGPreflightScreenCaptureAccess() {
                 t.invalidate()
+                Toast.shared.show("屏幕录制已授权")
                 self?.finish(true)
-            } else if attempts >= 120 {   // 最多等 60 秒
+            } else if attempts >= 14 {   // ~8 秒
                 t.invalidate()
-                Toast.shared.show("未检测到授权：请到 系统设置→隐私与安全性→屏幕录制 开启后重启拉比克")
+                Toast.shared.show("若已开启仍未生效：屏幕录制权限需重启拉比克后生效")
                 self?.finish(false)
             }
         }
