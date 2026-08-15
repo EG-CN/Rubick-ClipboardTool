@@ -186,6 +186,7 @@ func actionLabel(_ action: HotkeyManager.Action) -> String {
     case .togglePanel: return "呼出历史面板"
     case .screenshot: return "区域截图"
     case .openSettings: return "打开设置"
+    case .dragTranslate: return "划图翻译（选区识别+翻译）"
     }
 }
 

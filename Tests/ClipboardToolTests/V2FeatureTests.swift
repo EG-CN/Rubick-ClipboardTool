@@ -199,6 +199,14 @@ final class V2FeatureTests: XCTestCase {
         XCTAssertLessThan(c.blueComponent, 0.3)
     }
 
+    // MARK: 划图翻译快捷键
+
+    func testDragTranslateHotkeyDefault() {
+        let hk = HotkeyManager.shared
+        XCTAssertEqual(hk.hotkeys[.dragTranslate]?.display, "⌘⇧D")
+        XCTAssertEqual(HotkeyManager.Action.allCases.count, 4)
+    }
+
     // MARK: 合成/裁剪方向性（防「截到背景桌面」回归）
 
     func testCompositeOrientationTopRedBottomBlue() {

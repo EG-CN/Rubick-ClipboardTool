@@ -106,6 +106,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panelController.close()
             ShotActionBar.shared.hide()
             screenshotController.captureInteractive()
+        case .dragTranslate:
+            panelController.close()
+            ShotActionBar.shared.hide()
+            CaptureController.shared.captureForTranslation()
         case .openSettings:
             settingsController.toggle()
         }

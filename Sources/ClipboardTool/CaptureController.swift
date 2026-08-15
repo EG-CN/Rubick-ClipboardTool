@@ -64,7 +64,25 @@ final class CaptureController {
 
     // MARK: 入口
 
+    enum CapturePurpose {
+        case normal      // 普通截图（→ 标注编辑器）
+        case translate   // 划图翻译（→ OCR + 自动翻译）
+    }
+
+    private var pendingPurpose: CapturePurpose = .normal
+
     func captureInteractive() {
+        pendingPurpose = .normal
+        beginCapture()
+    }
+
+    /// 划图翻译（Bob 式）：滑选文字区域 → OCR → 自动翻译（功能清单 12.9）
+    func captureForTranslation() {
+        pendingPurpose = .translate
+        beginCapture()
+    }
+
+    private func beginCapture() {
         let allowed = Self.screenRecordingAllowed()
         if mode == "system" {
             systemFallback()
@@ -88,11 +106,9 @@ final class CaptureController {
     /// 系统框选回退（无吸附），截图后仍进标注编辑器（12.6.4）
     private func systemFallback() {
         Toast.shared.show("系统框选模式（未授权屏幕录制，无窗口吸附）")
-        ScreenshotController.shared.captureSystemInteractive { img in
-            guard let img = img else { return }
-            AnnotationController.shared.show(image: img) { [weak self] result in
-                self?.onCaptured?(result)
-            }
+        ScreenshotController.shared.captureSystemInteractive { [weak self] img in
+            guard let self = self, let img = img else { return }
+            self.handleCapturedImage(img)
         }
     }
 
@@ -179,6 +195,9 @@ final class CaptureController {
         let view = CaptureOverlayView(
             composite: composite,
             unionRect: unionRect,
+            hintText: pendingPurpose == .translate
+                ? "拖选需要翻译的文字区域 · ↵ 确认 · ⎋ 取消"
+                : "拖拽框选 · ↵ 确认 · ⎋ 取消",
             onCancel: { [weak self] in self?.teardown(restoreFocus: true) },
             onConfirm: { [weak self] rect in
                 self?.finish(rect: rect, composite: composite, unionRect: unionRect)
@@ -218,8 +237,48 @@ final class CaptureController {
             systemFallback()
             return
         }
-        AnnotationController.shared.show(image: cropped) { [weak self] result in
-            self?.onCaptured?(result)
+        handleCapturedImage(cropped)
+    }
+
+    /// 截图产物分发：普通截图 → 标注编辑器；划图翻译 → OCR+翻译
+    private func handleCapturedImage(_ image: NSImage) {
+        let purpose = pendingPurpose
+        pendingPurpose = .normal
+        if purpose == .translate {
+            runOCRTranslate(image)
+        } else {
+            AnnotationController.shared.show(image: image) { [weak self] result in
+                self?.onCaptured?(result)
+            }
+        }
+    }
+
+    /// 划图翻译：Vision 本地 OCR → 自动翻译 → 结果面板
+    private func runOCRTranslate(_ image: NSImage) {
+        Toast.shared.show("识别文字并翻译中…")
+        OCRService.shared.recognize(image: image) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let r):
+                    let text = r.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !text.isEmpty else {
+                        Toast.shared.show("该区域未识别到文字")
+                        return
+                    }
+                    TranslationService.shared.translate(text) { t in
+                        DispatchQueue.main.async {
+                            switch t {
+                            case .success(let translated):
+                                TextResultPanel.shared.show(kind: .translation, source: text, result: translated)
+                            case .failure(let err):
+                                Toast.shared.show("翻译失败：\(err.localizedDescription)")
+                            }
+                        }
+                    }
+                case .failure(let err):
+                    Toast.shared.show("识别失败：\(err.localizedDescription)")
+                }
+            }
         }
     }
 
@@ -241,6 +300,7 @@ final class CaptureController {
 struct CaptureOverlayView: View {
     let composite: NSImage
     let unionRect: CGRect
+    var hintText: String = "拖拽框选 · ↵ 确认 · ⎋ 取消"
     let onCancel: () -> Void
     let onConfirm: (CGRect) -> Void
 
@@ -288,7 +348,7 @@ struct CaptureOverlayView: View {
                     .background(Capsule().fill(.black.opacity(0.7)))
                     .position(x: sel.minX + 6, y: max(sel.minY - 15, 14))
             } else {
-                hintPill("拖拽框选 · ↵ 确认 · ⎋ 取消")
+                hintPill(hintText)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.top, 18)
             }
