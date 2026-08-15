@@ -14,6 +14,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let screenshotController = ScreenshotController.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 调试模式：打开标注编辑器并自拍截屏到 /tmp（诊断渲染问题用）
+        if CommandLine.arguments.contains("--debug-editor-shot") {
+            runDebugEditorShot()
+            return
+        }
         // 单实例握手：响应其他实例的探测
         DistributedNotificationCenter.default().addObserver(
             forName: .init("cbt.areYouRunning"), object: nil, queue: .main
@@ -78,6 +83,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return myExec != nil && app.executableURL?.path == myExec
         }
         return !others.isEmpty
+    }
+
+    /// 调试：生成彩色测试图 → 打开标注编辑器 → 应用自身权限截屏 → /tmp/rubick-editor.png
+    private func runDebugEditorShot() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            let img = Self.debugTestImage()
+            AnnotationController.shared.show(image: img) { _ in }
+            AnnotationController.shared.debugAddSampleAnnotations()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                let screen = NSScreen.main ?? NSScreen.screens.first
+                if let sid = screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
+                   let cg = CGDisplayCreateImage(CGDirectDisplayID(sid.uint32Value)) {
+                    let ns = NSImage(cgImage: cg, size: screen?.frame.size ?? .zero)
+                    try? ns.pngData()?.write(to: URL(fileURLWithPath: "/tmp/rubick-editor.png"))
+                }
+                NSApp.terminate(nil)
+            }
+        }
+    }
+
+    static func debugTestImage() -> NSImage {
+        let size = CGSize(width: 900, height: 560)
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 900, pixelsHigh: 560,
+                                   bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                   colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        rep.size = size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        for i in 0..<12 {
+            NSColor(hue: CGFloat(i) / 12.0, saturation: 0.65, brightness: 0.9, alpha: 1).setFill()
+            NSRect(x: CGFloat(i % 4) * 225, y: CGFloat(i / 4) * 190, width: 225, height: 190).fill()
+        }
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.boldSystemFont(ofSize: 42),
+            .foregroundColor: NSColor.white
+        ]
+        ("RUBICK DEBUG IMAGE" as NSString).draw(at: NSPoint(x: 60, y: 120), withAttributes: attrs)
+        NSGraphicsContext.restoreGraphicsState()
+        let img = NSImage(size: size)
+        img.addRepresentation(rep)
+        return img
     }
 
     // MARK: 服务装配

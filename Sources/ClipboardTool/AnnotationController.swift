@@ -388,6 +388,30 @@ final class AnnotationController {
         }
     }
 
+    /// 调试用：注入样例标注（箭头/马赛克/文字），供自拍验证渲染
+    func debugAddSampleAnnotations() {
+        guard let m = model else { return }
+        var arrow = Annotation(tool: .arrow)
+        arrow.startPoint = CGPoint(x: 0.15, y: 0.8)
+        arrow.endPoint = CGPoint(x: 0.75, y: 0.25)
+        arrow.colorIndex = 0
+        arrow.lineWidth = 4
+        arrow.displaySize = m.imageRect.size
+        m.commit(arrow)
+        var mos = Annotation(tool: .mosaic)
+        mos.rect = CGRect(x: 0.55, y: 0.55, width: 0.4, height: 0.35)
+        mos.mosaicStyle = 0
+        mos.displaySize = m.imageRect.size
+        m.commit(mos)
+        var txt = Annotation(tool: .text)
+        txt.rect = CGRect(origin: CGPoint(x: 0.05, y: 0.08), size: .zero)
+        txt.text = "你好世界 Hello"
+        txt.colorIndex = 3
+        txt.fontSize = 24
+        txt.displaySize = m.imageRect.size
+        m.commit(txt)
+    }
+
     private func confirm() {
         guard let m = model, let img = currentImage else { return }
         m.textEditing = nil
@@ -1027,7 +1051,7 @@ struct AnnotateEditorView: View {
                 toolbarAction("arrow.uturn.forward", help: "重做 \(keyDisplay(.redo))", enabled: !model.redoStack.isEmpty) {
                     model.redo()
                 }
-                Text(hoveredHelp ?? "\(keyDisplay(.toolRect))–\(keyDisplay(.toolHighlight)) 工具 · \(keyDisplay(.ocr)) 识图 · \(keyDisplay(.translate)) 翻译 · \(keyDisplay(.undo)) 撤销 · \(keyDisplay(.confirm)) 确认 · ⎋ 取消")
+                Text(hoveredHelp ?? "\(keyDisplay(.toolRect))–\(keyDisplay(.toolMosaic)) 工具 · \(keyDisplay(.ocr)) 识图 · \(keyDisplay(.translate)) 翻译 · \(keyDisplay(.undo)) 撤销 · \(keyDisplay(.confirm)) 确认 · ⎋ 取消")
                     .font(.system(size: 9.5))
                     .foregroundStyle(hoveredHelp != nil ? RubickTheme.emeraldBright : .white.opacity(0.55))
                     .lineLimit(1)
