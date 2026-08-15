@@ -649,6 +649,7 @@ struct AnnotateEditorView: View {
                             dragTextID = hit.id
                             dragTextStart = p
                             model.textEditing = nil
+                            hoveredHelp = "文字：按住拖动移动 · 点击编辑内容"
                             return
                         }
                         if let id = dragTextID {
