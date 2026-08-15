@@ -638,9 +638,14 @@ struct HistoryPanelView: View {
                 Button("删除", role: .destructive) { HistoryPanelController.shared.delete(at: index) }
             }
 
-            // 悬停操作按钮（独立命中区域）
+            // 悬停操作按钮（独立命中区域；翻译/识图可见化）
             VStack(spacing: 4) {
-                if item.kind == .image {
+                if item.kind == .text {
+                    actionButton("character.bubble") { HistoryPanelController.shared.translate(item) }
+                        .help("翻译")
+                } else {
+                    actionButton("text.viewfinder") { HistoryPanelController.shared.ocr(item) }
+                        .help("识别文字")
                     actionButton("pin.fill") { HistoryPanelController.shared.pin(item) }
                         .help("钉图")
                 }

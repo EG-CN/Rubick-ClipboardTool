@@ -156,6 +156,47 @@ final class V2FeatureTests: XCTestCase {
         XCTAssertEqual(out?.size, img.size)
     }
 
+    // MARK: 合成/裁剪方向性（防「截到背景桌面」回归）
+
+    func testCompositeOrientationTopRedBottomBlue() {
+        // 上半红、下半蓝的“屏幕”
+        let cg = syntheticImage(top: NSColor.red, bottom: NSColor.blue, width: 200, height: 100)
+        let shot = ScreenShot(frame: CGRect(x: 0, y: 0, width: 200, height: 100), image: cg)
+        let union = CGRect(x: 0, y: 0, width: 200, height: 100)
+        let composite = ImageCompose.composite([shot], union: union)!
+        // 裁上半 → 应为红色（若上下翻转则是蓝色 = 方向性回归）
+        let top = ImageCompose.crop(composite, rectInUnion: CGRect(x: 0, y: 50, width: 200, height: 50), union: union)!
+        let topColor = topColorOf(top)
+        XCTAssertGreaterThan(topColor.redComponent, 0.8, "上半裁剪应为红色")
+        XCTAssertLessThan(topColor.blueComponent, 0.3)
+        // 裁下半 → 应为蓝色
+        let bottom = ImageCompose.crop(composite, rectInUnion: CGRect(x: 0, y: 0, width: 200, height: 50), union: union)!
+        let bottomColor = topColorOf(bottom)
+        XCTAssertGreaterThan(bottomColor.blueComponent, 0.8, "下半裁剪应为蓝色")
+        XCTAssertLessThan(bottomColor.redComponent, 0.3)
+    }
+
+    private func syntheticImage(top: NSColor, bottom: NSColor, width: Int, height: Int) -> CGImage {
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+                                   bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                   colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        top.setFill()
+        NSRect(x: 0, y: height / 2, width: width, height: height / 2).fill()
+        bottom.setFill()
+        NSRect(x: 0, y: 0, width: width, height: height / 2).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        return rep.cgImage!
+    }
+
+    private func topColorOf(_ image: NSImage) -> NSColor {
+        guard let cg = image.cgImage() else { return .clear }
+        let rep = NSBitmapImageRep(cgImage: cg)
+        // NSBitmapImageRep.colorAt 原点在左上
+        return rep.colorAt(x: 10, y: 5) ?? .clear
+    }
+
     // MARK: 工具
 
     private func makeTextImage(_ text: String, size: CGSize = CGSize(width: 480, height: 120)) -> NSImage {

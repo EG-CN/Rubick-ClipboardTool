@@ -6,6 +6,40 @@ import CoreGraphics
 // MARK: - 截图管线 v2.0：ScreenCaptureKit 自绘选框 + 窗口吸附（功能清单 12.6）
 // 未授权屏幕录制时回退系统 screencapture（12.6.4）；截图确认后进入标注编辑器（12.1.1）
 
+/// 单屏截图素材（AppKit 全局坐标，左下原点）
+struct ScreenShot {
+    let frame: CGRect
+    let image: CGImage
+}
+
+/// 合成 / 裁剪（纯函数，可单元测试）
+enum ImageCompose {
+    static func composite(_ shots: [ScreenShot], union: CGRect) -> NSImage? {
+        let img = NSImage(size: union.size)
+        img.lockFocus()
+        for d in shots {
+            let dest = CGRect(x: d.frame.minX - union.minX,
+                              y: d.frame.minY - union.minY,
+                              width: d.frame.width, height: d.frame.height)
+            NSImage(cgImage: d.image, size: d.frame.size).draw(in: dest)
+        }
+        img.unlockFocus()
+        return img
+    }
+
+    static func crop(_ composite: NSImage, rectInUnion: CGRect, union: CGRect) -> NSImage? {
+        let out = NSImage(size: rectInUnion.size)
+        out.lockFocus()
+        let from = NSRect(x: rectInUnion.minX - union.minX,
+                          y: rectInUnion.minY - union.minY,
+                          width: rectInUnion.width, height: rectInUnion.height)
+        composite.draw(in: NSRect(origin: .zero, size: rectInUnion.size),
+                       from: from, operation: .copy, fraction: 1)
+        out.unlockFocus()
+        return out
+    }
+}
+
 final class CaptureController {
     static let shared = CaptureController()
 
@@ -13,12 +47,7 @@ final class CaptureController {
 
     private var overlayWindow: NSWindow?
     private var keyMonitor: Any?
-    private var capturedDisplays: [CapturedDisplay] = []
-
-    private struct CapturedDisplay {
-        let frame: CGRect      // AppKit 全局坐标（点，左下原点）
-        let image: CGImage
-    }
+    private var capturedDisplays: [ScreenShot] = []
 
     private init() {}
 
@@ -36,15 +65,20 @@ final class CaptureController {
 
     func captureInteractive() {
         let allowed = Self.screenRecordingAllowed()
-        if mode == "system" || (mode == "auto" && !allowed) {
+        if mode == "system" {
             systemFallback()
             return
         }
         if !allowed {
-            // 用户指定自绘但未授权 → 权限引导（12.6.5）
-            PermissionGuide.shared.show { [weak self] granted in
-                if granted { self?.startCustom() } else { self?.systemFallback() }
+            let guideShown = UserDefaults.standard.bool(forKey: "capture.guideShown")
+            if mode == "custom" || !guideShown {
+                UserDefaults.standard.set(true, forKey: "capture.guideShown")
+                PermissionGuide.shared.show { [weak self] granted in
+                    if granted { self?.startCustom() } else { self?.systemFallback() }
+                }
+                return
             }
+            systemFallback()
             return
         }
         startCustom()
@@ -52,6 +86,7 @@ final class CaptureController {
 
     /// 系统框选回退（无吸附），截图后仍进标注编辑器（12.6.4）
     private func systemFallback() {
+        Toast.shared.show("系统框选模式（未授权屏幕录制，无窗口吸附）")
         ScreenshotController.shared.captureSystemInteractive { img in
             guard let img = img else { return }
             AnnotationController.shared.show(image: img) { [weak self] result in
@@ -67,43 +102,49 @@ final class CaptureController {
             do {
                 let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
                 let displays = content.displays
+                let screens = NSScreen.screens
                 guard !displays.isEmpty else {
                     systemFallback()
                     return
                 }
-                // 主屏高度：用于把 SC 坐标（左上原点）换算为 AppKit 坐标（左下原点）
-                let mainHeight = displays.max(by: { $0.frame.height < $1.frame.height })?.frame.height
-                    ?? displays[0].frame.height
-                var appkitFrames: [CGRect] = []
-                for d in displays {
-                    let f = d.frame
-                    appkitFrames.append(CGRect(x: f.minX, y: mainHeight - f.maxY,
-                                               width: f.width, height: f.height))
+
+                // 各屏 AppKit 帧：直接取 NSScreen 原生坐标（免手工换算，多屏/异高屏都稳）
+                let appkitFrames: [CGRect] = screens.map { $0.frame }
+                guard appkitFrames.count == displays.count else {
+                    systemFallback()
+                    return
                 }
                 var unionRect = appkitFrames[0]
                 for f in appkitFrames.dropFirst() { unionRect = unionRect.union(f) }
 
+                // 主屏（AppKit 原点所在屏）高度：SC 窗口坐标（左上原点）→ AppKit（左下原点）
+                let primary = screens.first(where: { $0.frame.origin == .zero }) ?? screens[0]
+                let primaryHeight = primary.frame.height
+
                 // 每屏各拍一张（冻结画面）
-                var shots: [CapturedDisplay] = []
+                var shots: [ScreenShot] = []
                 for (i, d) in displays.enumerated() {
                     let filter = SCContentFilter(display: d, excludingWindows: [])
                     let cfg = SCStreamConfiguration()
                     let cg = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
-                    shots.append(CapturedDisplay(frame: appkitFrames[i], image: cg))
+                    shots.append(ScreenShot(frame: appkitFrames[i], image: cg))
                 }
 
-                // 窗口列表（全局 AppKit 坐标），排除自身与过小窗口
-                let windows: [CGRect] = content.windows
+                // 窗口列表（AppKit 坐标）+ 标题
+                let windows: [(frame: CGRect, title: String)] = content.windows
                     .filter { w in
                         w.owningApplication?.bundleIdentifier != Bundle.main.bundleIdentifier &&
                         w.frame.width > 60 && w.frame.height > 60
                     }
                     .map { w in
-                        CGRect(x: w.frame.minX, y: mainHeight - w.frame.maxY,
-                               width: w.frame.width, height: w.frame.height)
+                        let f = w.frame
+                        let appkit = CGRect(x: f.minX,
+                                            y: primaryHeight - f.maxY,
+                                            width: f.width, height: f.height)
+                        return (appkit, w.title ?? "")
                     }
 
-                guard let composite = Self.compositeImage(shots, union: unionRect) else {
+                guard let composite = ImageCompose.composite(shots, union: unionRect) else {
                     systemFallback()
                     return
                 }
@@ -120,7 +161,7 @@ final class CaptureController {
         }
     }
 
-    private func presentOverlay(composite: NSImage, unionRect: CGRect, windows: [CGRect], displays: [CapturedDisplay]) {
+    private func presentOverlay(composite: NSImage, unionRect: CGRect, windows: [(frame: CGRect, title: String)], displays: [ScreenShot]) {
         capturedDisplays = displays
         let view = CaptureOverlayView(
             composite: composite,
@@ -153,13 +194,17 @@ final class CaptureController {
                 self.teardown()
                 return nil
             }
+            if event.keyCode == 36 || event.keyCode == 76 {   // ↵ 确认当前选区
+                NotificationCenter.default.post(name: .init("cbt.captureConfirm"), object: nil)
+                return nil
+            }
             return event
         }
     }
 
     private func finish(rect: CGRect, composite: NSImage, unionRect: CGRect) {
         teardown()
-        guard let cropped = Self.crop(composite, rectInUnion: rect, union: unionRect) else {
+        guard let cropped = ImageCompose.crop(composite, rectInUnion: rect, union: unionRect) else {
             systemFallback()
             return
         }
@@ -174,35 +219,6 @@ final class CaptureController {
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
         capturedDisplays = []
     }
-
-    // MARK: 合成 / 裁剪
-
-    /// 把各屏截图拼成 union 大小的单图（点坐标）
-    private static func compositeImage(_ displays: [CapturedDisplay], union: CGRect) -> NSImage? {
-        let img = NSImage(size: union.size)
-        img.lockFocus()
-        for d in displays {
-            let dest = CGRect(x: d.frame.minX - union.minX,
-                              y: d.frame.minY - union.minY,
-                              width: d.frame.width, height: d.frame.height)
-            // 经 NSImage 绘制以正确处理 CGImage 的上下翻转
-            NSImage(cgImage: d.image, size: d.frame.size).draw(in: dest)
-        }
-        img.unlockFocus()
-        return img
-    }
-
-    static func crop(_ composite: NSImage, rectInUnion: CGRect, union: CGRect) -> NSImage? {
-        let out = NSImage(size: rectInUnion.size)
-        out.lockFocus()
-        let from = NSRect(x: rectInUnion.minX - union.minX,
-                          y: rectInUnion.minY - union.minY,
-                          width: rectInUnion.width, height: rectInUnion.height)
-        composite.draw(in: NSRect(origin: .zero, size: rectInUnion.size),
-                       from: from, operation: .copy, fraction: 1)
-        out.unlockFocus()
-        return out
-    }
 }
 
 // MARK: - 自绘选框覆盖层视图
@@ -210,7 +226,7 @@ final class CaptureController {
 struct CaptureOverlayView: View {
     let composite: NSImage
     let unionRect: CGRect
-    let windows: [CGRect]
+    let windows: [(frame: CGRect, title: String)]
     let snapEnabled: Bool
     let snapThreshold: CGFloat
     let onCancel: () -> Void
@@ -220,6 +236,8 @@ struct CaptureOverlayView: View {
     @State private var dragCurrent: CGPoint?
     @State private var hoverPoint: CGPoint?
     @State private var dragged = false
+
+    private var windowFrames: [CGRect] { windows.map { $0.frame } }
 
     /// 窗口坐标 → AppKit 全局坐标（窗口 frame 原点即 unionRect 原点）
     private func global(_ p: CGPoint) -> CGPoint {
@@ -247,14 +265,18 @@ struct CaptureOverlayView: View {
         guard let sel = selectionRect, snapEnabled else { return nil }
         let globalSel = CGRect(x: sel.minX + unionRect.minX, y: sel.minY + unionRect.minY,
                                width: sel.width, height: sel.height)
-        let (r, w) = SnapLogic.snappedRect(globalSel, windows: windows, threshold: snapThreshold)
+        let (r, w) = SnapLogic.snappedRect(globalSel, windows: windowFrames, threshold: snapThreshold)
         return (local(r), w.map(local))
     }
 
     /// 悬停窗口（未拖动时）
     private var hoverWindow: CGRect? {
         guard snapEnabled, !dragged, let hp = hoverPoint else { return nil }
-        return SnapLogic.window(under: global(hp), windows: windows).map(local)
+        return SnapLogic.window(under: global(hp), windows: windowFrames).map(local)
+    }
+
+    private func title(for frame: CGRect) -> String? {
+        windows.first(where: { $0.frame == frame })?.title
     }
 
     var body: some View {
@@ -263,48 +285,72 @@ struct CaptureOverlayView: View {
                 .resizable()
                 .frame(width: unionRect.width, height: unionRect.height)
                 .ignoresSafeArea()
-            Color.black.opacity(0.45)
+            Color.black.opacity(0.48)
 
             if let sel = snappedSelection?.rect ?? selectionRect {
-                // 选中区域亮显
-                Image(nsImage: CaptureController.crop(composite, rectInUnion: globalRect(sel), union: unionRect) ?? composite)
+                // 选中区域亮显（原画面亮度）
+                Image(nsImage: ImageCompose.crop(composite, rectInUnion: globalRect(sel), union: unionRect) ?? composite)
                     .resizable()
                     .frame(width: sel.width, height: sel.height)
                     .position(x: sel.midX, y: sel.midY)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
             }
 
+            // 窗口高亮（吸附目标 / 悬停窗口）
             if let w = snappedSelection?.window ?? hoverWindow {
-                RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(RubickTheme.emeraldBright, lineWidth: 1.5)
-                    .background(Rectangle().fill(RubickTheme.emerald.opacity(0.08)))
-                    .frame(width: w.width, height: w.height)
-                    .position(x: w.midX, y: w.midY)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(RubickTheme.emerald.opacity(0.10))
+                    RoundedRectangle(cornerRadius: 7)
+                        .strokeBorder(RubickTheme.emeraldBright, lineWidth: 2)
+                    if let t = title(for: globalRect(w)), !t.isEmpty {
+                        Text(t)
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(RubickTheme.emerald.opacity(0.9)))
+                            .frame(maxHeight: .infinity, alignment: .top)
+                            .padding(.top, -14)
+                    }
+                }
+                .frame(width: w.width, height: w.height)
+                .position(x: w.midX, y: w.midY)
+                .shadow(color: RubickTheme.emerald.opacity(0.35), radius: 6)
             }
 
+            // 选区描边 + 角标 + 尺寸
             if let sel = snappedSelection?.rect ?? selectionRect {
-                Rectangle()
-                    .strokeBorder(RubickTheme.emeraldBright, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 3)
+                    .strokeBorder(RubickTheme.emeraldBright, lineWidth: 1.5)
                     .frame(width: sel.width, height: sel.height)
                     .position(x: sel.midX, y: sel.midY)
+                cornerBrackets(sel)
                 Text("\(Int(sel.width)) × \(Int(sel.height))")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, 7)
                     .padding(.vertical, 3)
-                    .background(Capsule().fill(.black.opacity(0.7)))
-                    .position(x: sel.midX, y: max(sel.minY - 14, 12))
+                    .background(Capsule().fill(RubickTheme.emerald.opacity(0.9)))
+                    .position(x: sel.minX + 6, y: max(sel.minY - 15, 14))
             } else {
-                Text("拖拽框选 · 悬停窗口单击直截 · ↵ 确认 · ⎋ 取消")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(.black.opacity(0.6)))
-                    .padding(.top, 16)
+                hintPill("拖拽框选 · 悬停窗口单击直截 · ↵ 确认 · ⎋ 取消")
                     .frame(maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 18)
             }
         }
         .contentShape(Rectangle())
+        .onReceive(NotificationCenter.default.publisher(for: .init("cbt.captureConfirm"))) { _ in
+            if let sel = selectionRect, sel.width > 3, sel.height > 3 {
+                if let snapped = snappedSelection?.rect {
+                    onConfirm(globalRect(snapped))
+                } else {
+                    onConfirm(globalRect(sel))
+                }
+            } else if let hw = hoverWindow {
+                onConfirm(globalRect(hw))
+            }
+        }
         .onContinuousHover { phase in
             switch phase {
             case .active(let p): hoverPoint = p
@@ -339,6 +385,40 @@ struct CaptureOverlayView: View {
         )
         .onAppear { NSCursor.crosshair.set() }
         .onDisappear { NSCursor.arrow.set() }
+    }
+
+    private func hintPill(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11.5, weight: .medium))
+            .foregroundStyle(.white.opacity(0.95))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(.black.opacity(0.65)))
+            .overlay(Capsule().strokeBorder(RubickTheme.emerald.opacity(0.35), lineWidth: 0.8))
+            .shadow(color: RubickTheme.emerald.opacity(0.15), radius: 6)
+    }
+
+    private func cornerBrackets(_ r: CGRect) -> some View {
+        let l: CGFloat = 14
+        return Path { p in
+            // 左上
+            p.move(to: CGPoint(x: r.minX, y: r.minY + l))
+            p.addLine(to: CGPoint(x: r.minX, y: r.minY))
+            p.addLine(to: CGPoint(x: r.minX + l, y: r.minY))
+            // 右上
+            p.move(to: CGPoint(x: r.maxX - l, y: r.minY))
+            p.addLine(to: CGPoint(x: r.maxX, y: r.minY))
+            p.addLine(to: CGPoint(x: r.maxX, y: r.minY + l))
+            // 左下
+            p.move(to: CGPoint(x: r.minX, y: r.maxY - l))
+            p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
+            p.addLine(to: CGPoint(x: r.minX + l, y: r.maxY))
+            // 右下
+            p.move(to: CGPoint(x: r.maxX - l, y: r.maxY))
+            p.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+            p.addLine(to: CGPoint(x: r.maxX, y: r.maxY - l))
+        }
+        .stroke(Color.white, lineWidth: 2)
     }
 }
 
