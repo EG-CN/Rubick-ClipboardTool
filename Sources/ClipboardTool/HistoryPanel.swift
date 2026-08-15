@@ -473,6 +473,20 @@ struct HistoryPanelView: View {
                 .font(.system(size: 10.5))
                 .foregroundStyle(RubickTheme.muted(scheme))
             Spacer()
+            Button(action: { HistoryPanelController.shared.translateSelected() }) {
+                Image(systemName: "character.bubble")
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(RubickTheme.primary(scheme))
+            .help("翻译选中条目")
+            Button(action: { HistoryPanelController.shared.ocrSelected() }) {
+                Image(systemName: "text.viewfinder")
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(RubickTheme.primary(scheme))
+            .help("识别选中图片文字")
             Button(action: { SettingsController.shared.show() }) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 11))
@@ -652,7 +666,7 @@ struct HistoryPanelView: View {
                 actionButton("trash") { HistoryPanelController.shared.delete(at: index) }
                     .help("删除")
             }
-            .opacity(hoveringIds.contains(item.id) ? 1 : 0)
+            .opacity(hoveringIds.contains(item.id) ? 1 : 0.55)
             .animation(.easeOut(duration: 0.15), value: hoveringIds.contains(item.id))
         }
         .padding(10)

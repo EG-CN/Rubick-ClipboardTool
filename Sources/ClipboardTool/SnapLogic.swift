@@ -43,8 +43,17 @@ enum SnapLogic {
         abs(a.maxY - b.maxY) <= tolerance
     }
 
-    /// 坐标转换：屏幕坐标（左下原点）→ 视图坐标（左上原点）
-    static func viewRect(fromScreen r: CGRect, screenHeight: CGFloat) -> CGRect {
-        CGRect(x: r.minX, y: screenHeight - r.maxY, width: r.width, height: r.height)
+    /// 视图坐标（左上原点）→ AppKit 全局坐标（左下原点）；windowOrigin 为窗口左下角，viewHeight 为视图高度
+    static func appKitRect(fromViewRect r: CGRect, viewHeight: CGFloat, windowOrigin: CGPoint) -> CGRect {
+        CGRect(x: r.minX + windowOrigin.x,
+               y: windowOrigin.y + viewHeight - r.maxY,
+               width: r.width, height: r.height)
+    }
+
+    /// AppKit 全局坐标（左下原点）→ 视图坐标（左上原点）
+    static func viewRect(fromAppKitRect r: CGRect, viewHeight: CGFloat, windowOrigin: CGPoint) -> CGRect {
+        CGRect(x: r.minX - windowOrigin.x,
+               y: windowOrigin.y + viewHeight - r.maxY,
+               width: r.width, height: r.height)
     }
 }

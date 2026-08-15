@@ -122,12 +122,23 @@ final class CaptureController {
                 let primaryHeight = primary.frame.height
 
                 // 每屏各拍一张（冻结画面）
+                // 经典 API 优先：返回完整合成画面（含所有窗口）；macOS 26 上曾出现
+                // SCScreenshotManager 仅返回壁纸的情况，故以其兜底。
                 var shots: [ScreenShot] = []
                 for (i, d) in displays.enumerated() {
-                    let filter = SCContentFilter(display: d, excludingWindows: [])
-                    let cfg = SCStreamConfiguration()
-                    let cg = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
-                    shots.append(ScreenShot(frame: appkitFrames[i], image: cg))
+                    var cg: CGImage?
+                    if let num = screens[i].deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
+                        cg = CGDisplayCreateImage(CGDirectDisplayID(num.uint32Value))
+                    }
+                    if cg == nil {
+                        let filter = SCContentFilter(display: d, excludingWindows: [])
+                        cg = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: SCStreamConfiguration())
+                    }
+                    guard let captured = cg else {
+                        systemFallback()
+                        return
+                    }
+                    shots.append(ScreenShot(frame: appkitFrames[i], image: captured))
                 }
 
                 // 窗口列表（AppKit 坐标）+ 标题
@@ -239,19 +250,22 @@ struct CaptureOverlayView: View {
 
     private var windowFrames: [CGRect] { windows.map { $0.frame } }
 
-    /// 窗口坐标 → AppKit 全局坐标（窗口 frame 原点即 unionRect 原点）
+    /// SwiftUI 视图点（左上原点）→ AppKit 全局点（左下原点）
     private func global(_ p: CGPoint) -> CGPoint {
-        CGPoint(x: p.x + unionRect.minX, y: p.y + unionRect.minY)
+        let r = SnapLogic.appKitRect(fromViewRect: CGRect(origin: p, size: .zero),
+                                     viewHeight: unionRect.height,
+                                     windowOrigin: unionRect.origin)
+        return r.origin
     }
 
-    /// 全局坐标 → 窗口本地坐标
+    /// AppKit 全局矩形 → 视图坐标（左上原点）
     private func local(_ r: CGRect) -> CGRect {
-        CGRect(x: r.minX - unionRect.minX, y: r.minY - unionRect.minY, width: r.width, height: r.height)
+        SnapLogic.viewRect(fromAppKitRect: r, viewHeight: unionRect.height, windowOrigin: unionRect.origin)
     }
 
-    /// 窗口本地矩形 → AppKit 全局矩形
+    /// 视图矩形（左上原点）→ AppKit 全局矩形（左下原点）
     private func globalRect(_ r: CGRect) -> CGRect {
-        CGRect(x: r.minX + unionRect.minX, y: r.minY + unionRect.minY, width: r.width, height: r.height)
+        SnapLogic.appKitRect(fromViewRect: r, viewHeight: unionRect.height, windowOrigin: unionRect.origin)
     }
 
     private var selectionRect: CGRect? {

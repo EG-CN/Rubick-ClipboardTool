@@ -156,6 +156,25 @@ final class V2FeatureTests: XCTestCase {
         XCTAssertEqual(out?.size, img.size)
     }
 
+    // MARK: 视图↔全局坐标换算（防「选区偏移/所见非所截」回归）
+
+    func testViewRectToAppKitRect() {
+        // 视图高 1000，窗口原点 (0,0)：视图里顶部选区 y=100 → 全局 y=900（左上→左下翻转）
+        let v = CGRect(x: 200, y: 100, width: 400, height: 300)
+        let a = SnapLogic.appKitRect(fromViewRect: v, viewHeight: 1000, windowOrigin: .zero)
+        XCTAssertEqual(a.minY, 600, accuracy: 0.001)   // 1000 - 100 - 300 = 600
+        XCTAssertEqual(a.minX, 200)
+        XCTAssertEqual(a.width, 400)
+        XCTAssertEqual(a.height, 300)
+    }
+
+    func testAppKitRectToViewRectRoundTrip() {
+        let v = CGRect(x: 200, y: 100, width: 400, height: 300)
+        let a = SnapLogic.appKitRect(fromViewRect: v, viewHeight: 1000, windowOrigin: .zero)
+        let back = SnapLogic.viewRect(fromAppKitRect: a, viewHeight: 1000, windowOrigin: .zero)
+        XCTAssertEqual(back, v)
+    }
+
     // MARK: 合成/裁剪方向性（防「截到背景桌面」回归）
 
     func testCompositeOrientationTopRedBottomBlue() {

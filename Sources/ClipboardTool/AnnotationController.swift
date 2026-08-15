@@ -306,6 +306,7 @@ struct AnnotateEditorView: View {
 
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
+    @State private var penPath: [CGPoint] = []   // 画笔实时轨迹（归一化）
 
     @ObservedObject private var keys = AnnotateKeyConfig.shared
 
@@ -327,7 +328,14 @@ struct AnnotateEditorView: View {
 
                 Canvas { ctx, _ in
                     for a in model.annotations { drawPreview(&ctx, a, imageRect: imageRect) }
-                    if let p = inProgress(imageRect: imageRect) {
+                    if model.tool == .pen && penPath.count > 1 {
+                        var a = Annotation(tool: .pen)
+                        a.points = penPath
+                        a.colorIndex = model.colorIndex
+                        a.lineWidth = model.lineWidth
+                        a.displaySize = imageRect.size
+                        drawPreview(&ctx, a, imageRect: imageRect)
+                    } else if let p = inProgress(imageRect: imageRect) {
                         drawPreview(&ctx, p, imageRect: imageRect)
                     }
                 }
@@ -368,15 +376,23 @@ struct AnnotateEditorView: View {
                 model.textEditing = nil
             }
             .gesture(
-                DragGesture(minimumDistance: 2)
+                DragGesture(minimumDistance: 1)
                     .onChanged { v in
                         let p = clamp(v.startLocation, to: imageRect)
                         dragStart = dragStart ?? p
                         dragCurrent = clamp(v.location, to: imageRect)
+                        if model.tool == .pen {
+                            let n = normalize(clamp(v.location, to: imageRect), in: imageRect)
+                            if let last = penPath.last {
+                                if hypot(n.x - last.x, n.y - last.y) > 0.002 { penPath.append(n) }
+                            } else {
+                                penPath = [n]
+                            }
+                        }
                     }
                     .onEnded { v in
                         dragCurrent = clamp(v.location, to: imageRect)
-                        defer { dragStart = nil; dragCurrent = nil }
+                        defer { dragStart = nil; dragCurrent = nil; penPath = [] }
                         guard let start = dragStart else { return }
                         let end = dragCurrent ?? start
                         let normStart = normalize(start, in: imageRect)
@@ -389,16 +405,21 @@ struct AnnotateEditorView: View {
                             return
                         }
                         if model.tool == .pen {
+                            var pts = penPath
+                            if pts.count < 2 {
+                                pts = [normStart, normEnd]
+                            }
+                            guard pts.count >= 2 else { return }
                             var a = Annotation(tool: .pen)
-                            a.rect = CGRect(x: min(normStart.x, normEnd.x), y: min(normStart.y, normEnd.y),
-                                            width: abs(normEnd.x - normStart.x), height: abs(normEnd.y - normStart.y))
-                            a.points = [normStart, normEnd]
+                            a.points = pts
+                            let xs = pts.map { $0.x }
+                            let ys = pts.map { $0.y }
+                            a.rect = CGRect(x: xs.min()!, y: ys.min()!,
+                                            width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
                             a.colorIndex = model.colorIndex
                             a.lineWidth = model.lineWidth
                             a.displaySize = imageRect.size
-                            if hypot(a.rect.width, a.rect.height) > 0.004 {
-                                model.commit(a)
-                            }
+                            model.commit(a)
                             return
                         }
                         let w = abs(normEnd.x - normStart.x)
@@ -560,8 +581,8 @@ struct AnnotateEditorView: View {
             model.tool = t
         } label: {
             Image(systemName: t.symbol)
-                .font(.system(size: 13))
-                .frame(width: 30, height: 30)
+                .font(.system(size: 15))
+                .frame(width: 36, height: 36)
                 .background(RoundedRectangle(cornerRadius: 7).fill(model.tool == t
                                                                    ? RubickTheme.emerald.opacity(0.22)
                                                                    : .white.opacity(0.06)))
