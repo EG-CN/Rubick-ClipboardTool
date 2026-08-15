@@ -75,6 +75,15 @@ final class TextResultPanel {
         removeKeyMonitor()
     }
 
+    /// 拖动面板（头部拖动条调用；视图 y 向下 → 窗口坐标 y 向上）
+    func move(by delta: CGPoint) {
+        guard let p = panel else { return }
+        var f = p.frame
+        f.origin.x += delta.x
+        f.origin.y -= delta.y
+        p.setFrameOrigin(f.origin)
+    }
+
     private func translateThenShow(_ text: String) {
         Toast.shared.show("翻译中…（\(TranslationService.shared.engineLabel)）")
         TranslationService.shared.translate(text) { result in
@@ -187,6 +196,8 @@ struct TextResultView: View {
         .shadow(color: RubickTheme.emerald.opacity(0.15), radius: 10)
     }
 
+    @State private var moveLast: CGPoint?
+
     private var header: some View {
         HStack(spacing: 8) {
             Image(systemName: isOCR ? "doc.text.viewfinder" : "character.bubble.fill")
@@ -194,6 +205,10 @@ struct TextResultView: View {
                 .foregroundStyle(RubickTheme.primary(scheme))
             Text(isOCR ? "识别文字" : "翻译结果")
                 .font(.system(size: 13, weight: .bold))
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 9))
+                .foregroundStyle(RubickTheme.muted(scheme).opacity(0.5))
+                .help("按住标题栏拖动面板")
             if !isOCR {
                 Text(TranslationService.shared.engineLabel)
                     .font(.system(size: 9.5))
@@ -211,6 +226,18 @@ struct TextResultView: View {
             .foregroundStyle(RubickTheme.muted(scheme))
             .help("关闭")
         }
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { v in
+                    let t = CGPoint(x: v.translation.width, y: v.translation.height)
+                    if let last = moveLast {
+                        TextResultPanel.shared.move(by: CGPoint(x: t.x - last.x, y: t.y - last.y))
+                    }
+                    moveLast = t
+                }
+                .onEnded { _ in moveLast = nil }
+        )
     }
 
     private var footer: some View {
