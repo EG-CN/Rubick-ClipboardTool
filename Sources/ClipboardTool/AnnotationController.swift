@@ -153,19 +153,49 @@ final class AnnotateModel: ObservableObject {
         }
     }
 
+    /// 点击已有文字 → 进入编辑态
+    func beginEditingText(_ a: Annotation) {
+        textEditing = (a.id, a.rect.origin)
+        textDraft = a.text
+    }
+
+    /// 提交文字：已有注释则更新，否则新建；清空文本 = 删除该注释
     func commitText() {
         let text = textDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let editing = textEditing else { return }
+        let id = editing.id
+        let pos = editing.position
         textEditing = nil
+        if let idx = annotations.firstIndex(where: { $0.id == id }) {
+            if text.isEmpty {
+                annotations.remove(at: idx)
+            } else {
+                var a = annotations[idx]
+                a.text = text
+                a.fontSize = fontSize
+                a.colorIndex = colorIndex
+                a.rect.origin = pos
+                annotations[idx] = a
+            }
+            return
+        }
         guard !text.isEmpty else { return }
         var a = Annotation(tool: .text)
-        a.rect = CGRect(origin: editing.position, size: .zero)
+        a.rect = CGRect(origin: pos, size: .zero)
         a.text = text
         a.colorIndex = colorIndex
         a.lineWidth = lineWidth
         a.fontSize = fontSize
         a.displaySize = imageRect.size
         commit(a)
+    }
+
+    /// 拖动文字：整体赋值触发发布
+    func updateTextPosition(id: UUID, to p: CGPoint) {
+        guard let idx = annotations.firstIndex(where: { $0.id == id }) else { return }
+        var a = annotations[idx]
+        a.rect.origin = p
+        annotations[idx] = a
     }
 }
 
@@ -537,6 +567,8 @@ struct AnnotateEditorView: View {
     @State private var penPath: [CGPoint] = []
     @State private var moveLast: CGPoint?
     @State private var hoveredHelp: String?
+    @State private var dragTextID: UUID?
+    @State private var dragTextStart: CGPoint?
     @FocusState private var textFocused: Bool
 
     @ObservedObject private var keys = AnnotateKeyConfig.shared
@@ -558,7 +590,8 @@ struct AnnotateEditorView: View {
                     .shadow(color: .black.opacity(0.4), radius: 6, y: 2)
 
                 Canvas { ctx, _ in
-                    for a in model.annotations { drawPreview(&ctx, a, imageRect: imageRect) }
+                    for a in model.annotations
+                    where model.textEditing?.id != a.id { drawPreview(&ctx, a, imageRect: imageRect) }
                     if model.tool == .pen && penPath.count > 1 {
                         var a = Annotation(tool: .pen)
                         a.points = penPath
@@ -608,8 +641,21 @@ struct AnnotateEditorView: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { v in
-                        model.textEditing = nil
                         let p = clamp(v.startLocation)
+                        // 首次按下：未选工具或文字工具时，命中已有文字 → 拖动它
+                        if dragStart == nil, dragTextID == nil,
+                           (model.tool == nil || model.tool == .text),
+                           let hit = hitTextAnnotation(at: normalize(p)) {
+                            dragTextID = hit.id
+                            dragTextStart = p
+                            model.textEditing = nil
+                            return
+                        }
+                        if let id = dragTextID {
+                            model.updateTextPosition(id: id, to: normalize(clamp(v.location)))
+                            return
+                        }
+                        model.textEditing = nil
                         dragStart = dragStart ?? p
                         dragCurrent = clamp(v.location)
                         if model.tool == .pen {
@@ -622,6 +668,18 @@ struct AnnotateEditorView: View {
                         }
                     }
                     .onEnded { v in
+                        if let id = dragTextID {
+                            let moved = hypot(v.location.x - (dragTextStart?.x ?? v.location.x),
+                                              v.location.y - (dragTextStart?.y ?? v.location.y))
+                            dragTextID = nil
+                            dragTextStart = nil
+                            if moved < 6,
+                               let idx = model.annotations.firstIndex(where: { $0.id == id }) {
+                                model.beginEditingText(model.annotations[idx])
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { textFocused = true }
+                            }
+                            return
+                        }
                         dragCurrent = clamp(v.location)
                         defer { dragStart = nil; dragCurrent = nil; penPath = [] }
                         guard let start = dragStart else { return }
@@ -732,6 +790,29 @@ struct AnnotateEditorView: View {
                 }
                 .onEnded { _ in moveLast = nil }
         )
+    }
+
+    /// 命中检测：点是否落在已提交的文字上
+    private func hitTextAnnotation(at normalized: CGPoint) -> Annotation? {
+        let viewPoint = CGPoint(x: normalized.x * displaySize.width,
+                                y: normalized.y * displaySize.height)
+        for a in model.annotations.reversed() where a.tool == .text {
+            let size = textSize(a.text, fontSize: a.fontSize)
+            let r = CGRect(x: a.rect.origin.x * displaySize.width,
+                           y: a.rect.origin.y * displaySize.height,
+                           width: size.width, height: size.height)
+            if r.insetBy(dx: -4, dy: -4).contains(viewPoint) {
+                return a
+            }
+        }
+        return nil
+    }
+
+    private func textSize(_ text: String, fontSize: CGFloat) -> CGSize {
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: max(fontSize, 8), weight: .semibold)
+        ]
+        return (text as NSString).size(withAttributes: attrs)
     }
 
     private func normalize(_ p: CGPoint) -> CGPoint {
@@ -889,7 +970,9 @@ struct AnnotateEditorView: View {
                     .frame(width: 150)
                     .onChange(of: model.cornerRadius) { newValue in
                         if let idx = model.annotations.lastIndex(where: { $0.tool == .rect }) {
-                            model.annotations[idx].cornerRadius = newValue
+                            var a = model.annotations[idx]
+                            a.cornerRadius = newValue
+                            model.annotations[idx] = a
                         }
                     }
                 }
