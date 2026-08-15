@@ -217,7 +217,6 @@ final class AnnotationController {
             w.isOpaque = false
             w.hasShadow = false
             w.isReleasedWhenClosed = false
-            w.isMovableByWindowBackground = true
             window = w
         }
         window?.setContentSize(NSSize(width: winW, height: winH))
