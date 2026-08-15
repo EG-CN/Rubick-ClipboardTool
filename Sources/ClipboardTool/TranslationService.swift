@@ -103,7 +103,13 @@ final class TranslationService {
                     completion(.failure(TranslateError.appleUnavailable))
                     return
                 }
+                #if compiler(>=6.2)
+                // macOS 26 SDK：TranslationSession 需 installedSource 构造
                 let session = TranslationSession(installedSource: pair.source, target: pair.target)
+                #else
+                // macOS 15 SDK（CI macos-14 runner）
+                let session = TranslationSession(sourceLanguage: pair.source, targetLanguage: pair.target)
+                #endif
                 let chunks = Self.chunks(text)
                 var parts: [String] = []
                 for chunk in chunks {

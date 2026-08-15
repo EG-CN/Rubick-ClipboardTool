@@ -132,8 +132,7 @@ final class CaptureController {
                     systemFallback()
                     return
                 }
-                var unionRect = appkitFrames[0]
-                for f in appkitFrames.dropFirst() { unionRect = unionRect.union(f) }
+                let unionRect = appkitFrames.dropFirst().reduce(appkitFrames[0]) { $0.union($1) }
 
                 // 主屏（AppKit 原点所在屏）高度：SC 窗口坐标（左上原点）→ AppKit（左下原点）
                 let primary = screens.first(where: { $0.frame.origin == .zero }) ?? screens[0]
@@ -178,9 +177,11 @@ final class CaptureController {
                     return
                 }
 
+                let finalShots = shots
+                let finalWindows = windows
                 await MainActor.run {
                     self.presentOverlay(composite: composite, unionRect: unionRect,
-                                        windows: windows, displays: shots)
+                                        windows: finalWindows, displays: finalShots)
                 }
             } catch {
                 DispatchQueue.main.async { [weak self] in
