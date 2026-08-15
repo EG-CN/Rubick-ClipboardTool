@@ -47,7 +47,8 @@ struct Annotation: Identifiable, Equatable {
 // MARK: - 编辑器共享状态（供视图绑定 + 控制器快捷键驱动）
 
 final class AnnotateModel: ObservableObject {
-    @Published var tool: Annotation.Tool = .rect
+    /// nil = 未选择工具（截图后默认待机，选工具后才可绘制）
+    @Published var tool: Annotation.Tool? = nil
     @Published var colorIndex = 0
     @Published var lineWidth: CGFloat = 4
     @Published var annotations: [Annotation] = []
@@ -571,10 +572,11 @@ struct AnnotateEditorView: View {
                             model.commit(a)
                             return
                         }
+                        guard let tool = model.tool else { return }
                         let w = abs(normEnd.x - normStart.x)
                         let h = abs(normEnd.y - normStart.y)
                         guard w > 0.004 || h > 0.004 else { return }
-                        var a = Annotation(tool: model.tool)
+                        var a = Annotation(tool: tool)
                         a.rect = CGRect(x: min(normStart.x, normEnd.x), y: min(normStart.y, normEnd.y),
                                         width: w, height: h)
                         a.colorIndex = model.colorIndex
@@ -642,11 +644,11 @@ struct AnnotateEditorView: View {
     }
 
     private func inProgress() -> Annotation? {
-        guard let start = dragStart else { return nil }
+        guard let tool = model.tool, let start = dragStart else { return nil }
         let end = dragCurrent ?? start
         let n1 = normalize(start)
         let n2 = normalize(end)
-        var a = Annotation(tool: model.tool)
+        var a = Annotation(tool: tool)
         a.rect = CGRect(x: min(n1.x, n2.x), y: min(n1.y, n2.y),
                         width: abs(n2.x - n1.x), height: abs(n2.y - n1.y))
         a.colorIndex = model.colorIndex
@@ -766,7 +768,7 @@ struct AnnotateEditorView: View {
 
     private func toolButton(_ t: Annotation.Tool) -> some View {
         Button {
-            model.tool = t
+            model.tool = (model.tool == t) ? nil : t
         } label: {
             Image(systemName: t.symbol)
                 .font(.system(size: 13))

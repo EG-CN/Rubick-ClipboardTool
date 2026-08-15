@@ -199,6 +199,13 @@ final class V2FeatureTests: XCTestCase {
         XCTAssertLessThan(c.blueComponent, 0.3)
     }
 
+    // MARK: 标注默认状态
+
+    func testAnnotateModelStartsWithNoTool() {
+        let m = AnnotateModel()
+        XCTAssertNil(m.tool, "截图后应默认不选任何工具")
+    }
+
     // MARK: 划图翻译快捷键
 
     func testDragTranslateHotkeyDefault() {
