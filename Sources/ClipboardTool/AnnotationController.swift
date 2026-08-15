@@ -379,8 +379,7 @@ final class AnnotationController {
         if ak.matches(.translate, event: event) { model.translateSideSelection(); return }
         let toolMap: [(AnnotateKeyConfig.Action, Annotation.Tool)] = [
             (.toolRect, .rect), (.toolEllipse, .ellipse), (.toolArrow, .arrow),
-            (.toolPen, .pen), (.toolText, .text), (.toolMosaic, .mosaic),
-            (.toolHighlight, .highlight)
+            (.toolPen, .pen), (.toolText, .text), (.toolMosaic, .mosaic)
         ]
         for (action, tool) in toolMap where ak.matches(action, event: event) {
             model.tool = tool
@@ -533,23 +532,18 @@ final class AnnotationController {
 
     private static func drawArrow(from start: CGPoint, to tip: CGPoint, ctx: CGContext, color: NSColor) {
         let angle = atan2(tip.y - start.y, tip.x - start.x)
-        let headLen = max(hypot(tip.x - start.x, tip.y - start.y) * 0.22, 16)
-        let headHalf = headLen * 0.42
+        let headLen = max(hypot(tip.x - start.x, tip.y - start.y) * 0.18, 12)
+        let headHalf = headLen * 0.5
         let base = CGPoint(x: tip.x - cos(angle) * headLen, y: tip.y - sin(angle) * headLen)
-        // 箭杆画到三角根部
+        let perp = angle + .pi / 2
+        // 三根线：箭杆 + 两根斜线（开口 V 形）
         ctx.move(to: start)
         ctx.addLine(to: base)
-        ctx.strokePath()
-        // 实心三角箭头
-        let perp = angle + .pi / 2
-        let p1 = CGPoint(x: base.x + cos(perp) * headHalf, y: base.y + sin(perp) * headHalf)
-        let p2 = CGPoint(x: base.x - cos(perp) * headHalf, y: base.y - sin(perp) * headHalf)
-        ctx.move(to: p1)
+        ctx.move(to: CGPoint(x: base.x + cos(perp) * headHalf, y: base.y + sin(perp) * headHalf))
         ctx.addLine(to: tip)
-        ctx.addLine(to: p2)
-        ctx.closePath()
-        ctx.setFillColor(color.cgColor)
-        ctx.fillPath()
+        ctx.move(to: CGPoint(x: base.x - cos(perp) * headHalf, y: base.y - sin(perp) * headHalf))
+        ctx.addLine(to: tip)
+        ctx.strokePath()
     }
 
     private static func drawMosaic(_ r: CGRect, imageSize: CGSize, baseCG: CGImage?, blockSize: CGFloat = 16, blur: Bool = false) {
@@ -567,7 +561,9 @@ final class AnnotationController {
         if blur {
             ci = ci.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 12])
         } else {
-            ci = ci.applyingFilter("CIPixellate", parameters: [kCIInputScaleKey: max(blockSize, 4)])
+            // 像素块 ≈ 18pt，与预览观感一致
+            let blockPx = max(18 * scalePx, 8)
+            ci = ci.applyingFilter("CIPixellate", parameters: [kCIInputScaleKey: blockPx])
         }
         if let cg = CIContext().createCGImage(ci, from: ci.extent) {
             NSImage(cgImage: cg, size: r.size).draw(in: r)
@@ -906,20 +902,18 @@ struct AnnotateEditorView: View {
                 : CGPoint(x: r.maxX, y: r.maxY)
             let angle = atan2(ePt.y - sPt.y, ePt.x - sPt.x)
             let totalLen = hypot(ePt.x - sPt.x, ePt.y - sPt.y)
-            let headLen = max(totalLen * 0.22, 14)
-            let headHalf = headLen * 0.45
+            let headLen = max(totalLen * 0.18, 12)
+            let headHalf = headLen * 0.5
             let base = CGPoint(x: ePt.x - cos(angle) * headLen, y: ePt.y - sin(angle) * headLen)
+            let perp = angle + .pi / 2
             var p = Path()
             p.move(to: sPt)
             p.addLine(to: base)
+            p.move(to: CGPoint(x: base.x + cos(perp) * headHalf, y: base.y + sin(perp) * headHalf))
+            p.addLine(to: ePt)
+            p.move(to: CGPoint(x: base.x - cos(perp) * headHalf, y: base.y - sin(perp) * headHalf))
+            p.addLine(to: ePt)
             ctx.stroke(p, with: .color(color), lineWidth: a.lineWidth)
-            let perp = angle + .pi / 2
-            var tri = Path()
-            tri.move(to: CGPoint(x: base.x + cos(perp) * headHalf, y: base.y + sin(perp) * headHalf))
-            tri.addLine(to: ePt)
-            tri.addLine(to: CGPoint(x: base.x - cos(perp) * headHalf, y: base.y - sin(perp) * headHalf))
-            tri.closeSubpath()
-            ctx.fill(tri, with: .color(color))
         case .pen:
             var p = Path()
             let pts = a.points
@@ -967,7 +961,7 @@ struct AnnotateEditorView: View {
     private var toolbar: some View {
         VStack(spacing: 6) {
             HStack(spacing: 6) {
-                ForEach(Annotation.Tool.allCases, id: \.self) { t in
+                ForEach(visibleTools, id: \.self) { t in
                     toolButton(t)
                 }
                 Button {
@@ -1081,6 +1075,11 @@ struct AnnotateEditorView: View {
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(RubickTheme.emerald.opacity(0.3), lineWidth: 0.8))
     }
 
+    /// 工具栏可见工具（高亮暂下架）
+    private var visibleTools: [Annotation.Tool] {
+        [.rect, .ellipse, .arrow, .pen, .text, .mosaic]
+    }
+
     private func toolButton(_ t: Annotation.Tool) -> some View {
         Button {
             model.tool = (model.tool == t) ? nil : t
@@ -1145,9 +1144,11 @@ struct AnnotateEditorView: View {
         let from = CGRect(x: srcTop.minX,
                           y: image.size.height - srcTop.maxY,
                           width: srcTop.width, height: srcTop.height)
-        let out = NSImage(size: NSSize(width: 14, height: 14))
+        let cols = max(Int(rect.width / 18), 6)
+        let rows = max(Int(rect.height / 18), 6)
+        let out = NSImage(size: NSSize(width: cols, height: rows))
         out.lockFocus()
-        image.draw(in: NSRect(x: 0, y: 0, width: 14, height: 14),
+        image.draw(in: NSRect(x: 0, y: 0, width: cols, height: rows),
                    from: from, operation: .copy, fraction: 1)
         out.unlockFocus()
         return out
