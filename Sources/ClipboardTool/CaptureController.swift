@@ -95,15 +95,10 @@ final class CaptureController {
             return
         }
         if !allowed {
-            let guideShown = UserDefaults.standard.bool(forKey: "capture.guideShown")
-            if mode == "custom" || !guideShown {
-                UserDefaults.standard.set(true, forKey: "capture.guideShown")
-                PermissionGuide.shared.show { [weak self] granted in
-                    if granted { self?.startCustom() } else { self?.systemFallback() }
-                }
-                return
+            // 未授权屏幕录制：每次都弹引导（避免静默回退系统框选，用户误以为功能没生效）
+            PermissionGuide.shared.show { [weak self] granted in
+                if granted { self?.startCustom() } else { self?.systemFallback() }
             }
-            systemFallback()
             return
         }
         startCustom()
