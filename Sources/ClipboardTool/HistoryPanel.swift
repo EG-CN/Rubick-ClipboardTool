@@ -378,7 +378,10 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
 
     func translateSelected() {
         let items = filteredItems()
-        guard items.indices.contains(selectedIndex) else { return }
+        guard items.indices.contains(selectedIndex) else {
+            Toast.shared.show("请先选中一条文本")
+            return
+        }
         translate(items[selectedIndex])
     }
 
@@ -402,7 +405,10 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
 
     func ocrSelected() {
         let items = filteredItems()
-        guard items.indices.contains(selectedIndex) else { return }
+        guard items.indices.contains(selectedIndex) else {
+            Toast.shared.show("请先选中一张图片")
+            return
+        }
         ocr(items[selectedIndex])
     }
 

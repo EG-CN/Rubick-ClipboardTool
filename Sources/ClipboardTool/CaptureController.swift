@@ -48,6 +48,7 @@ final class CaptureController {
     private var overlayWindow: NSWindow?
     private var keyMonitor: Any?
     private var capturedDisplays: [ScreenShot] = []
+    private var previousApp: NSRunningApplication?
 
     private init() {}
 
@@ -174,13 +175,14 @@ final class CaptureController {
 
     private func presentOverlay(composite: NSImage, unionRect: CGRect, windows: [(frame: CGRect, title: String)], displays: [ScreenShot]) {
         capturedDisplays = displays
+        previousApp = NSWorkspace.shared.frontmostApplication
         let view = CaptureOverlayView(
             composite: composite,
             unionRect: unionRect,
             windows: windows,
             snapEnabled: snapEnabled,
             snapThreshold: snapThreshold,
-            onCancel: { [weak self] in self?.teardown() },
+            onCancel: { [weak self] in self?.teardown(restoreFocus: true) },
             onConfirm: { [weak self] rect in
                 self?.finish(rect: rect, composite: composite, unionRect: unionRect)
             }
@@ -202,7 +204,7 @@ final class CaptureController {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.overlayWindow?.isVisible == true else { return event }
             if event.keyCode == 53 {   // ⎋ 取消
-                self.teardown()
+                self.teardown(restoreFocus: true)
                 return nil
             }
             if event.keyCode == 36 || event.keyCode == 76 {   // ↵ 确认当前选区
@@ -214,7 +216,7 @@ final class CaptureController {
     }
 
     private func finish(rect: CGRect, composite: NSImage, unionRect: CGRect) {
-        teardown()
+        teardown(restoreFocus: false)
         guard let cropped = ImageCompose.crop(composite, rectInUnion: rect, union: unionRect) else {
             systemFallback()
             return
@@ -224,11 +226,16 @@ final class CaptureController {
         }
     }
 
-    private func teardown() {
+    private func teardown(restoreFocus: Bool) {
         overlayWindow?.orderOut(nil)
         overlayWindow = nil
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
         capturedDisplays = []
+        if restoreFocus, let prev = previousApp, !prev.isTerminated,
+           prev.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+            prev.activate(options: [.activateIgnoringOtherApps])
+        }
+        previousApp = nil
     }
 }
 
@@ -491,6 +498,7 @@ final class PermissionGuide {
                 self?.finish(true)
             } else if attempts >= 120 {   // 最多等 60 秒
                 t.invalidate()
+                Toast.shared.show("未检测到授权：请到 系统设置→隐私与安全性→屏幕录制 开启后重启拉比克")
                 self?.finish(false)
             }
         }
@@ -518,7 +526,7 @@ struct PermissionGuideView: View {
                 .foregroundStyle(RubickTheme.primary(scheme))
             Text("开启屏幕录制权限")
                 .font(.system(size: 14, weight: .bold))
-            Text("拉比克需要「屏幕录制」权限来实现窗口吸附与自绘截图选框。所有画面仅在本机处理，绝不上传网络。")
+            Text("拉比克需要「屏幕录制」权限来实现窗口吸附与自绘截图选框。所有画面仅在本机处理，绝不上传网络。\n（授权后若仍提示未开启，退出并重新打开拉比克即可生效。）")
                 .font(.system(size: 11.5))
                 .foregroundStyle(RubickTheme.muted(scheme))
                 .multilineTextAlignment(.center)
