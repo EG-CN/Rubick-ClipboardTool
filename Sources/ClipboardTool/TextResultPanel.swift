@@ -14,6 +14,7 @@ final class TextResultPanel {
 
     private var panel: NSPanel?
     private var keyMonitor: Any?
+    private var globalKeyMonitor: Any?
     private var panelTextView: NSTextView?
     private var currentKind: Kind = .ocr
     private var currentResult = ""
@@ -115,6 +116,15 @@ final class TextResultPanel {
             }
             return event
         }
+
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return }
+            if event.keyCode == 53 {
+                DispatchQueue.main.async { self.hide() }
+            } else if PanelKeyConfig.shared.matches(.translate, event: event), self.currentKind == .ocr {
+                DispatchQueue.main.async { self.translateSelection() }
+            }
+        }
     }
 
     /// 翻译选中文字；无选中则翻译全部
@@ -132,6 +142,7 @@ final class TextResultPanel {
 
     private func removeKeyMonitor() {
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+        if let m = globalKeyMonitor { NSEvent.removeMonitor(m); globalKeyMonitor = nil }
     }
 }
 

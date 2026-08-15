@@ -6,6 +6,11 @@ import CoreGraphics
 // MARK: - 截图管线 v2.0：ScreenCaptureKit 自绘选框 + 窗口吸附（功能清单 12.6）
 // 未授权屏幕录制时回退系统 screencapture（12.6.4）；截图确认后进入标注编辑器（12.1.1）
 
+/// 无边框面板也能成为键盘焦点（Esc/↵ 等按键必需）
+final class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
 /// 单屏截图素材（AppKit 全局坐标，左下原点）
 struct ScreenShot {
     let frame: CGRect
@@ -47,6 +52,7 @@ final class CaptureController {
 
     private var overlayWindow: NSWindow?
     private var keyMonitor: Any?
+    private var globalKeyMonitor: Any?
     private var capturedDisplays: [ScreenShot] = []
     private var previousApp: NSRunningApplication?
 
@@ -205,7 +211,7 @@ final class CaptureController {
         )
         // 非激活面板：显示与按键照常，但不激活应用、不切换桌面空间
         // （修复：多桌面/全屏空间下按 ⌘⇧A/⌘⇧D 触发“页面跳动”）
-        let window = NSPanel(contentRect: unionRect,
+        let window = KeyablePanel(contentRect: unionRect,
                              styleMask: [.borderless, .nonactivatingPanel],
                              backing: .buffered, defer: false)
         window.level = .screenSaver
@@ -229,6 +235,18 @@ final class CaptureController {
                 return nil
             }
             return event
+        }
+
+        // 全局监听兜底：应用未激活时也能收到 Esc / ↵
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.overlayWindow?.isVisible == true else { return }
+            if event.keyCode == 53 {
+                DispatchQueue.main.async { self.teardown(restoreFocus: true) }
+            } else if event.keyCode == 36 || event.keyCode == 76 {
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .init("cbt.captureConfirm"), object: nil)
+                }
+            }
         }
     }
 
@@ -287,6 +305,7 @@ final class CaptureController {
         overlayWindow?.orderOut(nil)
         overlayWindow = nil
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+        if let m = globalKeyMonitor { NSEvent.removeMonitor(m); globalKeyMonitor = nil }
         capturedDisplays = []
         if restoreFocus, let prev = previousApp, !prev.isTerminated,
            prev.processIdentifier != ProcessInfo.processInfo.processIdentifier {

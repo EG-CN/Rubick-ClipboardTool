@@ -160,6 +160,7 @@ final class AnnotationController {
 
     private var window: NSWindow?
     private var keyMonitor: Any?
+    private var globalKeyMonitor: Any?
     private var completion: ((NSImage) -> Void)?
     private var model: AnnotateModel?
     private var currentImage: NSImage?
@@ -186,7 +187,7 @@ final class AnnotationController {
         )
         if window == nil {
             guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
-            let w = NSPanel(contentRect: screen.frame,
+            let w = KeyablePanel(contentRect: screen.frame,
                             styleMask: [.borderless, .nonactivatingPanel],
                             backing: .buffered, defer: false)
             w.level = .screenSaver
@@ -257,6 +258,37 @@ final class AnnotationController {
             }
             return event
         }
+
+        // 全局监听兜底：编辑器打开时应用未激活也能响应按键
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.window?.isVisible == true else { return }
+            DispatchQueue.main.async { self.handleGlobalEditorKey(event, model: model) }
+        }
+    }
+
+    private func handleGlobalEditorKey(_ event: NSEvent, model: AnnotateModel) {
+        let ak = AnnotateKeyConfig.shared
+        if event.keyCode == 53 {
+            if model.sidePanelText != nil { model.closeSidePanel() } else { cancel() }
+            return
+        }
+        if ak.matches(.confirm, event: event) { confirm(); return }
+        if ak.matches(.undo, event: event) { model.undo(); return }
+        if ak.matches(.redo, event: event) { model.redo(); return }
+        if ak.matches(.ocr, event: event) {
+            if let img = currentImage { model.runOCR(on: img) }
+            return
+        }
+        if ak.matches(.translate, event: event) { model.translateSideSelection(); return }
+        let toolMap: [(AnnotateKeyConfig.Action, Annotation.Tool)] = [
+            (.toolRect, .rect), (.toolEllipse, .ellipse), (.toolArrow, .arrow),
+            (.toolPen, .pen), (.toolText, .text), (.toolMosaic, .mosaic),
+            (.toolHighlight, .highlight)
+        ]
+        for (action, tool) in toolMap where ak.matches(action, event: event) {
+            model.tool = tool
+            return
+        }
     }
 
     private func confirm() {
@@ -280,6 +312,7 @@ final class AnnotationController {
     private func teardown() {
         window?.orderOut(nil)
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+        if let m = globalKeyMonitor { NSEvent.removeMonitor(m); globalKeyMonitor = nil }
         model = nil
         currentImage = nil
     }

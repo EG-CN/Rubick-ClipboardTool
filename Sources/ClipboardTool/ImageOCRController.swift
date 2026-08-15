@@ -9,6 +9,7 @@ final class ImageOCRController {
 
     private var panel: NSPanel?
     private var keyMonitor: Any?
+    private var globalKeyMonitor: Any?
 
     private init() {}
 
@@ -85,10 +86,18 @@ final class ImageOCRController {
             }
             return event
         }
+
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return }
+            if event.keyCode == 53 {
+                DispatchQueue.main.async { self.hide() }
+            }
+        }
     }
 
     private func removeKeyMonitor() {
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+        if let m = globalKeyMonitor { NSEvent.removeMonitor(m); globalKeyMonitor = nil }
     }
 }
 
