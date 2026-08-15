@@ -42,7 +42,11 @@ struct Annotation: Identifiable, Equatable {
     var lineWidth: CGFloat = 4        // 创建时的显示点宽
     var cornerRadius: CGFloat = 0     // 矩形圆角（显示点，0 = 直角）
     var blockSize: CGFloat = 16       // 马赛克颗粒（像素）
+    var mosaicStyle: Int = 0          // 0 像素 / 1 模糊 / 2 色块
     var fillOpacity: CGFloat = 0.35   // 高亮透明度
+    var highlightEllipse: Bool = false // 高亮形状：false 方形 / true 圆形
+    var startPoint: CGPoint = .zero   // 箭头起点（归一化）
+    var endPoint: CGPoint = .zero     // 箭头终点（归一化）
     var fontSize: CGFloat = 16        // 文字工具字号（显示点）
     var displaySize: CGSize = .zero   // 创建时图片显示尺寸（用于展平缩放）
 }
@@ -57,7 +61,9 @@ final class AnnotateModel: ObservableObject {
     @Published var fontSize: CGFloat = 16
     @Published var cornerRadius: CGFloat = 0
     @Published var blockSize: CGFloat = 16     // 马赛克颗粒
+    @Published var mosaicStyle: Int = 0        // 0 像素 / 1 模糊 / 2 色块
     @Published var fillOpacity: CGFloat = 0.35 // 高亮透明度
+    @Published var highlightEllipse: Bool = false // 高亮形状
     @Published var annotations: [Annotation] = []
     @Published var redoStack: [Annotation] = []
     @Published var textEditing: (id: UUID, position: CGPoint)?
@@ -431,7 +437,14 @@ final class AnnotationController {
         case .ellipse:
             ctx.strokeEllipse(in: r.insetBy(dx: lw / 2, dy: lw / 2))
         case .arrow:
-            drawArrow(r, ctx: ctx, color: color)
+            let hasDir = (a.startPoint != .zero || a.endPoint != .zero)
+            let sPt = hasDir
+                ? CGPoint(x: a.startPoint.x * imageSize.width, y: (1 - a.startPoint.y) * imageSize.height)
+                : CGPoint(x: r.minX, y: r.minY)
+            let ePt = hasDir
+                ? CGPoint(x: a.endPoint.x * imageSize.width, y: (1 - a.endPoint.y) * imageSize.height)
+                : CGPoint(x: r.maxX, y: r.maxY)
+            drawArrow(from: sPt, to: ePt, ctx: ctx, color: color)
         case .pen:
             guard a.points.count > 1 else { break }
             let path = CGMutablePath()
@@ -448,18 +461,26 @@ final class AnnotationController {
             let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
             (a.text as NSString).draw(at: CGPoint(x: r.minX, y: r.minY), withAttributes: attrs)
         case .mosaic:
-            drawMosaic(r, imageSize: imageSize, baseCG: baseCG, blockSize: a.blockSize)
+            if a.mosaicStyle == 2 {
+                ctx.setFillColor(color.withAlphaComponent(0.85).cgColor)
+                ctx.fill(r)
+            } else {
+                drawMosaic(r, imageSize: imageSize, baseCG: baseCG,
+                           blockSize: a.blockSize, blur: a.mosaicStyle == 1)
+            }
         case .highlight:
             ctx.setFillColor(color.withAlphaComponent(a.fillOpacity).cgColor)
-            ctx.fill(r)
+            if a.highlightEllipse {
+                ctx.fillEllipse(in: r)
+            } else {
+                ctx.fill(r)
+            }
         }
     }
 
-    private static func drawArrow(_ r: CGRect, ctx: CGContext, color: NSColor) {
-        let start = CGPoint(x: r.minX, y: r.minY)
-        let tip = CGPoint(x: r.maxX, y: r.maxY)
+    private static func drawArrow(from start: CGPoint, to tip: CGPoint, ctx: CGContext, color: NSColor) {
         let angle = atan2(tip.y - start.y, tip.x - start.x)
-        let headLen = max(r.width * 0.3, 16)
+        let headLen = max(hypot(tip.x - start.x, tip.y - start.y) * 0.22, 16)
         let headHalf = headLen * 0.42
         let base = CGPoint(x: tip.x - cos(angle) * headLen, y: tip.y - sin(angle) * headLen)
         // 箭杆画到三角根部
@@ -478,7 +499,7 @@ final class AnnotationController {
         ctx.fillPath()
     }
 
-    private static func drawMosaic(_ r: CGRect, imageSize: CGSize, baseCG: CGImage?, blockSize: CGFloat = 16) {
+    private static func drawMosaic(_ r: CGRect, imageSize: CGSize, baseCG: CGImage?, blockSize: CGFloat = 16, blur: Bool = false) {
         guard let baseCG = baseCG else {
             NSColor.gray.withAlphaComponent(0.5).setFill()
             NSBezierPath(rect: r).fill()
@@ -489,8 +510,12 @@ final class AnnotationController {
                             y: (imageSize.height - r.maxY) * scalePx,
                             width: r.width * scalePx,
                             height: r.height * scalePx)
-        let ci = CIImage(cgImage: baseCG).cropped(to: cropPx)
-            .applyingFilter("CIPixellate", parameters: [kCIInputScaleKey: max(blockSize, 4)])
+        var ci = CIImage(cgImage: baseCG).cropped(to: cropPx)
+        if blur {
+            ci = ci.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 12])
+        } else {
+            ci = ci.applyingFilter("CIPixellate", parameters: [kCIInputScaleKey: max(blockSize, 4)])
+        }
         if let cg = CIContext().createCGImage(ci, from: ci.extent) {
             NSImage(cgImage: cg, size: r.size).draw(in: r)
         }
@@ -652,7 +677,11 @@ struct AnnotateEditorView: View {
                         a.lineWidth = model.lineWidth
                         a.cornerRadius = tool == .rect ? model.cornerRadius : 0
                         a.blockSize = model.blockSize
+                        a.mosaicStyle = model.mosaicStyle
                         a.fillOpacity = model.fillOpacity
+                        a.highlightEllipse = model.highlightEllipse
+                        a.startPoint = tool == .arrow ? normStart : .zero
+                        a.endPoint = tool == .arrow ? normEnd : .zero
                         a.fontSize = tool == .text ? model.fontSize : model.lineWidth * 4
                         a.displaySize = displaySize
                         model.commit(a)
@@ -736,6 +765,11 @@ struct AnnotateEditorView: View {
         a.colorIndex = model.colorIndex
         a.lineWidth = model.lineWidth
         a.cornerRadius = tool == .rect ? model.cornerRadius : 0
+        a.mosaicStyle = model.mosaicStyle
+        a.fillOpacity = model.fillOpacity
+        a.highlightEllipse = model.highlightEllipse
+        a.startPoint = tool == .arrow ? n1 : .zero
+        a.endPoint = tool == .arrow ? n2 : .zero
         a.fontSize = model.lineWidth * 4
         a.displaySize = displaySize
         return a
@@ -758,10 +792,29 @@ struct AnnotateEditorView: View {
         case .ellipse:
             ctx.stroke(Path(ellipseIn: r), with: .color(color), lineWidth: a.lineWidth)
         case .arrow:
+            let hasDir = (a.startPoint != .zero || a.endPoint != .zero)
+            let sPt = hasDir
+                ? CGPoint(x: a.startPoint.x * imageRect.width, y: a.startPoint.y * imageRect.height)
+                : CGPoint(x: r.minX, y: r.minY)
+            let ePt = hasDir
+                ? CGPoint(x: a.endPoint.x * imageRect.width, y: a.endPoint.y * imageRect.height)
+                : CGPoint(x: r.maxX, y: r.maxY)
+            let angle = atan2(ePt.y - sPt.y, ePt.x - sPt.x)
+            let totalLen = hypot(ePt.x - sPt.x, ePt.y - sPt.y)
+            let headLen = max(totalLen * 0.22, 14)
+            let headHalf = headLen * 0.45
+            let base = CGPoint(x: ePt.x - cos(angle) * headLen, y: ePt.y - sin(angle) * headLen)
             var p = Path()
-            p.move(to: CGPoint(x: r.minX, y: r.minY))
-            p.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+            p.move(to: sPt)
+            p.addLine(to: base)
             ctx.stroke(p, with: .color(color), lineWidth: a.lineWidth)
+            let perp = angle + .pi / 2
+            var tri = Path()
+            tri.move(to: CGPoint(x: base.x + cos(perp) * headHalf, y: base.y + sin(perp) * headHalf))
+            tri.addLine(to: ePt)
+            tri.addLine(to: CGPoint(x: base.x - cos(perp) * headHalf, y: base.y - sin(perp) * headHalf))
+            tri.closeSubpath()
+            ctx.fill(tri, with: .color(color))
         case .pen:
             var p = Path()
             let pts = a.points
@@ -779,13 +832,28 @@ struct AnnotateEditorView: View {
             ctx.draw(Text(a.text).font(.system(size: a.fontSize, weight: .semibold)).foregroundStyle(color),
                      at: CGPoint(x: r.minX, y: r.minY), anchor: .bottomLeading)
         case .mosaic:
-            if let tiny = mosaicTiny(for: r) {
-                ctx.draw(Image(nsImage: tiny).interpolation(.none), in: r)
-            } else {
-                ctx.fill(Path(r), with: .color(.gray.opacity(0.45)))
+            switch a.mosaicStyle {
+            case 2:
+                ctx.fill(Path(r), with: .color(color.opacity(0.85)))
+            case 1:
+                if let tiny = mosaicTiny(for: r) {
+                    ctx.draw(Image(nsImage: tiny).interpolation(.high), in: r)
+                } else {
+                    ctx.fill(Path(r), with: .color(.gray.opacity(0.45)))
+                }
+            default:
+                if let tiny = mosaicTiny(for: r) {
+                    ctx.draw(Image(nsImage: tiny).interpolation(.none), in: r)
+                } else {
+                    ctx.fill(Path(r), with: .color(.gray.opacity(0.45)))
+                }
             }
         case .highlight:
-            ctx.fill(Path(r), with: .color(color.opacity(a.fillOpacity)))
+            if a.highlightEllipse {
+                ctx.fill(Path(ellipseIn: r), with: .color(color.opacity(a.fillOpacity)))
+            } else {
+                ctx.fill(Path(r), with: .color(color.opacity(a.fillOpacity)))
+            }
         }
     }
 
@@ -830,6 +898,39 @@ struct AnnotateEditorView: View {
                         Text("小").tag(CGFloat(12))
                         Text("中").tag(CGFloat(16))
                         Text("大").tag(CGFloat(22))
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 110)
+                }
+                if model.tool == .mosaic {
+                    Picker("", selection: $model.mosaicStyle) {
+                        Text("像素").tag(0)
+                        Text("模糊").tag(1)
+                        Text("色块").tag(2)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 110)
+                    if model.mosaicStyle == 0 {
+                        Picker("", selection: $model.blockSize) {
+                            Text("细").tag(CGFloat(8))
+                            Text("中").tag(CGFloat(16))
+                            Text("粗").tag(CGFloat(28))
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 110)
+                    }
+                }
+                if model.tool == .highlight {
+                    Picker("", selection: $model.highlightEllipse) {
+                        Text("方形").tag(false)
+                        Text("圆形").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 110)
+                    Picker("", selection: $model.fillOpacity) {
+                        Text("浅").tag(CGFloat(0.18))
+                        Text("中").tag(CGFloat(0.35))
+                        Text("深").tag(CGFloat(0.55))
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 110)
@@ -887,9 +988,16 @@ struct AnnotateEditorView: View {
         Button {
             model.tool = (model.tool == t) ? nil : t
         } label: {
-            Image(systemName: t.symbol)
-                .font(.system(size: 13))
-                .frame(width: 32, height: 32)
+            Group {
+                if t == .text {
+                    Text("T")
+                        .font(.system(size: 15, weight: .heavy))
+                } else {
+                    Image(systemName: t.symbol)
+                        .font(.system(size: 13))
+                }
+            }
+            .frame(width: 32, height: 32)
                 .background(RoundedRectangle(cornerRadius: 7).fill(model.tool == t
                                                                    ? RubickTheme.emerald.opacity(0.22)
                                                                    : .white.opacity(0.06)))
