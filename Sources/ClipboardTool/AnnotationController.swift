@@ -987,21 +987,11 @@ struct AnnotateEditorView: View {
                 }
                 if model.tool == .mosaic {
                     Picker("", selection: $model.mosaicStyle) {
-                        Text("像素").tag(0)
+                        Text("马赛克").tag(0)
                         Text("模糊").tag(1)
-                        Text("色块").tag(2)
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 110)
-                    if model.mosaicStyle == 0 {
-                        Picker("", selection: $model.blockSize) {
-                            Text("细").tag(CGFloat(8))
-                            Text("中").tag(CGFloat(16))
-                            Text("粗").tag(CGFloat(28))
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 110)
-                    }
+                    .frame(width: 130)
                 }
                 if model.tool == .highlight {
                     Picker("", selection: $model.highlightEllipse) {
