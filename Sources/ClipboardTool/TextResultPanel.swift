@@ -44,7 +44,7 @@ final class TextResultPanel {
         )
         if panel == nil {
             let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 430, height: 460),
-                            styleMask: [.titled, .fullSizeContentView, .closable],
+                            styleMask: [.titled, .fullSizeContentView, .closable, .nonactivatingPanel],
                             backing: .buffered, defer: false)
             p.titleVisibility = .hidden
             p.titlebarAppearsTransparent = true
@@ -66,7 +66,6 @@ final class TextResultPanel {
         panel?.setContentSize(NSHostingView(rootView: view).fittingSize)
         position()
         panel?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
         installKeyMonitor()
     }
 

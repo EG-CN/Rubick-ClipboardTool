@@ -27,6 +27,7 @@ final class SettingsController {
                              backing: .buffered, defer: false)
             w.title = "设置"
             w.titlebarAppearsTransparent = true
+            w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             w.contentView = host
             w.center()
             w.isReleasedWhenClosed = false

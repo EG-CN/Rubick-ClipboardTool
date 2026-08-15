@@ -203,9 +203,11 @@ final class CaptureController {
                 self?.finish(rect: rect, composite: composite, unionRect: unionRect)
             }
         )
-        let window = NSWindow(contentRect: unionRect,
-                              styleMask: [.borderless],
-                              backing: .buffered, defer: false)
+        // 非激活面板：显示与按键照常，但不激活应用、不切换桌面空间
+        // （修复：多桌面/全屏空间下按 ⌘⇧A/⌘⇧D 触发“页面跳动”）
+        let window = NSPanel(contentRect: unionRect,
+                             styleMask: [.borderless, .nonactivatingPanel],
+                             backing: .buffered, defer: false)
         window.level = .screenSaver
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.backgroundColor = .clear
@@ -215,7 +217,6 @@ final class CaptureController {
         window.contentView = NSHostingView(rootView: view)
         overlayWindow = window
         window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.overlayWindow?.isVisible == true else { return event }
@@ -421,7 +422,7 @@ final class PermissionGuide {
                 onFallback: { [weak self] in self?.finish(false) }
             )
             let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 420, height: 220),
-                            styleMask: [.titled, .fullSizeContentView],
+                            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
                             backing: .buffered, defer: false)
             p.titleVisibility = .hidden
             p.titlebarAppearsTransparent = true
@@ -434,7 +435,6 @@ final class PermissionGuide {
             panel = p
         }
         panel?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func requestAndWait() {

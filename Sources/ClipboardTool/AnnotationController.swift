@@ -186,9 +186,9 @@ final class AnnotationController {
         )
         if window == nil {
             guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
-            let w = NSWindow(contentRect: screen.frame,
-                             styleMask: [.borderless],
-                             backing: .buffered, defer: false)
+            let w = NSPanel(contentRect: screen.frame,
+                            styleMask: [.borderless, .nonactivatingPanel],
+                            backing: .buffered, defer: false)
             w.level = .screenSaver
             w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             w.backgroundColor = .clear
@@ -199,7 +199,6 @@ final class AnnotationController {
         }
         window?.contentView = NSHostingView(rootView: view)
         window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
         installKeyMonitor(model: m)
     }
 

@@ -20,7 +20,7 @@ final class ImageOCRController {
         }
         if panel == nil {
             let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 760, height: 560),
-                            styleMask: [.titled, .fullSizeContentView, .closable],
+                            styleMask: [.titled, .fullSizeContentView, .closable, .nonactivatingPanel],
                             backing: .buffered, defer: false)
             p.title = "识别文字 — 拖拽划选区域，Esc 取消"
             p.titleVisibility = .visible
@@ -37,7 +37,6 @@ final class ImageOCRController {
         }
         panel?.center()
         panel?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
         installKeyMonitor()
     }
 
