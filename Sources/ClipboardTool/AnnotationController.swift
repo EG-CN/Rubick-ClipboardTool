@@ -373,7 +373,7 @@ struct AnnotateEditorView: View {
             }
             .contentShape(Rectangle())
             .gesture(
-                DragGesture(minimumDistance: 1)
+                DragGesture(minimumDistance: 0)
                     .onChanged { v in
                         model.textEditing = nil
                         let p = clamp(v.startLocation, to: imageRect)

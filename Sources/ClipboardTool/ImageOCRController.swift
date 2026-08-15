@@ -133,7 +133,7 @@ struct OCRSelectView: View {
             }
             .contentShape(Rectangle())
             .gesture(
-                DragGesture(minimumDistance: 1)
+                DragGesture(minimumDistance: 0)
                     .onChanged { v in
                         dragStart = dragStart ?? v.startLocation
                         dragCurrent = v.location

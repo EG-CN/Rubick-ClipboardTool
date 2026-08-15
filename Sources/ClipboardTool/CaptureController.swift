@@ -247,6 +247,7 @@ struct CaptureOverlayView: View {
     @State private var dragCurrent: CGPoint?
     @State private var hoverPoint: CGPoint?
     @State private var dragged = false
+    @State private var hoverAtDragStart: CGRect? = nil
 
     private var windowFrames: [CGRect] { windows.map { $0.frame } }
 
@@ -372,18 +373,26 @@ struct CaptureOverlayView: View {
             }
         }
         .gesture(
-            DragGesture(minimumDistance: 2)
+            DragGesture(minimumDistance: 0)
                 .onChanged { v in
+                    if dragStart == nil {
+                        hoverAtDragStart = hoverWindow   // 记住按下瞬间悬停的窗口
+                    }
                     dragged = true
                     dragStart = dragStart ?? v.startLocation
                     dragCurrent = v.location
                 }
                 .onEnded { v in
                     dragCurrent = v.location
-                    defer { dragStart = nil; dragCurrent = nil; dragged = false }
+                    defer {
+                        dragStart = nil
+                        dragCurrent = nil
+                        dragged = false
+                        hoverAtDragStart = nil
+                    }
                     guard let sel = selectionRect, sel.width > 3, sel.height > 3 else {
-                        // 单击：有悬停窗口 → 直截整窗；否则取消
-                        if let hw = hoverWindow {
+                        // 单击：按下瞬间悬停窗口 → 直截整窗；否则取消
+                        if let hw = hoverAtDragStart {
                             onConfirm(globalRect(hw))
                         } else {
                             onCancel()

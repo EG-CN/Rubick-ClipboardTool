@@ -8,13 +8,19 @@ cd "$(dirname "$0")/.."
 UNIVERSAL=0
 [ "${1:-}" = "--universal" ] && UNIVERSAL=1
 
+# 构建环境：兼容普通终端与受限沙箱环境
+export TMPDIR="${TMPDIR:-$PWD/.tmp}"
+mkdir -p "$TMPDIR"
+export SWIFTPM_MODULECACHE_OVERRIDE="$TMPDIR/modulecache"
+EXTRA="--disable-sandbox"
+
 if [ "$UNIVERSAL" = "1" ]; then
   echo "==> swift build -c release (arm64 + x86_64)"
-  swift build --arch arm64 -c release
-  swift build --arch x86_64 -c release
+  swift build --arch arm64 -c release $EXTRA
+  swift build --arch x86_64 -c release $EXTRA
 else
   echo "==> swift build -c release"
-  swift build -c release
+  swift build -c release $EXTRA
 fi
 
 APP="build/拉比克.app"

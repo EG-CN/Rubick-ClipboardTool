@@ -297,7 +297,7 @@ struct OCRPinOverlay: View {
         }
         .contentShape(Rectangle())
         .gesture(
-            DragGesture(minimumDistance: 1)
+            DragGesture(minimumDistance: 0)
                 .onChanged { v in
                     start = start ?? v.startLocation
                     current = v.location
