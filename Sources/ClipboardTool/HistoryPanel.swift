@@ -113,6 +113,15 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         restoreFocus()
     }
 
+    /// 拖动面板（头部拖动条调用；视图 y 向下 → 窗口坐标 y 向上）
+    func move(by delta: CGPoint) {
+        guard let p = panel else { return }
+        var f = p.frame
+        f.origin.x += delta.x
+        f.origin.y -= delta.y
+        p.setFrameOrigin(f.origin)
+    }
+
     func windowDidResignKey(_ notification: Notification) {
         if !suppressAutoClose { close() }
     }
@@ -468,6 +477,8 @@ struct HistoryPanelView: View {
 
     // MARK: 头部
 
+    @State private var moveLast: CGPoint?
+
     private var header: some View {
         HStack(spacing: 8) {
             Image(systemName: "sparkles")
@@ -475,6 +486,10 @@ struct HistoryPanelView: View {
                 .foregroundStyle(RubickTheme.primary(scheme))
             Text("拉比克")
                 .font(.system(size: 13, weight: .bold))
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 9))
+                .foregroundStyle(RubickTheme.muted(scheme).opacity(0.5))
+                .help("按住标题栏拖动面板")
             Text("\(store.items.count) / \(store.limit) 条")
                 .font(.system(size: 10.5))
                 .foregroundStyle(RubickTheme.muted(scheme))
@@ -510,6 +525,18 @@ struct HistoryPanelView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { v in
+                    let t = CGPoint(x: v.translation.width, y: v.translation.height)
+                    if let last = moveLast {
+                        HistoryPanelController.shared.move(by: CGPoint(x: t.x - last.x, y: t.y - last.y))
+                    }
+                    moveLast = t
+                }
+                .onEnded { _ in moveLast = nil }
+        )
     }
 
     // MARK: 搜索
