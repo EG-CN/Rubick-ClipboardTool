@@ -183,20 +183,27 @@ final class AnnotationController {
 
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let vis = screen.visibleFrame
-        let toolbarH: CGFloat = 118
+        let chromeH: CGFloat = 178   // 头部拖动条 + 两行工具栏 + 间距
         let pad: CGFloat = 24
         let maxW = min(vis.width * 0.88, image.size.width)
-        let maxH = min(vis.height * 0.8, image.size.height + toolbarH)
+        let maxH = min(vis.height * 0.8, image.size.height + chromeH)
         let s = min(maxW / max(image.size.width, 1), maxH / max(image.size.height, 1), 1)
         let dispW = max(image.size.width * s, 60)
         let dispH = max(image.size.height * s, 40)
         let winW = max(dispW + pad, 540)
-        let winH = dispH + toolbarH + pad
+        let winH = dispH + chromeH
 
         let view = AnnotateEditorView(
             image: image,
             displaySize: CGSize(width: dispW, height: dispH),
             model: m,
+            onMove: { [weak self] delta in
+                guard let self = self, let w = self.window else { return }
+                var f = w.frame
+                f.origin.x += delta.x
+                f.origin.y -= delta.y   // 视图坐标 y 向下 → 窗口坐标 y 向上
+                w.setFrameOrigin(f.origin)
+            },
             onConfirm: { [weak self] annotated in self?.finish(annotated) },
             onCancel: { [weak self] in self?.cancel() }
         )
@@ -210,6 +217,7 @@ final class AnnotationController {
             w.isOpaque = false
             w.hasShadow = false
             w.isReleasedWhenClosed = false
+            w.isMovableByWindowBackground = true
             window = w
         }
         window?.setContentSize(NSSize(width: winW, height: winH))
@@ -218,7 +226,7 @@ final class AnnotationController {
         // 定位：优先选区原地（含工具栏下方空间）；无选区贴鼠标
         let origin: NSPoint
         if let r = rect {
-            origin = NSPoint(x: r.minX - 12, y: r.minY - toolbarH - 12)
+            origin = NSPoint(x: r.minX - 12, y: r.minY - chromeH - 12)
         } else {
             let mp = NSEvent.mouseLocation
             origin = NSPoint(x: mp.x - winW / 2, y: mp.y - winH + 20)
@@ -455,12 +463,14 @@ struct AnnotateEditorView: View {
     let image: NSImage
     let displaySize: CGSize      // 图片显示尺寸
     @ObservedObject var model: AnnotateModel
+    let onMove: (CGPoint) -> Void
     let onConfirm: (NSImage) -> Void
     let onCancel: () -> Void
 
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
     @State private var penPath: [CGPoint] = []
+    @State private var moveLast: CGPoint?
 
     @ObservedObject private var keys = AnnotateKeyConfig.shared
 
@@ -472,6 +482,7 @@ struct AnnotateEditorView: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            header
             ZStack {
                 Image(nsImage: image)
                     .resizable()
@@ -578,7 +589,7 @@ struct AnnotateEditorView: View {
             toolbar
         }
         .padding(12)
-        .frame(width: displaySize.width + 24, height: displaySize.height + 142)
+        .frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: 14).fill(RubickTheme.darkBackground.opacity(0.97)))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(RubickTheme.emerald.opacity(0.45), lineWidth: 1))
         .shadow(color: RubickTheme.emerald.opacity(0.35), radius: 18)   // 祖母绿荧光
@@ -587,6 +598,38 @@ struct AnnotateEditorView: View {
             NSCursor.crosshair.set()
         }
         .onDisappear { NSCursor.arrow.set() }
+    }
+
+    /// 顶部拖动条：按住拖动移动卡片
+    private var header: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "pencil.and.outline")
+                .font(.system(size: 10))
+                .foregroundStyle(RubickTheme.emeraldBright)
+            Text("标注 · 按住此处拖动")
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.7))
+            Spacer()
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.4))
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 5)
+        .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.08), lineWidth: 0.5))
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { v in
+                    let t = CGPoint(x: v.translation.width, y: v.translation.height)
+                    if let last = moveLast {
+                        onMove(CGPoint(x: t.x - last.x, y: t.y - last.y))
+                    }
+                    moveLast = t
+                }
+                .onEnded { _ in moveLast = nil }
+        )
     }
 
     private func normalize(_ p: CGPoint) -> CGPoint {
