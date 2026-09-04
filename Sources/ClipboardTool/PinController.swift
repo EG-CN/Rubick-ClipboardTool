@@ -29,9 +29,15 @@ final class PinController {
         }
         let host = ZoomHostingView(rootView: view)
 
-        host.onScroll = { delta in
-            let factor = delta > 0 ? 1.05 : 0.95
-            model.zoom = min(max(model.zoom * factor, 0.1), 6.0)
+        host.onScroll = { delta, flags in
+            if flags.contains(.option) {
+                // ⌥滚轮：不透明度（Snipaste 式贴图透明调节）
+                let factor = delta > 0 ? 0.08 : -0.08
+                model.opacity = min(max(model.opacity + factor, 0.25), 1.0)
+            } else {
+                let factor = delta > 0 ? 1.05 : 0.95
+                model.zoom = min(max(model.zoom * factor, 0.1), 6.0)
+            }
         }
 
         // 缩放后同步调整窗口尺寸（保持左上角位置稳定）
@@ -75,13 +81,19 @@ final class PinController {
 
 final class PinModel: ObservableObject {
     @Published var zoom: CGFloat = 1.0
+    /// 贴图不透明度（⌥滚轮调节，0.25–1.0）
+    @Published var opacity: CGFloat = 1.0
+    /// 当前生效图（标注原位替换后变化；nil = 初始图）
+    @Published var image: NSImage?
+    /// 图片替换计数（驱动尺寸重排）
+    @Published var imageToken: Int = 0
 }
 
-/// 捕获 scrollWheel 的 NSHostingView 子类
+/// 捕获 scrollWheel 的 NSHostingView 子类（修饰键透传：⌥=不透明度，无=缩放）
 final class ZoomHostingView<Content: View>: NSHostingView<Content> {
-    var onScroll: ((CGFloat) -> Void)?
+    var onScroll: ((CGFloat, NSEvent.ModifierFlags) -> Void)?
     override func scrollWheel(with event: NSEvent) {
-        onScroll?(event.scrollingDeltaY)
+        onScroll?(event.scrollingDeltaY, event.modifierFlags)
     }
 }
 
@@ -95,6 +107,9 @@ struct PinImageView: View {
     @State private var hovering = false
     @State private var ocrMode = false
     @Environment(\.colorScheme) private var scheme
+
+    /// 当前生效图（标注完成后被原位替换）
+    private var displayImage: NSImage { model.image ?? image }
 
     var body: some View {
         ZStack {
@@ -128,11 +143,12 @@ struct PinImageView: View {
                 Divider().opacity(0.4)
 
                 ZStack {
-                    Image(nsImage: image)
+                    Image(nsImage: displayImage)
                         .resizable()
                         .interpolation(.high)
-                        .frame(width: image.size.width * fitScale * model.zoom,
-                               height: image.size.height * fitScale * model.zoom)
+                        .frame(width: displayImage.size.width * fitScale * model.zoom,
+                               height: displayImage.size.height * fitScale * model.zoom)
+                        .opacity(model.opacity)
                     if ocrMode {
                         OCRPinOverlay { rect in
                             ocrMode = false
@@ -147,6 +163,7 @@ struct PinImageView: View {
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color(nsColor: .windowBackgroundColor).opacity(scheme == .dark ? 0.92 : 0.95))
+                    .opacity(model.opacity)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
@@ -155,12 +172,14 @@ struct PinImageView: View {
             .shadow(color: hovering
                     ? RubickTheme.emerald.opacity(0.35)
                     : Color.black.opacity(0.35), radius: hovering ? 10 : 12, y: 5)
+            .opacity(model.opacity)
             .contentShape(Rectangle())
             .onTapGesture(count: 2) { onClose() }
             .contextMenu {
+                Button("标注…") { annotateInPlace() }
                 Button("识别文字…") { ocrMode = true }
-                Button("复制图片") { writeImageToPasteboard(image) }
-                Button("另存为 PNG…") { saveImageAsPng(image) }
+                Button("复制图片") { writeImageToPasteboard(displayImage) }
+                Button("另存为 PNG…") { saveImageAsPng(displayImage) }
                 Divider()
                 Button("关闭贴图", role: .destructive) { onClose() }
             }
@@ -168,11 +187,11 @@ struct PinImageView: View {
                 if hovering {
                     VStack(spacing: 4) {
                         hoverAction("doc.on.doc", help: "回响至剪贴板") {
-                            writeImageToPasteboard(image)
+                            writeImageToPasteboard(displayImage)
                             Toast.shared.show("已复制图片")
                         }
                         hoverAction("square.and.arrow.down", help: "存入魔典") {
-                            saveImageAsPng(image)
+                            saveImageAsPng(displayImage)
                         }
                         hoverAction("pin.slash", help: "取消钉图") {
                             onClose()
@@ -187,7 +206,13 @@ struct PinImageView: View {
             }
             .onHover { hovering = $0 }
             .onAppear {
-                fitScale = min(420 / image.size.width, 300 / image.size.height)
+                fitScale = min(420 / displayImage.size.width, 300 / displayImage.size.height)
+                onResize?(contentSize())
+            }
+            .onChange(of: model.imageToken) { _ in
+                // 标注原位替换图片后：重置缩放并按新尺寸重排
+                fitScale = min(420 / displayImage.size.width, 300 / displayImage.size.height)
+                model.zoom = 1.0
                 onResize?(contentSize())
             }
             .onChange(of: model.zoom) { _ in
@@ -198,14 +223,23 @@ struct PinImageView: View {
         .animation(.easeOut(duration: 0.2), value: hovering)
     }
 
+    /// 贴图原位标注：打开标注编辑器，确认后用产物替换贴图内容
+    private func annotateInPlace() {
+        AnnotationController.shared.show(image: displayImage) { result in
+            model.image = result
+            model.imageToken += 1
+            Toast.shared.show("贴图已更新为标注结果")
+        }
+    }
+
     /// 钉图 OCR：显示坐标 → 图片点坐标 → 像素坐标 → Vision 识别（功能清单 12.2.1）
     private func runPinOCR(_ displayRect: CGRect?) {
-        guard let cg = image.cgImage() else {
+        guard let cg = displayImage.cgImage() else {
             Toast.shared.show("无法读取图片")
             return
         }
         let displayScale = max(fitScale * model.zoom, 0.001)
-        let pixelScale = CGFloat(cg.width) / max(image.size.width, 1)
+        let pixelScale = CGFloat(cg.width) / max(displayImage.size.width, 1)
         let rectInPixels: CGRect?
         if let r = displayRect {
             let inPoints = CGRect(x: r.minX / displayScale, y: r.minY / displayScale,
@@ -216,7 +250,7 @@ struct PinImageView: View {
             rectInPixels = nil
         }
         Toast.shared.show("正在识别文字…")
-        OCRService.shared.recognize(image: image, rect: rectInPixels) { result in
+        OCRService.shared.recognize(image: displayImage, rect: rectInPixels) { result in
             DispatchQueue.main.async {
                 switch result {
                 case .success(let r):
@@ -247,8 +281,8 @@ struct PinImageView: View {
         let header: CGFloat = 28
         let padding: CGFloat = 48   // 卡片外边距（含氛围光空间）
         let inner: CGFloat = 20     // 图片内边距
-        let imgW = image.size.width * fitScale * model.zoom
-        let imgH = image.size.height * fitScale * model.zoom
+        let imgW = displayImage.size.width * fitScale * model.zoom
+        let imgH = displayImage.size.height * fitScale * model.zoom
         return CGSize(width: max(imgW, 120) + inner + padding,
                       height: imgH + header + inner + padding)
     }

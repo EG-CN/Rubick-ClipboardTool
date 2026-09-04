@@ -5,15 +5,23 @@ import SwiftUI
 
 final class PanelState: ObservableObject {
     enum FilterKind: Int, CaseIterable {
-        case all = 0, text = 1, image = 2
+        case all = 0, text = 1, image = 2, link = 3
 
         var label: String {
             switch self {
             case .all: return "全部"
             case .text: return "文本"
             case .image: return "图片"
+            case .link: return "链接"
             }
         }
+    }
+
+    /// 链接判定（纯函数）：单行且以 http(s):// 或 www. 开头
+    static func isLink(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, !t.contains("\n") else { return false }
+        return t.hasPrefix("http://") || t.hasPrefix("https://") || t.hasPrefix("www.")
     }
 
     @Published var searchText = ""
@@ -24,6 +32,8 @@ final class PanelState: ObservableObject {
         case .all: break
         case .text: if item.kind != .text { return false }
         case .image: if item.kind != .image { return false }
+        case .link:
+            guard item.kind == .text, let t = item.text, Self.isLink(t) else { return false }
         }
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !q.isEmpty {
@@ -739,12 +749,16 @@ struct HistoryPanelView: View {
     }
 
     private func typeChip(_ item: ClipboardItem) -> some View {
+        typeChipView(item: item, isLink: item.kind == .text && PanelState.isLink(item.text ?? ""))
+    }
+
+    private func typeChipView(item: ClipboardItem, isLink: Bool) -> some View {
         let color: Color
         let label: String
         switch item.kind {
         case .text:
             color = RubickTheme.primary(scheme)
-            label = "文本"
+            label = isLink ? "链接" : "文本"
         case .image:
             color = .blue
             label = "图片"

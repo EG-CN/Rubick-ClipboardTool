@@ -100,4 +100,29 @@ final class V3ImprovementTests: XCTestCase {
         XCTAssertTrue(actionLabel(.pinClipboard).contains("钉剪贴板"))
         XCTAssertTrue(actionLabel(.dragOCR).contains("取字"))
     }
+
+    // MARK: 链接筛选
+
+    func testLinkDetection() {
+        XCTAssertTrue(PanelState.isLink("https://developer.apple.com/design"))
+        XCTAssertTrue(PanelState.isLink("http://x.cn"))
+        XCTAssertTrue(PanelState.isLink("  www.example.com/a?b=1\n"))
+        XCTAssertFalse(PanelState.isLink("hello world"), "普通文本不是链接")
+        XCTAssertFalse(PanelState.isLink("https://a.com\nhttps://b.com"), "多行不算单条链接")
+        XCTAssertFalse(PanelState.isLink(""), "空串不是链接")
+    }
+
+    func testLinkFilterMatchesOnlyLinks() {
+        let state = PanelState()
+        state.filter = .link
+        let link = ClipboardItem(id: "1", kind: .text, text: "https://example.com",
+                                 imageFile: nil, timestamp: Date(), pinned: false)
+        let plain = ClipboardItem(id: "2", kind: .text, text: "普通笔记",
+                                  imageFile: nil, timestamp: Date(), pinned: false)
+        let image = ClipboardItem(id: "3", kind: .image, text: nil,
+                                  imageFile: "x.png", timestamp: Date(), pinned: false)
+        XCTAssertTrue(state.matches(link))
+        XCTAssertFalse(state.matches(plain))
+        XCTAssertFalse(state.matches(image))
+    }
 }
