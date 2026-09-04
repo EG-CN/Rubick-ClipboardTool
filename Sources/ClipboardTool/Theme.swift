@@ -54,7 +54,7 @@ extension Color {
     }
 }
 
-// MARK: - 列表卡片（Stitch tonal layering：色调分层 + 发丝线，无发光无阴影）
+// MARK: - 列表卡片（Maccy/CleanClip 式列表：空闲透明、悬停浅底、选中强调色）
 
 struct GlowCardModifier: ViewModifier {
     @Environment(\.colorScheme) private var scheme
@@ -63,18 +63,16 @@ struct GlowCardModifier: ViewModifier {
     var cornerRadius: CGFloat = 8
 
     func body(content: Content) -> some View {
-        let active = hovering || selected
-        return content
+        content
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(active
-                          ? RubickTheme.primary(scheme).opacity(0.06)
-                          : RubickTheme.surfaceContainer(scheme))
+                    .fill(selected
+                          ? RubickTheme.primary(scheme).opacity(0.16)
+                          : (hovering ? RubickTheme.surfaceHigh(scheme).opacity(0.6) : Color.clear))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(active ? RubickTheme.primary(scheme) : RubickTheme.hairline(scheme),
-                                  lineWidth: active ? 1.2 : 1)
+                    .strokeBorder(selected ? RubickTheme.primary(scheme) : Color.clear, lineWidth: 1.2)
             )
     }
 }

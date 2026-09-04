@@ -719,7 +719,7 @@ struct HistoryPanelView: View {
                 Button("删除", role: .destructive) { HistoryPanelController.shared.delete(at: index) }
             }
 
-            // 悬停操作按钮（独立命中区域；翻译/识图可见化）
+            // 悬停操作按钮（独立命中区域；仅悬停该行时出现，保持列表安静）
             VStack(spacing: 4) {
                 if item.kind == .text {
                     actionButton("character.bubble") { HistoryPanelController.shared.translate(item) }
@@ -733,8 +733,8 @@ struct HistoryPanelView: View {
                 actionButton("trash") { HistoryPanelController.shared.delete(at: index) }
                     .help("删除")
             }
-            .opacity(hoveringIds.contains(item.id) ? 1 : 0.55)
-            .animation(.easeOut(duration: 0.15), value: hoveringIds.contains(item.id))
+            .opacity(hoveringIds.contains(item.id) ? 1 : 0)
+            .animation(.easeOut(duration: 0.12), value: hoveringIds.contains(item.id))
         }
         .padding(10)
         .glowCard(hovering: hoveringIds.contains(item.id), selected: selected == index, cornerRadius: 8)

@@ -112,115 +112,74 @@ struct PinImageView: View {
     private var displayImage: NSImage { model.image ?? image }
 
     var body: some View {
+        // Snipaste 式裸图贴图：贴图 = 图片本身 + 发丝线 + 投影；无标题栏、无氛围光、无内衬底
         ZStack {
-            // 低干扰氛围光（Obsidian Emerald：无紫、无强发光，hover 略亮）
-            Circle()
-                .fill(RubickTheme.emerald.opacity(hovering ? 0.10 : 0.05))
-                .blur(radius: 24)
-                .frame(width: 260, height: 260)
-                .animation(.easeOut(duration: 0.3), value: hovering)
-
-            VStack(spacing: 0) {
-                // 卡片头：状态点 + 片段 + 图钉
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(RubickTheme.emerald)
-                        .frame(width: 8, height: 8)
-                        .shadow(color: RubickTheme.emerald.opacity(0.7), radius: 2)
-                    Text("片段")
-                        .font(.system(size: 10, weight: .medium))
-                        .tracking(1.5)
-                        .textCase(.uppercase)
-                        .foregroundStyle(RubickTheme.muted(scheme))
-                    Spacer()
-                    Image(systemName: "pin.fill")
-                        .font(.system(size: 10))
-                        .foregroundStyle(RubickTheme.emerald)
+            Image(nsImage: displayImage)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: displayImage.size.width * fitScale * model.zoom,
+                       height: displayImage.size.height * fitScale * model.zoom)
+                .opacity(model.opacity)
+            if ocrMode {
+                OCRPinOverlay { rect in
+                    ocrMode = false
+                    runPinOCR(rect)
+                } onExit: {
+                    ocrMode = false
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-
-                Divider().opacity(0.4)
-
-                ZStack {
-                    Image(nsImage: displayImage)
-                        .resizable()
-                        .interpolation(.high)
-                        .frame(width: displayImage.size.width * fitScale * model.zoom,
-                               height: displayImage.size.height * fitScale * model.zoom)
-                        .opacity(model.opacity)
-                    if ocrMode {
-                        OCRPinOverlay { rect in
-                            ocrMode = false
-                            runPinOCR(rect)
-                        } onExit: {
-                            ocrMode = false
-                        }
-                    }
-                }
-                .padding(10)
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(nsColor: .windowBackgroundColor).opacity(scheme == .dark ? 0.92 : 0.95))
-                    .opacity(model.opacity)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(hovering ? RubickTheme.primary(scheme) : Color.primary.opacity(0.14), lineWidth: 1)
-            )
-            .shadow(color: hovering
-                    ? RubickTheme.emerald.opacity(0.35)
-                    : Color.black.opacity(0.35), radius: hovering ? 10 : 12, y: 5)
-            .opacity(model.opacity)
-            .contentShape(Rectangle())
-            .onTapGesture(count: 2) { onClose() }
-            .contextMenu {
-                Button("标注…") { annotateInPlace() }
-                Button("识别文字…") { ocrMode = true }
-                Button("复制图片") { writeImageToPasteboard(displayImage) }
-                Button("另存为 PNG…") { saveImageAsPng(displayImage) }
-                Divider()
-                Button("关闭贴图", role: .destructive) { onClose() }
-            }
-            .overlay(alignment: .topTrailing) {
-                if hovering {
-                    VStack(spacing: 4) {
-                        hoverAction("doc.on.doc", help: "回响至剪贴板") {
-                            writeImageToPasteboard(displayImage)
-                            Toast.shared.show("已复制图片")
-                        }
-                        hoverAction("square.and.arrow.down", help: "存入魔典") {
-                            saveImageAsPng(displayImage)
-                        }
-                        hoverAction("pin.slash", help: "取消钉图") {
-                            onClose()
-                        }
-                    }
-                    .padding(6)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial))
-                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
-                    .padding(6)
-                    .transition(.opacity)
-                }
-            }
-            .onHover { hovering = $0 }
-            .onAppear {
-                fitScale = min(420 / displayImage.size.width, 300 / displayImage.size.height)
-                onResize?(contentSize())
-            }
-            .onChange(of: model.imageToken) { _ in
-                // 标注原位替换图片后：重置缩放并按新尺寸重排
-                fitScale = min(420 / displayImage.size.width, 300 / displayImage.size.height)
-                model.zoom = 1.0
-                onResize?(contentSize())
-            }
-            .onChange(of: model.zoom) { _ in
-                onResize?(contentSize())
             }
         }
-        .padding(24)
-        .animation(.easeOut(duration: 0.2), value: hovering)
+        .overlay(
+            Rectangle().strokeBorder(hovering ? RubickTheme.primary(scheme) : Color.primary.opacity(0.25),
+                                     lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.35), radius: 7, y: 3)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) { onClose() }
+        .contextMenu {
+            Button("标注…") { annotateInPlace() }
+            Button("识别文字…") { ocrMode = true }
+            Button("复制图片") { writeImageToPasteboard(displayImage) }
+            Button("另存为 PNG…") { saveImageAsPng(displayImage) }
+            Divider()
+            Button("关闭贴图", role: .destructive) { onClose() }
+        }
+        .overlay(alignment: .topTrailing) {
+            if hovering {
+                VStack(spacing: 4) {
+                    hoverAction("doc.on.doc", help: "回响至剪贴板") {
+                        writeImageToPasteboard(displayImage)
+                        Toast.shared.show("已复制图片")
+                    }
+                    hoverAction("square.and.arrow.down", help: "存入魔典") {
+                        saveImageAsPng(displayImage)
+                    }
+                    hoverAction("pin.slash", help: "取消钉图") {
+                        onClose()
+                    }
+                }
+                .padding(5)
+                .background(RoundedRectangle(cornerRadius: 7).fill(.ultraThinMaterial))
+                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5))
+                .padding(5)
+                .transition(.opacity)
+            }
+        }
+        .onHover { hovering = $0 }
+        .onAppear {
+            fitScale = min(420 / displayImage.size.width, 300 / displayImage.size.height)
+            onResize?(contentSize())
+        }
+        .onChange(of: model.imageToken) { _ in
+            // 标注原位替换图片后：重置缩放并按新尺寸重排
+            fitScale = min(420 / displayImage.size.width, 300 / displayImage.size.height)
+            model.zoom = 1.0
+            onResize?(contentSize())
+        }
+        .onChange(of: model.zoom) { _ in
+            onResize?(contentSize())
+        }
+        .animation(.easeOut(duration: 0.15), value: hovering)
     }
 
     /// 贴图原位标注：打开标注编辑器，确认后用产物替换贴图内容
@@ -278,13 +237,11 @@ struct PinImageView: View {
     }
 
     private func contentSize() -> CGSize {
-        let header: CGFloat = 28
-        let padding: CGFloat = 48   // 卡片外边距（含氛围光空间）
-        let inner: CGFloat = 20     // 图片内边距
+        // 裸图模式：窗口尺寸 = 图片尺寸 + 描边余量（无标题栏/内衬/氛围光空间）
+        let borderAllowance: CGFloat = 2
         let imgW = displayImage.size.width * fitScale * model.zoom
         let imgH = displayImage.size.height * fitScale * model.zoom
-        return CGSize(width: max(imgW, 120) + inner + padding,
-                      height: imgH + header + inner + padding)
+        return CGSize(width: imgW + borderAllowance, height: imgH + borderAllowance)
     }
 }
 

@@ -25,7 +25,7 @@ final class ShotActionBar {
             onClose: { [weak self] in self?.hide() }
         )
         if panel == nil {
-            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 300, height: 86),
+            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 232, height: 56),
                             styleMask: [.borderless, .nonactivatingPanel],
                             backing: .buffered, defer: false)
             p.level = .floating
@@ -55,11 +55,11 @@ final class ShotActionBar {
 
     private func positionNearMouse() -> NSPoint {
         let m = NSEvent.mouseLocation
-        var p = NSPoint(x: m.x + 14, y: m.y - 86)
+        var p = NSPoint(x: m.x + 14, y: m.y - 64)
         if let screen = NSScreen.main {
             let vis = screen.visibleFrame
-            p.x = min(max(p.x, vis.minX + 8), vis.maxX - 308)
-            p.y = min(max(p.y, vis.minY + 8), vis.maxY - 94)
+            p.x = min(max(p.x, vis.minX + 8), vis.maxX - 240)
+            p.y = min(max(p.y, vis.minY + 8), vis.maxY - 64)
         }
         return p
     }
@@ -71,36 +71,33 @@ struct ShotActionView: View {
     let onClose: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 9) {
             Image(nsImage: image)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 58, height: 58)
-                .clipShape(RoundedRectangle(cornerRadius: 7))
-            VStack(alignment: .leading, spacing: 7) {
-                Text("已复制并存入历史")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.white.opacity(0.9))
-                HStack(spacing: 6) {
-                    Button(action: onPin) {
-                        Label("钉图", systemImage: "pin.fill")
-                            .font(.system(size: 11))
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .tint(RubickTheme.emerald)
-                    Button("关闭", action: onClose)
-                        .buttonStyle(.plain)
-                        .controlSize(.small)
-                        .foregroundStyle(.white.opacity(0.7))
-                }
+                .frame(width: 36, height: 36)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.primary.opacity(0.15), lineWidth: 0.5))
+            Text("已复制")
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(.primary.opacity(0.85))
+            Button("钉图", action: onPin)
+                .font(.system(size: 11, weight: .medium))
+                .buttonStyle(.plain)
+                .foregroundStyle(RubickTheme.emeraldDeep)
+            Button {
+                onClose()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.primary.opacity(0.45))
             }
-            Spacer(minLength: 0)
+            .buttonStyle(.plain)
         }
-        .padding(10)
-        .frame(width: 300, height: 86)
-        .background(RoundedRectangle(cornerRadius: 11).fill(Color.black.opacity(0.85)))
-        .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(RubickTheme.emerald.opacity(0.35), lineWidth: 0.5))
-        .shadow(color: RubickTheme.emerald.opacity(0.2), radius: 8)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(width: 232, height: 56)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.5))
     }
 }

@@ -19,6 +19,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             runDebugEditorShot()
             return
         }
+        // 调试：钉图裸图样式自拍 → /tmp/rubick-pin.png
+        if CommandLine.arguments.contains("--debug-pin-shot") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                PinController.shared.pin(image: Self.debugTestImage())
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    Self.captureScreen(to: "/tmp/rubick-pin.png")
+                    NSApp.terminate(nil)
+                }
+            }
+            return
+        }
+        // 调试：历史面板样式自拍 → /tmp/rubick-panel.png
+        if CommandLine.arguments.contains("--debug-panel-shot") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                HistoryPanelController.shared.show(fromHotkey: true)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    Self.captureScreen(to: "/tmp/rubick-panel.png")
+                    NSApp.terminate(nil)
+                }
+            }
+            return
+        }
         // 单实例握手：响应其他实例的探测
         DistributedNotificationCenter.default().addObserver(
             forName: .init("cbt.areYouRunning"), object: nil, queue: .main
@@ -107,6 +129,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 NSApp.terminate(nil)
             }
+        }
+    }
+
+    /// 全屏截屏存 PNG（调试自拍用）
+    static func captureScreen(to path: String) {
+        let screen = NSScreen.main ?? NSScreen.screens.first
+        if let sid = screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
+           let cg = CGDisplayCreateImage(CGDirectDisplayID(sid.uint32Value)) {
+            let ns = NSImage(cgImage: cg, size: screen?.frame.size ?? .zero)
+            try? ns.pngData()?.write(to: URL(fileURLWithPath: path))
         }
     }
 
