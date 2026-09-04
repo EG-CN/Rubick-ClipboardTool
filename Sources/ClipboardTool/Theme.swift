@@ -1,25 +1,27 @@
 import SwiftUI
 
-// MARK: - RubickBoard 主题（Stitch 设计系统 → SwiftUI 还原）
+// MARK: - RubickBoard 主题（Stitch "Obsidian Emerald" 设计系统 → SwiftUI 还原）
+// 设计原则：低干扰、克制。色调分层 + 1px 发丝线定结构；强调色仅用于交互态
+// （选中边框/激活筛选片/状态点/主图标），禁用发光与彩色渐变。
 
 enum RubickTheme {
-    // 深色（Stitch Material3 dark palette）
-    static let darkBackground = Color(hex: 0x0E150F)
-    static let darkSurfaceContainer = Color(hex: 0x1A211B)
-    static let darkSurfaceHigh = Color(hex: 0x242C25)
-    static let darkOnSurface = Color(hex: 0xDCE5DA)
-    static let darkOnSurfaceVariant = Color(hex: 0xBBCBBB)
-    static let darkOutline = Color(hex: 0x869486)
+    // 深色（中性冷灰，Stitch 色板）
+    static let darkBackground = Color(hex: 0x17191B)
+    static let darkSurfaceContainer = Color(hex: 0x1F2321)
+    static let darkSurfaceHigh = Color(hex: 0x262B29)
+    static let darkOnSurface = Color(hex: 0xE2E8E4)
+    static let darkOnSurfaceVariant = Color(hex: 0xA8B3AC)
+    static let darkOutline = Color(hex: 0x3A423E)
 
-    // 强调色（祖母绿）
-    static let emerald = Color(hex: 0x2ECC71)       // 浅色模式主强调 / primary-container
-    static let emeraldBright = Color(hex: 0x54E98A) // 深色模式 primary
-    static let emeraldDeep = Color(hex: 0x005027)   // 浅色模式文字绿
-    static let arcanePurple = Color(hex: 0x8A2BE2)  // 奥术紫（钉图氛围光）
+    // 强调色（去饱和祖母绿，仅交互态使用）
+    static let emerald = Color(hex: 0x3E8E63)       // 浅色模式主强调
+    static let emeraldBright = Color(hex: 0x6BB98C) // 深色模式 primary（发丝线/图标可读）
+    static let emeraldDeep = Color(hex: 0x2F6B4C)   // 浅色模式文字绿
+    static let arcanePurple = Color(hex: 0x8A2BE2)  // 已退役：仅保留定义兼容旧引用
 
     // 浅色
-    static let lightText = Color(hex: 0x1A211B)
-    static let lightMuted = Color(hex: 0x869486)
+    static let lightText = Color(hex: 0x1E2220)
+    static let lightMuted = Color(hex: 0x6F7B74)
 
     static func primary(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? emeraldBright : emerald
@@ -36,6 +38,10 @@ enum RubickTheme {
     static func surfaceHigh(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? darkSurfaceHigh : Color.black.opacity(0.05)
     }
+    /// 发丝线描边（结构线，选中时换强调色）
+    static func hairline(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? darkOutline : Color.black.opacity(0.12)
+    }
 }
 
 extension Color {
@@ -48,7 +54,7 @@ extension Color {
     }
 }
 
-// MARK: - 发光描边卡片（Stitch glow-border）
+// MARK: - 列表卡片（Stitch tonal layering：色调分层 + 发丝线，无发光无阴影）
 
 struct GlowCardModifier: ViewModifier {
     @Environment(\.colorScheme) private var scheme
@@ -58,19 +64,18 @@ struct GlowCardModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         let active = hovering || selected
-        let border = RubickTheme.primary(scheme)
         return content
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(active
-                          ? RubickTheme.primary(scheme).opacity(0.08)
-                          : Color.primary.opacity(0.04))
+                          ? RubickTheme.primary(scheme).opacity(0.06)
+                          : RubickTheme.surfaceContainer(scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(active ? border : Color.primary.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(active ? RubickTheme.primary(scheme) : RubickTheme.hairline(scheme),
+                                  lineWidth: active ? 1.2 : 1)
             )
-            .shadow(color: active ? RubickTheme.emerald.opacity(0.3) : .clear, radius: 4, x: 0, y: 0)
     }
 }
 

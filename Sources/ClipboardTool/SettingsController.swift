@@ -188,6 +188,8 @@ func actionLabel(_ action: HotkeyManager.Action) -> String {
     case .screenshot: return "区域截图"
     case .openSettings: return "打开设置"
     case .dragTranslate: return "划图翻译（选区识别+翻译）"
+    case .pinClipboard: return "钉剪贴板贴图（Snipaste F3 式）"
+    case .dragOCR: return "划图取字（选区识别→复制）"
     }
 }
 

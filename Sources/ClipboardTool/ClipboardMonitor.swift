@@ -12,6 +12,8 @@ final class ClipboardMonitor {
 
     var onText: ((String) -> Void)?
     var onImage: ((NSImage) -> Void)?
+    /// 优先通道：剪贴板自带 PNG 字节时直通存储（免 NSImage 解码 + 免二次 PNG 编码）
+    var onImageData: ((Data) -> Void)?
 
     private var timer: Timer?
     private var lastChangeCount: Int = NSPasteboard.general.changeCount
@@ -35,8 +37,10 @@ final class ClipboardMonitor {
 
         if let s = pb.string(forType: .string), !s.isEmpty {
             onText?(s)
-        } else if let data = pb.data(forType: .png) ?? pb.data(forType: .tiff),
-                  let img = NSImage(data: data) {
+        } else if let png = pb.data(forType: .png) {
+            onImageData?(png)
+        } else if let tiff = pb.data(forType: .tiff), let img = NSImage(data: tiff) {
+            // TIFF 来源才需要 NSImage 解码；编码成 PNG 的开销在存储层后台队列完成
             onImage?(img)
         }
     }

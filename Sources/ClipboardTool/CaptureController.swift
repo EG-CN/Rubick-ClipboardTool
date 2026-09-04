@@ -73,6 +73,7 @@ final class CaptureController {
     enum CapturePurpose {
         case normal      // 普通截图（→ 标注编辑器）
         case translate   // 划图翻译（→ OCR + 自动翻译）
+        case ocr         // 划图取字（→ OCR + 复制到剪贴板，Easydict 静默模式）
     }
 
     private var pendingPurpose: CapturePurpose = .normal
@@ -85,6 +86,12 @@ final class CaptureController {
     /// 划图翻译（Bob 式）：滑选文字区域 → OCR → 自动翻译（功能清单 12.9）
     func captureForTranslation() {
         pendingPurpose = .translate
+        beginCapture()
+    }
+
+    /// 划图取字（Easydict 静默 OCR 式）：滑选区域 → OCR → 直接复制到剪贴板
+    func captureForOCR() {
+        pendingPurpose = .ocr
         beginCapture()
     }
 
@@ -199,7 +206,9 @@ final class CaptureController {
             unionRect: unionRect,
             hintText: pendingPurpose == .translate
                 ? "拖选需要翻译的文字区域 · ↵ 确认 · ⎋ 取消"
-                : "拖拽框选 · ↵ 确认 · ⎋ 取消",
+                : (pendingPurpose == .ocr
+                   ? "拖选要取字的区域 · 识别后直接复制 · ⎋ 取消"
+                   : "拖拽框选 · ↵ 确认 · ⎋ 取消"),
             onCancel: { [weak self] in self?.teardown(restoreFocus: true) },
             onConfirm: { [weak self] rect in
                 self?.finish(rect: rect, composite: composite, unionRect: unionRect)
@@ -255,13 +264,16 @@ final class CaptureController {
         handleCapturedImage(cropped, at: rect)
     }
 
-    /// 截图产物分发：普通截图 → 标注编辑器（选区原地弹出）；划图翻译 → OCR+翻译
+    /// 截图产物分发：普通截图 → 标注编辑器（选区原地弹出）；划图翻译 → OCR+翻译；划图取字 → OCR+复制
     private func handleCapturedImage(_ image: NSImage, at rect: CGRect? = nil) {
         let purpose = pendingPurpose
         pendingPurpose = .normal
-        if purpose == .translate {
+        switch purpose {
+        case .translate:
             runOCRTranslate(image)
-        } else {
+        case .ocr:
+            runOCRCopy(image)
+        case .normal:
             AnnotationController.shared.show(image: image, at: rect) { [weak self] result in
                 self?.onCaptured?(result)
             }
@@ -290,6 +302,27 @@ final class CaptureController {
                             }
                         }
                     }
+                case .failure(let err):
+                    Toast.shared.show("识别失败：\(err.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    /// 划图取字：Vision 本地 OCR → 识别结果直接进剪贴板（历史自动入册，⌘V 即贴）
+    private func runOCRCopy(_ image: NSImage) {
+        Toast.shared.show("正在识别文字…")
+        OCRService.shared.recognize(image: image) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let r):
+                    let text = r.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !text.isEmpty else {
+                        Toast.shared.show("该区域未识别到文字")
+                        return
+                    }
+                    writeTextToPasteboard(text)
+                    Toast.shared.show("已复制 \(text.count) 个字 · ⌘V 粘贴")
                 case .failure(let err):
                     Toast.shared.show("识别失败：\(err.localizedDescription)")
                 }

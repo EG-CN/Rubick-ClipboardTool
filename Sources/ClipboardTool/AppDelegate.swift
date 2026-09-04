@@ -149,6 +149,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         monitor.onText = { [weak self] text in
             self?.store.addText(text)
         }
+        monitor.onImageData = { [weak self] data in
+            self?.store.addImageData(data)
+        }
         monitor.onImage = { [weak self] img in
             self?.store.addImage(img)
         }
@@ -171,9 +174,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panelController.close()
             ShotActionBar.shared.hide()
             CaptureController.shared.captureForTranslation()
+        case .pinClipboard:
+            panelController.close()
+            ShotActionBar.shared.hide()
+            pinImageFromPasteboard()
+        case .dragOCR:
+            panelController.close()
+            ShotActionBar.shared.hide()
+            CaptureController.shared.captureForOCR()
         case .openSettings:
             settingsController.toggle()
         }
+    }
+
+    /// 钉剪贴板贴图（Snipaste F3 式）：剪贴板有图则直接置顶到鼠标位置，不改动剪贴板内容
+    private func pinImageFromPasteboard() {
+        let pb = NSPasteboard.general
+        guard let data = pb.data(forType: .png) ?? pb.data(forType: .tiff),
+              let img = NSImage(data: data), img.size.width > 0 else {
+            Toast.shared.show("剪贴板中没有图片（先复制或截图一张）")
+            return
+        }
+        PinController.shared.pin(image: img, at: NSEvent.mouseLocation)
+        Toast.shared.show("已钉在桌面 · 双击贴图取消")
     }
 
     // MARK: 菜单栏
@@ -201,6 +224,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shotItem.keyEquivalentModifierMask = [.command, .shift]
         shotItem.target = self
         menu.addItem(shotItem)
+
+        let dragOCRItem = NSMenuItem(title: "划图取字", action: #selector(startDragOCR), keyEquivalent: "x")
+        dragOCRItem.keyEquivalentModifierMask = [.command, .shift]
+        dragOCRItem.target = self
+        menu.addItem(dragOCRItem)
+
+        let pinClipItem = NSMenuItem(title: "钉剪贴板贴图", action: #selector(pinClipboardImage), keyEquivalent: "p")
+        pinClipItem.keyEquivalentModifierMask = [.command, .shift]
+        pinClipItem.target = self
+        menu.addItem(pinClipItem)
 
         menu.addItem(.separator())
 
@@ -232,6 +265,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func captureScreenshot() {
         panelController.close()
         screenshotController.captureInteractive()
+    }
+
+    @objc private func startDragOCR() {
+        panelController.close()
+        CaptureController.shared.captureForOCR()
+    }
+
+    @objc private func pinClipboardImage() {
+        pinImageFromPasteboard()
     }
 
     @objc private func clearHistory() {

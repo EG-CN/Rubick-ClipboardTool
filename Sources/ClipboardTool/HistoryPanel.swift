@@ -104,6 +104,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         panel?.makeKeyAndOrderFront(nil)
         resetSelection()
         installMonitors()
+        NotificationCenter.default.post(name: .panelShown, object: nil)
     }
 
     func close() {
@@ -231,12 +232,20 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.isVisible else { return event }
-            // 搜索框编辑中：按键放行给输入框（仅 ⎋ 仍关闭面板）
+            let pk = PanelKeyConfig.shared
+            // 搜索框编辑中：字符/删除放行给输入框（Maccy 式即打即搜）；
+            // 但导航/粘贴/快选/关闭仍被面板拦截，纯键盘流不中断（P/T/O 等单键动作编辑态让位于输入）
             if let fr = NSApp.keyWindow?.firstResponder, fr is NSTextView {
-                if event.keyCode == 53 { self.close() }
+                if pk.matches(.close, event: event) { self.close(); return nil }
+                if pk.matches(.navUp, event: event) { self.moveSelection(-1); return nil }
+                if pk.matches(.navDown, event: event) { self.moveSelection(1); return nil }
+                if pk.matches(.paste, event: event) { self.activateSelected(); return nil }
+                if pk.matches(.quick, event: event), let n = pk.quickDigit(event) {
+                    self.activate(at: n - 1)
+                    return nil
+                }
                 return event
             }
-            let pk = PanelKeyConfig.shared
             if pk.matches(.navUp, event: event) { self.moveSelection(-1); return nil }
             if pk.matches(.navDown, event: event) { self.moveSelection(1); return nil }
             if pk.matches(.paste, event: event) { self.activateSelected(); return nil }
@@ -451,6 +460,7 @@ struct HistoryPanelView: View {
     @ObservedObject var panelKeys = PanelKeyConfig.shared
     @Environment(\.colorScheme) private var scheme
     @State private var selected: Int = 0
+    @FocusState private var searchFocused: Bool
 
     private var items: [ClipboardItem] { store.items.filter { panelState.matches($0) } }
 
@@ -473,6 +483,10 @@ struct HistoryPanelView: View {
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5))
         .onReceive(NotificationCenter.default.publisher(for: .panelSelectionChanged)) { _ in
             selected = HistoryPanelController.shared.selectedIndex
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .panelShown)) { _ in
+            // 呼出即聚焦搜索框：直接输入即可筛选（Maccy/CleanClip 式）
+            DispatchQueue.main.async { searchFocused = true }
         }
         .onAppear { selected = HistoryPanelController.shared.selectedIndex }
         .onChange(of: panelState.searchText) { _ in
@@ -558,6 +572,7 @@ struct HistoryPanelView: View {
             TextField("搜索法术…", text: $panelState.searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
+                .focused($searchFocused)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -760,7 +775,7 @@ struct HistoryPanelView: View {
 
     private var footer: some View {
         VStack(spacing: 4) {
-            Text(panelKeys.hintText() + " · ⌥点=仅复制 · 右键=翻译/识别")
+            Text(panelKeys.hintText() + " · 输入即筛选 · ⌥点=仅复制")
                 .font(.system(size: 9.5))
                 .foregroundStyle(RubickTheme.muted(scheme).opacity(0.8))
                 .lineLimit(1)

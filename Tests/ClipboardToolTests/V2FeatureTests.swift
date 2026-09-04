@@ -237,7 +237,10 @@ final class V2FeatureTests: XCTestCase {
     func testDragTranslateHotkeyDefault() {
         let hk = HotkeyManager.shared
         XCTAssertEqual(hk.hotkeys[.dragTranslate]?.display, "⌘⇧D")
-        XCTAssertEqual(HotkeyManager.Action.allCases.count, 4)
+        // v3 起 6 个全局动作：面板/截图/设置/划图翻译/钉贴图/划图取字
+        XCTAssertEqual(HotkeyManager.Action.allCases.count, 6)
+        XCTAssertEqual(hk.hotkeys[.pinClipboard]?.display, "⌘⇧P")
+        XCTAssertEqual(hk.hotkeys[.dragOCR]?.display, "⌘⇧X")
     }
 
     // MARK: 合成/裁剪方向性（防「截到背景桌面」回归）

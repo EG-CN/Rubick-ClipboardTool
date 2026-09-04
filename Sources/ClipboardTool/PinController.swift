@@ -98,11 +98,11 @@ struct PinImageView: View {
 
     var body: some View {
         ZStack {
-            // 奥术紫氛围光
+            // 低干扰氛围光（Obsidian Emerald：无紫、无强发光，hover 略亮）
             Circle()
-                .fill(RubickTheme.arcanePurple.opacity(hovering ? 0.22 : 0.12))
-                .blur(radius: 30)
-                .frame(width: 280, height: 280)
+                .fill(RubickTheme.emerald.opacity(hovering ? 0.10 : 0.05))
+                .blur(radius: 24)
+                .frame(width: 260, height: 260)
                 .animation(.easeOut(duration: 0.3), value: hovering)
 
             VStack(spacing: 0) {

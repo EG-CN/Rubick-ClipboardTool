@@ -23,6 +23,7 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
 extension Notification.Name {
     static let clipboardHistoryChanged = Notification.Name("clipboardHistoryChanged")
     static let panelSelectionChanged = Notification.Name("panelSelectionChanged")
+    static let panelShown = Notification.Name("panelShown")
 }
 
 // MARK: - 历史存储（JSON 索引 + images/ 存 PNG）
@@ -46,6 +47,11 @@ final class HistoryStore: ObservableObject {
     let imagesDir: URL
     private let jsonURL: URL
 
+    /// 图片内存缓存：面板列表每帧都会取缩略图，不能每次都读盘（卡顿根因之一）
+    private let imageCache = NSCache<NSString, NSImage>()
+    /// 剪贴板图片入册串行队列：PNG 编码/磁盘比对/写文件全部离开主线程（卡顿根因之二）
+    private let ingestQueue = DispatchQueue(label: "clipboardtool.ingest", qos: .userInitiated)
+
     /// baseDir 传 nil 时使用默认 Application Support 目录；测试可注入临时目录
     init(baseDir: URL? = nil) {
         let fm = FileManager.default
@@ -60,6 +66,7 @@ final class HistoryStore: ObservableObject {
             jsonURL = self.baseDir.appendingPathComponent("history.json")
         }
         try? fm.createDirectory(at: imagesDir, withIntermediateDirectories: true)
+        imageCache.countLimit = 200
         load()
     }
 
@@ -94,20 +101,57 @@ final class HistoryStore: ObservableObject {
     }
 
     func addImage(_ image: NSImage) {
-        guard let png = image.pngData() else { return }
-        if let first = items.first, first.kind == .image, let f = first.imageFile,
-           let existing = try? Data(contentsOf: imagesDir.appendingPathComponent(f)),
+        // cgImage 提取与队列外状态捕获轻量，留主线程；PNG 编码走后台（截图管线入口）
+        let prev = imageFileOfFirstImageItem()
+        let cg = image.cgImage()
+        ingestQueue.async { [weak self] in
+            guard let self, let cg else { return }
+            let rep = NSBitmapImageRep(cgImage: cg)
+            guard let png = rep.representation(using: .png, properties: [:]) else { return }
+            self.compareAndStore(png, prev: prev)
+        }
+    }
+
+    /// 监听器入口：剪贴板里已是 PNG 字节时零编码直写入册
+    func addImageData(_ data: Data) {
+        let prev = imageFileOfFirstImageItem()
+        ingestQueue.async { [weak self] in
+            self?.compareAndStore(data, prev: prev)
+        }
+    }
+
+    /// 主线程取最近一条图片的文件名（避免后台线程读 @Published）
+    private func imageFileOfFirstImageItem() -> (id: String, file: String)? {
+        guard let first = items.first, first.kind == .image, let f = first.imageFile else { return nil }
+        return (first.id, f)
+    }
+
+    /// 后台（串行 FIFO）：字节级去重比对 + 落盘，然后回主线程更新索引
+    private func compareAndStore(_ png: Data, prev: (id: String, file: String)?) {
+        if let prev,
+           let existing = try? Data(contentsOf: imagesDir.appendingPathComponent(prev.file)),
            existing == png {
-            items.removeFirst()
-            var t = first
-            t.timestamp = Date()
-            items.insert(t, at: 0)
+            DispatchQueue.main.async { [weak self] in self?.applyDedupe(id: prev.id) }
         } else {
             let name = UUID().uuidString + ".png"
-            try? png.write(to: imagesDir.appendingPathComponent(name))
-            items.insert(ClipboardItem(id: UUID().uuidString, kind: .image, text: nil,
-                                       imageFile: name, timestamp: Date(), pinned: false), at: 0)
+            try? png.write(to: imagesDir.appendingPathComponent(name), options: .atomic)
+            DispatchQueue.main.async { [weak self] in self?.applyNewFile(name) }
         }
+    }
+
+    private func applyDedupe(id: String) {
+        guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
+        var t = items.remove(at: idx)
+        t.timestamp = Date()
+        items.insert(t, at: 0)
+        trim()
+        save()
+        notify()
+    }
+
+    private func applyNewFile(_ name: String) {
+        items.insert(ClipboardItem(id: UUID().uuidString, kind: .image, text: nil,
+                                   imageFile: name, timestamp: Date(), pinned: false), at: 0)
         trim()
         save()
         notify()
@@ -115,7 +159,10 @@ final class HistoryStore: ObservableObject {
 
     func imageFor(_ item: ClipboardItem) -> NSImage? {
         guard let f = item.imageFile else { return nil }
-        return NSImage(contentsOf: imagesDir.appendingPathComponent(f))
+        if let hit = imageCache.object(forKey: f as NSString) { return hit }
+        guard let img = NSImage(contentsOf: imagesDir.appendingPathComponent(f)) else { return nil }
+        imageCache.setObject(img, forKey: f as NSString)
+        return img
     }
 
     func remove(_ id: String) {

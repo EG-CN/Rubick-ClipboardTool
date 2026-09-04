@@ -10,6 +10,8 @@ final class HotkeyManager {
         case screenshot = 2
         case openSettings = 3
         case dragTranslate = 4
+        case pinClipboard = 5
+        case dragOCR = 6
     }
 
     static let shared = HotkeyManager()
@@ -42,6 +44,8 @@ final class HotkeyManager {
         hotkeys[.screenshot] = read(d, "hk.screenshot", keyCode: UInt32(kVK_ANSI_A), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧A")
         hotkeys[.openSettings] = read(d, "hk.settings", keyCode: UInt32(kVK_ANSI_Comma), mods: UInt32(cmdKey), display: "⌘,")
         hotkeys[.dragTranslate] = read(d, "hk.dragTranslate", keyCode: UInt32(kVK_ANSI_D), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧D")
+        hotkeys[.pinClipboard] = read(d, "hk.pinClipboard", keyCode: UInt32(kVK_ANSI_P), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧P")
+        hotkeys[.dragOCR] = read(d, "hk.dragOCR", keyCode: UInt32(kVK_ANSI_X), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧X")
     }
 
     private func read(_ d: UserDefaults, _ key: String, keyCode: UInt32, mods: UInt32, display: String) -> Hotkey {
@@ -59,6 +63,8 @@ final class HotkeyManager {
         case .screenshot: return "hk.screenshot"
         case .openSettings: return "hk.settings"
         case .dragTranslate: return "hk.dragTranslate"
+        case .pinClipboard: return "hk.pinClipboard"
+        case .dragOCR: return "hk.dragOCR"
         }
     }
 
@@ -87,6 +93,10 @@ final class HotkeyManager {
             def = Hotkey(keyCode: UInt32(kVK_ANSI_Comma), modifiers: UInt32(cmdKey), display: "⌘,")
         case .dragTranslate:
             def = Hotkey(keyCode: UInt32(kVK_ANSI_D), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧D")
+        case .pinClipboard:
+            def = Hotkey(keyCode: UInt32(kVK_ANSI_P), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧P")
+        case .dragOCR:
+            def = Hotkey(keyCode: UInt32(kVK_ANSI_X), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧X")
         }
         update(action, keyCode: def.keyCode, modifiers: def.modifiers, display: def.display)
     }
