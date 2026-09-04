@@ -19,8 +19,11 @@ else
     -subj "/CN=ClipboardTool Dev"
 
   echo "==> 2/4 打包为 p12 并导入钥匙串（密码 cbtdev，仅本地开发用）"
+  # macOS security import 不认 OpenSSL 3.x 默认的 AES/SHA-256 p12（报 MAC verification failed），
+  # 显式指定老式 SHA1+3DES 算法保证兼容
   openssl pkcs12 -export -inkey "$CERT_DIR/cbt-key.pem" -in "$CERT" \
-    -out "$P12" -passout pass:cbtdev
+    -out "$P12" -passout pass:cbtdev \
+    -macalg sha1 -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES
   security import "$P12" -k ~/Library/Keychains/login.keychain-db -P cbtdev -T /usr/bin/codesign
 
   echo "==> 3/4 设置信任"

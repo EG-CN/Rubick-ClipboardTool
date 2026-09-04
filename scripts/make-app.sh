@@ -43,13 +43,16 @@ else
 fi
 
 IDENTITY=""
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "ClipboardTool Dev"; then
-  IDENTITY="ClipboardTool Dev"
+# 签名身份优先级：Apple Development（真实证书，授权最稳）→ 本地自签 ClipboardTool Dev → ad-hoc
+# 同一证书签名 = Designated Requirement 稳定 = TCC 授权（辅助功能/屏幕录制）跨构建持久
+IDENTITY=$(security find-identity -v 2>/dev/null | grep -o '"Apple Development: [^"]*"' | head -1 | tr -d '"')
+if [ -z "$IDENTITY" ]; then
+  IDENTITY=$(security find-identity -v 2>/dev/null | grep -o '"ClipboardTool Dev"' | head -1 | tr -d '"')
 fi
 
 if [ -n "$IDENTITY" ]; then
   codesign --force --deep -s "$IDENTITY" "$APP"
-  echo "==> 已用固定身份「ClipboardTool Dev」签名（辅助功能授权可持续生效）"
+  echo "==> 已用固定身份「$IDENTITY」签名（辅助功能授权可持续生效）"
 else
   codesign --force --deep -s - "$APP"
   echo ""
