@@ -56,6 +56,8 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
     private var globalMouseMonitor: Any?
     private var previousApp: NSRunningApplication?
     private var suppressAutoClose = false
+    /// 调试自拍用：抑制失焦自动关闭
+    var debugHoldOpen = false
     private(set) var selectedIndex = 0
     let panelState = PanelState()
     /// 由 AppDelegate 注入：用于把面板锚定在菜单栏图标下方
@@ -142,7 +144,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        if !suppressAutoClose { close() }
+        if !suppressAutoClose && !debugHoldOpen { close() }
     }
 
     /// 粘贴完成后把面板重新变为 key，继续选择下一条
@@ -280,7 +282,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         // 本应用内部点击在面板外 → 关闭面板并吞掉该次点击；面板内点击放行（按钮/手势）
         localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self = self, let p = self.panel, p.isVisible else { return event }
-            if !self.suppressAutoClose, !p.frame.contains(NSEvent.mouseLocation) {
+            if !self.suppressAutoClose, !self.debugHoldOpen, !p.frame.contains(NSEvent.mouseLocation) {
                 self.close()
                 return nil
             }
@@ -288,7 +290,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         }
         // 其他应用的点击 → 关闭
         globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            guard let self = self, let p = self.panel, p.isVisible, !self.suppressAutoClose else { return }
+            guard let self = self, let p = self.panel, p.isVisible, !self.suppressAutoClose, !self.debugHoldOpen else { return }
             if !p.frame.contains(NSEvent.mouseLocation) {
                 self.close()
             }
@@ -488,9 +490,9 @@ struct HistoryPanelView: View {
         }
         .frame(width: 360, height: 500)
         .background(.ultraThinMaterial)
-        .background(RubickTheme.darkBackground.opacity(scheme == .dark ? 0.55 : 0))
+        .background(RubickTheme.panelBackground(scheme))
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(RubickTheme.hairline(scheme), lineWidth: 0.5))
         .onReceive(NotificationCenter.default.publisher(for: .panelSelectionChanged)) { _ in
             selected = HistoryPanelController.shared.selectedIndex
         }
@@ -512,12 +514,10 @@ struct HistoryPanelView: View {
     @State private var grabOffset: CGPoint?
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 12))
-                .foregroundStyle(RubickTheme.primary(scheme))
+        HStack(spacing: 7) {
+            ArcaneSparkle(size: 13)
             Text("拉比克")
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 13.5, weight: .semibold, design: .serif))
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 9))
                 .foregroundStyle(RubickTheme.muted(scheme).opacity(0.5))
@@ -576,9 +576,7 @@ struct HistoryPanelView: View {
 
     private var searchField: some View {
         HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 11))
-                .foregroundStyle(RubickTheme.muted(scheme))
+            ArcaneSparkle(size: 10)
             TextField("搜索法术…", text: $panelState.searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
@@ -586,8 +584,8 @@ struct HistoryPanelView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(RubickTheme.surfaceHigh(scheme)))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(RubickTheme.primary(scheme).opacity(0.25), lineWidth: 0.5))
+        .background(RoundedRectangle(cornerRadius: 8).fill(RubickTheme.surfaceHigh(scheme).opacity(0.7)))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(RubickTheme.hairline(scheme), lineWidth: 0.5))
         .padding(.horizontal, 14)
         .padding(.bottom, 8)
     }
@@ -606,11 +604,11 @@ struct HistoryPanelView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .background(Capsule().fill(active
-                                          ? RubickTheme.primary(scheme).opacity(0.15)
-                                          : RubickTheme.surfaceHigh(scheme)))
+                                          ? RubickTheme.primary(scheme).opacity(0.07)
+                                          : Color.clear))
                 .overlay(Capsule().strokeBorder(active
-                                                ? RubickTheme.primary(scheme).opacity(0.5)
-                                                : Color.primary.opacity(0.06), lineWidth: 1))
+                                                ? RubickTheme.primary(scheme)
+                                                : RubickTheme.hairline(scheme), lineWidth: 1))
                 .foregroundStyle(active ? RubickTheme.primary(scheme) : RubickTheme.muted(scheme))
             }
             Spacer()
@@ -737,7 +735,7 @@ struct HistoryPanelView: View {
             .animation(.easeOut(duration: 0.12), value: hoveringIds.contains(item.id))
         }
         .padding(10)
-        .glowCard(hovering: hoveringIds.contains(item.id), selected: selected == index, cornerRadius: 8)
+        .spellSlot(hovering: hoveringIds.contains(item.id), selected: selected == index, cornerRadius: 8)
         .onHover { hovering in
             if hovering {
                 hoveringIds.insert(item.id)

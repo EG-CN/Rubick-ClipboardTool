@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 调试：历史面板样式自拍 → /tmp/rubick-panel.png
         if CommandLine.arguments.contains("--debug-panel-shot") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                HistoryPanelController.shared.debugHoldOpen = true
                 HistoryPanelController.shared.show(fromHotkey: true)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                     Self.captureScreen(to: "/tmp/rubick-panel.png")

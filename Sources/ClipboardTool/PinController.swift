@@ -133,6 +133,13 @@ struct PinImageView: View {
             Rectangle().strokeBorder(hovering ? RubickTheme.primary(scheme) : Color.primary.opacity(0.25),
                                      lineWidth: 1)
         )
+        .overlay(alignment: .topLeading) {
+            // ✦ 徽记：贴图上唯一的品牌符号（奥术纸墨语言）
+            ArcaneSparkle(size: 10)
+                .padding(4)
+                .allowsHitTesting(false)
+                .opacity(0.9)
+        }
         .shadow(color: Color.black.opacity(0.35), radius: 7, y: 3)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { onClose() }

@@ -69,6 +69,7 @@ struct ShotActionView: View {
     let image: NSImage
     let onPin: () -> Void
     let onClose: () -> Void
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(spacing: 9) {
@@ -84,7 +85,7 @@ struct ShotActionView: View {
             Button("钉图", action: onPin)
                 .font(.system(size: 11, weight: .medium))
                 .buttonStyle(.plain)
-                .foregroundStyle(RubickTheme.emeraldDeep)
+                .foregroundStyle(RubickTheme.primary(scheme))
             Button {
                 onClose()
             } label: {
@@ -98,6 +99,6 @@ struct ShotActionView: View {
         .padding(.vertical, 8)
         .frame(width: 232, height: 56)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.5))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(RubickTheme.hairline(scheme), lineWidth: 0.5))
     }
 }
