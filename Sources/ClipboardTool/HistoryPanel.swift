@@ -160,14 +160,15 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         activateApp(target)
     }
 
-    /// 粘贴前的焦点还原：轮询等待目标 App 真正成为前台后再回调（修复粘贴落空）
+    /// 粘贴前的焦点还原：轮询等待目标 App 真正成为前台后再回调（修复粘贴落空）。
+    /// macOS 常见「首次 activate 被忽略」→ 等待过半仍未前台时再激活一次，总窗口 2.5s
     private func restoreFocusAndWait(completion: @escaping () -> Void) {
         guard let target = targetAppForRestore() else {
             completion()
             return
         }
         activateApp(target)
-        waitUntilFrontmost(target, attempts: 20, interval: 0.05) { _ in
+        waitUntilFrontmost(target, attempts: 50, interval: 0.05, reActivateAt: 25, target: target) { _ in
             completion()
         }
     }
@@ -192,13 +193,17 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         app.activate(options: [.activateIgnoringOtherApps])
     }
 
-    private func waitUntilFrontmost(_ app: NSRunningApplication, attempts: Int, interval: TimeInterval, done: @escaping (Bool) -> Void) {
+    private func waitUntilFrontmost(_ app: NSRunningApplication, attempts: Int, interval: TimeInterval, reActivateAt: Int = -1, target: NSRunningApplication? = nil, done: @escaping (Bool) -> Void) {
         if NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier || attempts <= 0 {
             done(true)
             return
         }
+        if reActivateAt > 0, attempts == reActivateAt, let target = target {
+            activateApp(target)   // 二次激活：突破系统忽略首次 activate 的情况
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + interval) { [weak self] in
-            self?.waitUntilFrontmost(app, attempts: attempts - 1, interval: interval, done: done)
+            self?.waitUntilFrontmost(app, attempts: attempts - 1, interval: interval,
+                                     reActivateAt: reActivateAt, target: target, done: done)
         }
     }
 

@@ -27,10 +27,11 @@ final class ClipboardMonitor {
 
     func start() {
         guard timer == nil else { return }
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        // 0.3s 轮询：0.5s 时连续快速复制会丢中间那次（复制 A 后立刻复制 B → A 永远不入册）
+        timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in
             self?.poll()
         }
-        timer?.tolerance = 0.1
+        timer?.tolerance = 0.05
     }
 
     private func poll() {
