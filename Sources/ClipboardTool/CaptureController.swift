@@ -172,10 +172,17 @@ final class CaptureController {
                 }
 
                 // 窗口列表（AppKit 坐标）+ 标题
+                let displayFramesSC = displays.map { $0.frame }   // SC 坐标，供整屏窗过滤
                 let windows: [(frame: CGRect, title: String)] = content.windows
                     .filter { w in
                         w.owningApplication?.bundleIdentifier != Bundle.main.bundleIdentifier &&
                         w.frame.width > 60 && w.frame.height > 60
+                    }
+                    // 排除桌面/壁纸窗：尺寸≈整块屏幕,会让悬停与吸附永远命中"全屏"
+                    .filter { w in
+                        !displayFramesSC.contains { d in
+                            w.frame.width >= d.width * 0.97 && w.frame.height >= d.height * 0.97
+                        }
                     }
                     .map { w in
                         let f = w.frame
@@ -251,7 +258,7 @@ final class CaptureController {
                 let m = NSEvent.mouseLocation
                 let viewPoint = CGPoint(x: m.x - unionRect.origin.x,
                                         y: unionRect.height - (m.y - unionRect.origin.y))
-                session.hoverWindowViewFrame = windowViewFrames.first { $0.contains(viewPoint) }
+                session.hoverWindowViewFrame = SnapLogic.window(under: viewPoint, windows: windowViewFrames)
             }
             return event
         }

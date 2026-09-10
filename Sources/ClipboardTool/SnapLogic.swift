@@ -30,9 +30,12 @@ enum SnapLogic {
         return (r, win)
     }
 
-    /// 光标悬停的窗口（窗口检测吸附，单击直截整窗）
+    /// 光标悬停的窗口（窗口检测吸附，单击直截整窗）。
+    /// 命中多个时取**最小面积**者——桌面等大窗不应遮住其上的小窗口
     static func window(under point: CGPoint, windows: [CGRect]) -> CGRect? {
-        windows.first { $0.contains(point) }
+        windows
+            .filter { $0.contains(point) }
+            .min { $0.width * $0.height < $1.width * $1.height }
     }
 
     /// 选区是否与窗口几乎重合（单击判定容差）
