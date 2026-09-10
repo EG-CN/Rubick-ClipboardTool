@@ -344,7 +344,10 @@ final class AnnotationController {
             if ak.matches(.undo, event: event) { model.undo(); return nil }
             if ak.matches(.redo, event: event) { model.redo(); return nil }
             if ak.matches(.ocr, event: event) {
-                if let img = self.currentImage { model.runOCR(on: img) }
+                if let img = self.currentImage {
+                    let composite = Self.flatten(image: img, annotations: model.annotations) ?? img
+                    model.runOCR(on: composite)
+                }
                 return nil
             }
             if ak.matches(.translate, event: event) {
@@ -379,7 +382,10 @@ final class AnnotationController {
         if ak.matches(.undo, event: event) { model.undo(); return }
         if ak.matches(.redo, event: event) { model.redo(); return }
         if ak.matches(.ocr, event: event) {
-            if let img = currentImage { model.runOCR(on: img) }
+            if let img = currentImage {
+                let composite = Self.flatten(image: img, annotations: model.annotations) ?? img
+                model.runOCR(on: composite)
+            }
             return
         }
         if ak.matches(.translate, event: event) { model.translateSideSelection(); return }
@@ -974,16 +980,18 @@ struct AnnotateEditorView: View {
         }
     }
 
-    // MARK: 工具栏（两行紧凑）
+    // MARK: 工具栏（定宽两段式：第一行工具恒定不抖，属性控件固定在第二行左槽）
 
     private var toolbar: some View {
         VStack(spacing: 6) {
+            // 第一行（恒定）：工具 + 识图 + 颜色 + 线宽 + 撤销重做
             HStack(spacing: 6) {
                 ForEach(visibleTools, id: \.self) { t in
                     toolButton(t)
                 }
+                divider
                 Button {
-                    model.runOCR(on: image)
+                    ocrOnComposite()
                 } label: {
                     Image(systemName: "text.viewfinder")
                         .font(.system(size: 14))
@@ -994,57 +1002,9 @@ struct AnnotateEditorView: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { hovering in
-                    hoveredHelp = hovering ? "识图（\(keyDisplay(.ocr))）" : nil
+                    hoveredHelp = hovering ? "识图当前画面（\(keyDisplay(.ocr))）" : nil
                 }
-                if model.tool == .rect {
-                    Picker("", selection: $model.cornerRadius) {
-                        Text("直角").tag(CGFloat(0))
-                        Text("圆角").tag(CGFloat(8))
-                        Text("大圆角").tag(CGFloat(16))
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 150)
-                    .onChange(of: model.cornerRadius) { newValue in
-                        if let idx = model.annotations.lastIndex(where: { $0.tool == .rect }) {
-                            var a = model.annotations[idx]
-                            a.cornerRadius = newValue
-                            model.annotations[idx] = a
-                        }
-                    }
-                }
-                if model.tool == .text {
-                    Picker("", selection: $model.fontSize) {
-                        Text("小").tag(CGFloat(12))
-                        Text("中").tag(CGFloat(16))
-                        Text("大").tag(CGFloat(22))
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 110)
-                }
-                if model.tool == .mosaic {
-                    Picker("", selection: $model.mosaicStyle) {
-                        Text("马赛克").tag(0)
-                        Text("模糊").tag(1)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 130)
-                }
-                if model.tool == .highlight {
-                    Picker("", selection: $model.highlightEllipse) {
-                        Text("方形").tag(false)
-                        Text("圆形").tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 110)
-                    Picker("", selection: $model.fillOpacity) {
-                        Text("浅").tag(CGFloat(0.18))
-                        Text("中").tag(CGFloat(0.35))
-                        Text("深").tag(CGFloat(0.55))
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 110)
-                }
-                Spacer()
+                divider
                 ForEach(0..<AnnotationController.palette.count, id: \.self) { i in
                     colorDot(i)
                 }
@@ -1055,19 +1015,31 @@ struct AnnotateEditorView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 104)
-            }
-            HStack(spacing: 8) {
+                Spacer()
                 toolbarAction("arrow.uturn.backward", help: "撤销 \(keyDisplay(.undo))", enabled: !model.annotations.isEmpty) {
                     model.undo()
                 }
                 toolbarAction("arrow.uturn.forward", help: "重做 \(keyDisplay(.redo))", enabled: !model.redoStack.isEmpty) {
                     model.redo()
                 }
-                Text(hoveredHelp ?? "\(keyDisplay(.toolRect))–\(keyDisplay(.toolMosaic)) 工具 · \(keyDisplay(.ocr)) 识图 · \(keyDisplay(.translate)) 翻译 · \(keyDisplay(.undo)) 撤销 · \(keyDisplay(.confirm)) 确认 · ⎋ 取消")
+            }
+            // 第二行（恒定高度）：左槽=当前工具属性（不抖动），右=提示 + 确认/取消
+            HStack(spacing: 8) {
+                contextualControls
+                    .frame(minWidth: 240, alignment: .leading)
+                Text(hoveredHelp ?? "\(keyDisplay(.toolRect))–\(keyDisplay(.toolMosaic)) 工具 · \(keyDisplay(.ocr)) 识图 · \(keyDisplay(.undo)) 撤销 · ⎋ 取消")
                     .font(.system(size: 9.5))
                     .foregroundStyle(hoveredHelp != nil ? RubickTheme.emeraldBright : .white.opacity(0.55))
                     .lineLimit(1)
                 Spacer()
+                Button {
+                    onCancel()
+                } label: {
+                    Label("取消", systemImage: "xmark")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
                 Button {
                     model.textEditing = nil
                     onConfirm(AnnotationController.flatten(image: image, annotations: model.annotations) ?? image)
@@ -1078,19 +1050,84 @@ struct AnnotateEditorView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .tint(RubickTheme.emerald)
-                Button {
-                    onCancel()
-                } label: {
-                    Label("取消", systemImage: "xmark")
-                        .font(.system(size: 11))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .keyboardShortcut(.defaultAction)
             }
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 10).fill(.black.opacity(0.55)))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(RubickTheme.emerald.opacity(0.3), lineWidth: 0.8))
+    }
+
+    private var divider: some View {
+        Rectangle().fill(.white.opacity(0.12)).frame(width: 1, height: 20)
+    }
+
+    /// 当前工具的属性控件（固定槽位，切换工具只换内容不改变行高/布局）
+    @ViewBuilder private var contextualControls: some View {
+        switch model.tool {
+        case .rect:
+            Picker("", selection: $model.cornerRadius) {
+                Text("直角").tag(CGFloat(0))
+                Text("圆角").tag(CGFloat(8))
+                Text("大圆角").tag(CGFloat(16))
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 150)
+            .onChange(of: model.cornerRadius) { newValue in
+                if let idx = model.annotations.lastIndex(where: { $0.tool == .rect }) {
+                    var a = model.annotations[idx]
+                    a.cornerRadius = newValue
+                    model.annotations[idx] = a
+                }
+            }
+        case .text:
+            Picker("", selection: $model.fontSize) {
+                Text("小").tag(CGFloat(12))
+                Text("中").tag(CGFloat(16))
+                Text("大").tag(CGFloat(22))
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 110)
+        case .mosaic:
+            Picker("", selection: $model.mosaicStyle) {
+                Text("马赛克").tag(0)
+                Text("模糊").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 130)
+        case .highlight:
+            Picker("", selection: $model.highlightEllipse) {
+                Text("方形").tag(false)
+                Text("圆形").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 110)
+            Picker("", selection: $model.fillOpacity) {
+                Text("浅").tag(CGFloat(0.18))
+                Text("中").tag(CGFloat(0.35))
+                Text("深").tag(CGFloat(0.55))
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 110)
+        case .pen:
+            Text("拖拽绘制 · Shift 直线")
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.45))
+        case .arrow, .ellipse:
+            Text("拖拽绘制 · Shift 约束")
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.45))
+        case nil:
+            Text("选择上方工具开始标注，或按 ↵ 直接完成")
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.45))
+        }
+    }
+
+    /// OCR 识别当前合成画面（含已画标注），避免识别结果包含被马赛克遮住的原文
+    private func ocrOnComposite() {
+        let composite = AnnotationController.flatten(image: image, annotations: model.annotations) ?? image
+        model.runOCR(on: composite)
     }
 
     /// 工具栏可见工具（高亮暂下架）

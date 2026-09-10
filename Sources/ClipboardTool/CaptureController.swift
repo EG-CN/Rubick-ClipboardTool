@@ -60,7 +60,7 @@ final class CaptureController {
 
     // MARK: 配置
 
-    var snapEnabled: Bool { UserDefaults.standard.object(forKey: "capture.snap") as? Bool ?? false }
+    var snapEnabled: Bool { UserDefaults.standard.object(forKey: "capture.snap") as? Bool ?? true }
     var snapThreshold: CGFloat { CGFloat(UserDefaults.standard.object(forKey: "capture.snapThreshold") as? Double ?? 8) }
     var mode: String { UserDefaults.standard.string(forKey: "capture.mode") ?? "auto" }   // auto / custom / system
 
@@ -227,7 +227,9 @@ final class CaptureController {
         window.ignoresMouseEvents = false
         window.contentView = NSHostingView(rootView: view)
         overlayWindow = window
-        window.makeKeyAndOrderFront(nil)
+        // 只浮现不抢 key:makeKeyAndOrderFront 会激活本应用/切换空间 → 发起截图时整屏"跳一下"
+        // 按键经下方 local+global 双监听兜底,不依赖本窗口成为 key
+        window.orderFrontRegardless()
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.overlayWindow?.isVisible == true else { return event }
