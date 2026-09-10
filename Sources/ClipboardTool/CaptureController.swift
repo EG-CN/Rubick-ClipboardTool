@@ -17,6 +17,11 @@ struct ScreenShot {
     let image: CGImage
 }
 
+/// 选框会话状态（悬停高亮的窗口，视图坐标）
+final class CaptureSessionState: ObservableObject {
+    @Published var hoverWindowViewFrame: CGRect?
+}
+
 /// 合成 / 裁剪（纯函数，可单元测试）
 enum ImageCompose {
     static func composite(_ shots: [ScreenShot], union: CGRect) -> NSImage? {
@@ -53,6 +58,7 @@ final class CaptureController {
     private var overlayWindow: NSWindow?
     private var keyMonitor: Any?
     private var globalKeyMonitor: Any?
+    private var hoverMonitor: Any?
     private var capturedDisplays: [ScreenShot] = []
     private var previousApp: NSRunningApplication?
 
@@ -201,35 +207,54 @@ final class CaptureController {
     private func presentOverlay(composite: NSImage, unionRect: CGRect, windows: [(frame: CGRect, title: String)], displays: [ScreenShot]) {
         capturedDisplays = displays
         previousApp = NSWorkspace.shared.frontmostApplication
+        // 窗口帧 AppKit → 视图坐标（选框视图左上原点），供吸附/悬停/单击整窗
+        let windowViewFrames = windows.map { w in
+            SnapLogic.viewRect(fromAppKitRect: w.frame, viewHeight: unionRect.height, windowOrigin: unionRect.origin)
+        }
+        let session = CaptureSessionState()
+
         let view = CaptureOverlayView(
             composite: composite,
             unionRect: unionRect,
+            windowFrames: windowViewFrames,
+            session: session,
             hintText: pendingPurpose == .translate
                 ? "拖选需要翻译的文字区域 · ↵ 确认 · ⎋ 取消"
                 : (pendingPurpose == .ocr
                    ? "拖选要取字的区域 · 识别后直接复制 · ⎋ 取消"
-                   : "拖拽框选 · ↵ 确认 · ⎋ 取消"),
+                   : "拖拽框选 · 单击窗口直截 · ⌥ 禁吸附 · ⎋ 取消"),
             onCancel: { [weak self] in self?.teardown(restoreFocus: true) },
             onConfirm: { [weak self] rect in
                 self?.finish(rect: rect, composite: composite, unionRect: unionRect)
             }
         )
-        // 非激活面板：显示与按键照常，但不激活应用、不切换桌面空间
-        // （修复：多桌面/全屏空间下按 ⌘⇧A/⌘⇧D 触发“页面跳动”）
+        // 非激活面板：显示与按键照常，但不激活应用
+        // .stationary:覆盖窗不参与空间切换——这是发起截图时"整屏跳动"的根因
         let window = KeyablePanel(contentRect: unionRect,
                              styleMask: [.borderless, .nonactivatingPanel],
                              backing: .buffered, defer: false)
         window.level = .screenSaver
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         window.backgroundColor = .clear
         window.isOpaque = false
         window.hasShadow = false
         window.ignoresMouseEvents = false
         window.contentView = NSHostingView(rootView: view)
         overlayWindow = window
-        // 只浮现不抢 key:makeKeyAndOrderFront 会激活本应用/切换空间 → 发起截图时整屏"跳一下"
-        // 按键经下方 local+global 双监听兜底,不依赖本窗口成为 key
-        window.orderFrontRegardless()
+        // 成为 key（非激活面板不抢应用焦点）：保证首击即生效、按键走本地监听
+        window.makeKeyAndOrderFront(nil)
+
+        // 悬停窗口高亮（鼠标移动即刷新，Snipaste 式）
+        hoverMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .otherMouseDragged]) { [weak self, weak session] event in
+            guard let self = self, self.overlayWindow?.isVisible == true else { return event }
+            if let session = session {
+                let m = NSEvent.mouseLocation
+                let viewPoint = CGPoint(x: m.x - unionRect.origin.x,
+                                        y: unionRect.height - (m.y - unionRect.origin.y))
+                session.hoverWindowViewFrame = windowViewFrames.first { $0.contains(viewPoint) }
+            }
+            return event
+        }
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.overlayWindow?.isVisible == true else { return event }
@@ -340,6 +365,7 @@ final class CaptureController {
         overlayWindow = nil
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
         if let m = globalKeyMonitor { NSEvent.removeMonitor(m); globalKeyMonitor = nil }
+        if let m = hoverMonitor { NSEvent.removeMonitor(m); hoverMonitor = nil }
         capturedDisplays = []
         if restoreFocus, let prev = previousApp, !prev.isTerminated,
            prev.processIdentifier != ProcessInfo.processInfo.processIdentifier {
@@ -354,6 +380,9 @@ final class CaptureController {
 struct CaptureOverlayView: View {
     let composite: NSImage
     let unionRect: CGRect
+    /// 可吸附窗口帧（视图坐标，左上原点）
+    var windowFrames: [CGRect] = []
+    @ObservedObject var session: CaptureSessionState
     var hintText: String = "拖拽框选 · ↵ 确认 · ⎋ 取消"
     let onCancel: () -> Void
     let onConfirm: (CGRect) -> Void
@@ -366,10 +395,19 @@ struct CaptureOverlayView: View {
         SnapLogic.appKitRect(fromViewRect: r, viewHeight: unionRect.height, windowOrigin: unionRect.origin)
     }
 
-    private var selectionRect: CGRect? {
+    /// 原始选区（未吸附）
+    private var rawSelection: CGRect? {
         guard let a = dragStart, let b = dragCurrent else { return nil }
         return CGRect(x: min(a.x, b.x), y: min(a.y, b.y),
                       width: abs(a.x - b.x), height: abs(a.y - b.y))
+    }
+
+    /// 吸附后选区（⌥ 临时禁用吸附）
+    private var selectionRect: CGRect? {
+        guard let raw = rawSelection else { return nil }
+        let optionHeld = NSApp.currentEvent?.modifierFlags.contains(.option) == true
+        guard CaptureController.shared.snapEnabled, !optionHeld, !windowFrames.isEmpty else { return raw }
+        return SnapLogic.snappedRect(raw, windows: windowFrames, threshold: CaptureController.shared.snapThreshold).rect
     }
 
     var body: some View {
@@ -384,8 +422,18 @@ struct CaptureOverlayView: View {
                 DimWithHole(hole: sel)
                     .fill(Color.black.opacity(0.5), style: FillStyle(eoFill: true))
                     .allowsHitTesting(false)
-            } else {
+            } else if let hover = session.hoverWindowViewFrame {
+                // 悬停窗口高亮（未拖拽时，Snipaste 式）
+                Rectangle()
+                    .strokeBorder(RubickTheme.emeraldBright, lineWidth: 2)
+                    .background(RubickTheme.emerald.opacity(0.08))
+                    .frame(width: hover.width, height: hover.height)
+                    .position(x: hover.midX, y: hover.midY)
+                    .allowsHitTesting(false)
+            }
+            if rawSelection == nil && session.hoverWindowViewFrame == nil {
                 Color.black.opacity(0.5)
+                    .allowsHitTesting(false)
             }
 
             if let sel = selectionRect {
@@ -401,7 +449,7 @@ struct CaptureOverlayView: View {
                     .padding(.vertical, 3)
                     .background(Capsule().fill(.black.opacity(0.7)))
                     .position(x: sel.minX + 6, y: max(sel.minY - 15, 14))
-            } else {
+            } else if session.hoverWindowViewFrame == nil {
                 hintPill(hintText)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.top, 18)
@@ -422,11 +470,16 @@ struct CaptureOverlayView: View {
                 .onEnded { v in
                     dragCurrent = v.location
                     defer { dragStart = nil; dragCurrent = nil }
-                    guard let sel = selectionRect, sel.width > 3, sel.height > 3 else {
-                        onCancel()   // 单击空白 = 取消
+                    guard let raw = rawSelection, raw.width > 3, raw.height > 3 else {
+                        // 单击：命中的窗口直截整窗（Snipaste 式），空白处取消
+                        if let win = SnapLogic.window(under: v.location, windows: windowFrames) {
+                            onConfirm(globalRect(win))
+                        } else {
+                            onCancel()
+                        }
                         return
                     }
-                    onConfirm(globalRect(sel))
+                    onConfirm(globalRect(selectionRect ?? raw))
                 }
         )
         .onAppear { NSCursor.crosshair.set() }
