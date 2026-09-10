@@ -362,7 +362,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
             writeTextToPasteboard(item.text ?? "")
         case .image:
             if let img = store.imageFor(item) {
-                writeImageToPasteboard(img)
+                copyImageToClipboardSuppressingMonitor(img)
             }
         }
 
@@ -377,6 +377,10 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
                 guard let self = self else { return }
                 if keepOpenNow { self.reactivatePanel() }
                 self.suppressAutoClose = false
+                // 取放完成：清空筛选回到全量列表，便于连续取下一条
+                self.panelState.searchText = ""
+                self.panelState.filter = .all
+                self.resetSelection()
             }
         } else {
             if !(copyOnly && keepOpenNow) {
@@ -490,9 +494,12 @@ struct HistoryPanelView: View {
         }
         .frame(width: 360, height: 500)
         .background(.ultraThinMaterial)
-        .background(RubickTheme.panelBackground(scheme))
+        .background(RubickTheme.panelAurora(scheme))
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(RubickTheme.hairline(scheme), lineWidth: 0.5))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(RubickTheme.panelGradientBorder(scheme), lineWidth: 0.8)
+        )
         .onReceive(NotificationCenter.default.publisher(for: .panelSelectionChanged)) { _ in
             selected = HistoryPanelController.shared.selectedIndex
         }
@@ -515,7 +522,7 @@ struct HistoryPanelView: View {
 
     private var header: some View {
         HStack(spacing: 7) {
-            ArcaneSparkle(size: 13)
+            ArcaneSparkle(size: 13, glow: true)
             Text("拉比克")
                 .font(.system(size: 13.5, weight: .semibold, design: .serif))
             Image(systemName: "line.3.horizontal")

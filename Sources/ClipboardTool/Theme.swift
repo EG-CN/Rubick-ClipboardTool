@@ -42,9 +42,23 @@ enum RubickTheme {
     static func hairline(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? darkOutline : Color.black.opacity(0.08)
     }
-    /// 面板底色（纸白/墨黑，叠在材质上）
-    static func panelBackground(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? darkBackground.opacity(0.55) : Color(hex: 0xFAFAF8).opacity(0.55)
+    /// 面板底衬（奥术夜幕/黎明：顶部极光渐变 + 基底色，垫在材质后透出）
+    static func panelAurora(_ scheme: ColorScheme) -> some View {
+        let base = scheme == .dark ? Color(hex: 0x0C120E) : Color(hex: 0xFBFCFA)
+        let glowTop = scheme == .dark ? Color(hex: 0x1E3A28) : Color(hex: 0xD9EBDB)
+        return ZStack {
+            base
+            LinearGradient(colors: [glowTop.opacity(scheme == .dark ? 0.85 : 0.65),
+                                    base.opacity(0)],
+                           startPoint: UnitPoint(x: 0.5, y: 0),
+                           endPoint: UnitPoint(x: 0.5, y: 0.5))
+        }
+    }
+
+    /// 渐变发丝描边（顶部祖母绿 → 底部近乎透明）
+    static func panelGradientBorder(_ scheme: ColorScheme) -> LinearGradient {
+        LinearGradient(colors: [primary(scheme).opacity(0.35), primary(scheme).opacity(0.04)],
+                       startPoint: .top, endPoint: .bottom)
     }
 }
 
@@ -132,11 +146,13 @@ struct GlowCardModifier: ViewModifier {
 
 struct ArcaneSparkle: View {
     var size: CGFloat = 12
+    var glow: Bool = false
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Text("✦")
             .font(.system(size: size))
             .foregroundStyle(RubickTheme.primary(scheme))
+            .shadow(color: glow ? RubickTheme.primary(scheme).opacity(0.6) : .clear, radius: glow ? 3 : 0)
     }
 }

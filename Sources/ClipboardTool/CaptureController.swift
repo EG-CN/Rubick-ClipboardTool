@@ -261,6 +261,9 @@ final class CaptureController {
             systemFallback()
             return
         }
+        // 即拍即复制：选区确认的瞬间原图就进剪贴板（监听会自动入册历史）。
+        // 此后无论标注后确认还是 ⎋ 取消，⌘V 拿到的都是这次截图——修复自绘路径从不写剪贴板的缺陷
+        writeImageToPasteboard(cropped)
         handleCapturedImage(cropped, at: rect)
     }
 

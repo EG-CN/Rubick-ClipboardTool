@@ -190,6 +190,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         monitor.start()
         screenshotController.onCaptured = { [weak self] img in
+            // 标注确认产物替换剪贴板（抑制监听，历史由 addImage 显式入册一次）
+            copyImageToClipboardSuppressingMonitor(img)
             self?.store.addImage(img)
             ShotActionBar.shared.show(image: img)   // 截图后可选直接钉图（功能清单 3.5）
         }

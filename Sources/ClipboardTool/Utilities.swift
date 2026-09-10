@@ -13,7 +13,22 @@ func writeTextToPasteboard(_ text: String) {
 func writeImageToPasteboard(_ image: NSImage) {
     let pb = NSPasteboard.general
     pb.clearContents()
+    // 同时声明 PNG/TIFF 字节 + NSImage 对象：部分 App（微信/浏览器富文本框）
+    // 不读 NSImage 对象类型，只认具体图片字节类型
+    pb.declareTypes([.png, .tiff], owner: nil)
+    if let png = image.pngData() {
+        pb.setData(png, forType: .png)
+    }
+    if let tiff = image.tiffRepresentation {
+        pb.setData(tiff, forType: .tiff)
+    }
     pb.writeObjects([image])
+}
+
+/// 复制应用内已有内容到剪贴板（抑制监听重复入册；历史由调用方显式维护）
+func copyImageToClipboardSuppressingMonitor(_ image: NSImage) {
+    ClipboardMonitor.shared.suppressNextCapture()
+    writeImageToPasteboard(image)
 }
 
 // MARK: - 模拟粘贴（⌘V，需辅助功能权限）

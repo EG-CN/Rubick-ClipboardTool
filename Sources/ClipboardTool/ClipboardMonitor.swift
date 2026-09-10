@@ -15,6 +15,11 @@ final class ClipboardMonitor {
     /// 优先通道：剪贴板自带 PNG 字节时直通存储（免 NSImage 解码 + 免二次 PNG 编码）
     var onImageData: ((Data) -> Void)?
 
+    /// 应用自身即将写剪贴板时调用：下一次变更不计入历史
+    /// （显式 addImage 已入册，监听再收会造成重复；风险窗口 ≤0.5s，期间用户复制会被跳过，可接受）
+    private var pendingSelfWrites = 0
+    func suppressNextCapture() { pendingSelfWrites += 1 }
+
     private var timer: Timer?
     private var lastChangeCount: Int = NSPasteboard.general.changeCount
 
@@ -32,6 +37,10 @@ final class ClipboardMonitor {
         let pb = NSPasteboard.general
         guard pb.changeCount != lastChangeCount else { return }
         lastChangeCount = pb.changeCount
+        if pendingSelfWrites > 0 {
+            pendingSelfWrites -= 1
+            return
+        }
 
         if ignorePasswordManagers, isPrivate(pb) { return }
 
