@@ -125,4 +125,14 @@ final class V3ImprovementTests: XCTestCase {
         XCTAssertFalse(state.matches(plain))
         XCTAssertFalse(state.matches(image))
     }
+
+    // MARK: 弹壳 Dock：链接域名展示
+
+    func testDisplayDomain() {
+        XCTAssertEqual(PanelState.displayDomain("https://developer.apple.com/design"), "developer.apple.com")
+        XCTAssertEqual(PanelState.displayDomain("www.example.com/a?b=1"), "example.com")
+        XCTAssertEqual(PanelState.displayDomain("http://news.ycombinator.com"), "news.ycombinator.com")
+        XCTAssertFalse(PanelState.displayDomain("not a url at all").isEmpty, "非标准输入应有截断兜底不崩溃")
+        XCTAssertTrue(PanelState.displayDomain(String(repeating: "x", count: 60)).count <= 24, "超长兜底应截断")
+    }
 }

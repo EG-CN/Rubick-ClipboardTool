@@ -24,6 +24,18 @@ final class PanelState: ObservableObject {
         return t.hasPrefix("http://") || t.hasPrefix("https://") || t.hasPrefix("www.")
     }
 
+    /// 链接展示域名（纯函数）：剥协议/www,任何结果截断 24 字兜底
+    static func displayDomain(_ text: String) -> String {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolved: String
+        if let url = URL(string: t.hasPrefix("http") ? t : "https://" + t), let host = url.host {
+            resolved = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        } else {
+            resolved = t
+        }
+        return String(resolved.prefix(24))
+    }
+
     @Published var searchText = ""
     @Published var filter: FilterKind = .all
 

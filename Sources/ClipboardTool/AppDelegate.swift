@@ -30,6 +30,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return
         }
+        // 调试：弹壳 Dock 自拍 → /tmp/rubick-dock.png
+        if CommandLine.arguments.contains("--debug-dock-shot") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                ShellDockController.shared.show()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    Self.captureScreen(to: "/tmp/rubick-dock.png")
+                    NSApp.terminate(nil)
+                }
+            }
+            return
+        }
         // 调试：历史面板样式自拍 → /tmp/rubick-panel.png
         if CommandLine.arguments.contains("--debug-panel-shot") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -200,7 +211,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleHotkey(_ action: HotkeyManager.Action) {
         switch action {
         case .togglePanel:
-            panelController.toggle(fromHotkey: true)   // 快捷键呼出：面板跟随鼠标弹出
+            // 面板形态：完整面板(默认) / 底部弹壳 Dock（设置→通用）
+            if UserDefaults.standard.string(forKey: "panel.form") == "dock" {
+                panelController.close()
+                ShellDockController.shared.toggle()
+            } else {
+                ShellDockController.shared.hide()
+                panelController.toggle(fromHotkey: true)   // 快捷键呼出：面板跟随鼠标弹出
+            }
         case .screenshot:
             panelController.close()
             ShotActionBar.shared.hide()
@@ -294,7 +312,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: 菜单动作
 
     @objc private func togglePanel() {
-        panelController.toggle()
+        if UserDefaults.standard.string(forKey: "panel.form") == "dock" {
+            panelController.close()
+            ShellDockController.shared.toggle()
+        } else {
+            ShellDockController.shared.hide()
+            panelController.toggle()
+        }
     }
 
     @objc private func captureScreenshot() {

@@ -204,6 +204,7 @@ struct SettingsView: View {
     @State private var autoLaunch = false
     @State private var ignorePassword = ClipboardMonitor.shared.ignorePasswordManagers
     @State private var pasteAuto = UserDefaults.standard.object(forKey: "pasteAuto") as? Bool ?? true
+    @State private var panelForm = UserDefaults.standard.string(forKey: "panel.form") ?? "panel"
     @State private var keepOpen = UserDefaults.standard.object(forKey: "keepPanelOpen") as? Bool ?? true
     @State private var limit: Int = HistoryStore.shared.limit
     @State private var trusted = AXIsProcessTrusted()
@@ -381,6 +382,21 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 paneHeader("通用设置", subtitle: "管理核心行为与环境魔法。")
+                settingCard {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Picker("面板形态", selection: $panelForm) {
+                            Text("完整面板").tag("panel")
+                            Text("底部弹壳 Dock").tag("dock")
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 240)
+                        .onChange(of: panelForm) { newValue in
+                            UserDefaults.standard.set(newValue, forKey: "panel.form")
+                        }
+                        Text("⌘⇧V 的呼出形态：完整历史面板，或贴屏幕底部的标签页弹壳（单击卡片直接粘贴）。")
+                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
+                    }
+                }
                 settingCard {
                     VStack(alignment: .leading, spacing: 4) {
                         Toggle("开机自启动", isOn: $autoLaunch)
