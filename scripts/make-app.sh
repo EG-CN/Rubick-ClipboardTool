@@ -56,8 +56,16 @@ fi
 if [ -n "$IDENTITY" ]; then
   # 签名前清扩展属性：仓库文件携带的 Finder 属性会让 codesign 报 detritus 拒签
   xattr -cr "$APP"
-  codesign --force --deep -s "$IDENTITY" "$APP"
-  echo "==> 已用固定身份「$IDENTITY」签名（辅助功能授权可持续生效）"
+  # 后台会话可能弹不出 Apple 证书的私钥授权框（errSecInternalComponent）——失败自动降级自签证书
+  if codesign --force --deep -s "$IDENTITY" "$APP" 2>/dev/null; then
+    echo "==> 已用固定身份「$IDENTITY」签名（辅助功能授权可持续生效）"
+  elif [ "$IDENTITY" != "ClipboardTool Dev" ] && security find-identity -v 2>/dev/null | grep -q "ClipboardTool Dev"; then
+    codesign --force --deep -s "ClipboardTool Dev" "$APP"
+    echo "==> Apple 证书签名失败（后台会话无法弹授权框），已改用「ClipboardTool Dev」自签（同为固定身份，授权持久）"
+  else
+    echo "==> ⚠ 「$IDENTITY」签名失败且无降级身份，改用 ad-hoc（重装后需重新授权）"
+    codesign --force --deep -s - "$APP"
+  fi
 else
   codesign --force --deep -s - "$APP"
   echo ""

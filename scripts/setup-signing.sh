@@ -13,6 +13,8 @@ P12="$CERT_DIR/cbt-dev.p12"
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "ClipboardTool Dev"; then
   echo "==> 已存在「ClipboardTool Dev」签名身份，跳过生成"
 else
+  # 清理同名残留身份（重复生成会导致 codesign 报 multiple matching identities）
+  security delete-identity -c "ClipboardTool Dev" ~/Library/Keychains/login.keychain-db 2>/dev/null || true
   echo "==> 1/4 生成自签名证书（10 年有效）"
   openssl req -x509 -newkey rsa:2048 -nodes \
     -keyout "$CERT_DIR/cbt-key.pem" -out "$CERT" -days 3650 \
