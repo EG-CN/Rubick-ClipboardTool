@@ -5,7 +5,7 @@ import SwiftUI
 
 final class PanelState: ObservableObject {
     enum FilterKind: Int, CaseIterable {
-        case all = 0, text = 1, image = 2, link = 3
+        case all = 0, text = 1, image = 2, link = 3, file = 4
 
         var label: String {
             switch self {
@@ -13,6 +13,7 @@ final class PanelState: ObservableObject {
             case .text: return "文本"
             case .image: return "图片"
             case .link: return "链接"
+            case .file: return "文件"
             }
         }
     }
@@ -38,19 +39,40 @@ final class PanelState: ObservableObject {
 
     @Published var searchText = ""
     @Published var filter: FilterKind = .all
+    /// 标签筛选（设置后优先于类型筛选）
+    @Published var tagFilter: String?
+    /// ⌘F 聚焦搜索（控制器 +1，视图监听后置焦）
+    @Published var searchFocusRequest = 0
+
+    /// 标签圆点颜色（按标签名哈希取色相，稳定可辨识）
+    static func tagColor(_ tag: String) -> Color {
+        let hue = Double(abs(tag.unicodeScalars.reduce(0) { $0 &* 31 &+ Int($1.value) } % 360)) / 360
+        return Color(hue: hue, saturation: 0.55, brightness: 0.8)
+    }
 
     func matches(_ item: ClipboardItem) -> Bool {
-        switch filter {
-        case .all: break
-        case .text: if item.kind != .text { return false }
-        case .image: if item.kind != .image { return false }
-        case .link:
-            guard item.kind == .text, let t = item.text, Self.isLink(t) else { return false }
+        if let tf = tagFilter {
+            guard item.tag == tf else { return false }
+        } else {
+            switch filter {
+            case .all: break
+            case .text: if item.kind != .text { return false }
+            case .image: if item.kind != .image { return false }
+            case .file: if item.kind != .file { return false }
+            case .link:
+                guard item.kind == .text, let t = item.text, Self.isLink(t) else { return false }
+            }
         }
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !q.isEmpty {
-            guard item.kind == .text, let t = item.text else { return false }
-            return t.localizedCaseInsensitiveContains(q)
+            switch item.kind {
+            case .text:
+                return item.text?.localizedCaseInsensitiveContains(q) == true
+            case .file:
+                return item.filePath?.localizedCaseInsensitiveContains(q) == true
+            case .image:
+                return false
+            }
         }
         return true
     }
@@ -64,10 +86,13 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
     private let store = HistoryStore.shared
     private var panel: NSPanel?
     private var keyMonitor: Any?
+    private var globalSearchMonitor: Any?
     private var localMouseMonitor: Any?
     private var globalMouseMonitor: Any?
     private var previousApp: NSRunningApplication?
     private var suppressAutoClose = false
+    /// 粘贴会话代际号：粘贴等待期间再点条目/重开面板时，旧会话的 completion 一律作废，防止双粘
+    private var pasteSession = 0
     /// 调试自拍用：抑制失焦自动关闭
     var debugHoldOpen = false
     private(set) var selectedIndex = 0
@@ -95,7 +120,26 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         notifySelection()
     }
 
+    /// 记录当前前台应用（粘贴目标判定用；必须在面板自身激活之前调用）
+    func captureFrontmost() {
+        previousApp = NSWorkspace.shared.frontmostApplication
+    }
+
+    /// ⌘F 聚焦搜索：面板非 key 时先拉回 key 再置焦（焦点在别的应用里按下也生效）
+    func focusSearch() {
+        panelState.searchFocusRequest += 1
+        if let p = panel, p.isVisible {
+            NSApp.activate(ignoringOtherApps: true)
+            p.makeKeyAndOrderFront(nil)
+        }
+    }
+
     func show(fromHotkey: Bool = false) {
+        pasteSession += 1          // 上一次粘贴会话若仍在等待，立即作废
+        suppressAutoClose = false  // 新会话不继承旧会话的抑制态
+        // 必须在下方激活之前抓取：激活后 frontmost 是自己，
+        // previousApp 记成自己会让粘贴目标选择彻底失灵（dock 正常/面板坏的根因）
+        captureFrontmost()
         if panel == nil {
             let host = NSHostingView(rootView: HistoryPanelView()
                 .environmentObject(store)
@@ -121,21 +165,29 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
             panel = p
         }
         if fromHotkey { positionNearMouse() } else { positionNearStatusItem() }
+        // macOS 26/27：accessory App 的 NSApp.activate 不再生效，未激活时面板
+        // 不显示在当前（全屏）空间、点击也不可靠——临时转 regular 激活，关闭还原
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
         panelState.searchText = ""
         panelState.filter = .all
-        previousApp = NSWorkspace.shared.frontmostApplication
-        NSApp.activate(ignoringOtherApps: true)
+        panelState.tagFilter = nil   // 呼出即重置筛选（含标签），上次会话的筛选不残留
         panel?.makeKeyAndOrderFront(nil)
+        // 保持 regular 常驻（面板可见于全屏空间的前提）；粘贴后由
+        // reactivatePanel 重新激活，避免首次点击被激活消费
         resetSelection()
         installMonitors()
         NotificationCenter.default.post(name: .panelShown, object: nil)
     }
 
-    func close() {
+    /// restoresFocus=false 用于失焦/点击面板外的被动关闭：用户已自行切走，再把 previousApp
+    /// 弹回前台会和用户的应用切换打架（"被弹回"）；⎋/热键主动关闭才还原焦点
+    func close(restoresFocus: Bool = true) {
         guard isVisible else { return }
         panel?.orderOut(nil)
         removeMonitors()
-        restoreFocus()
+        NSApp.setActivationPolicy(.accessory)
+        if restoresFocus { restoreFocus() }
     }
 
     /// 拖动面板（头部拖动条调用；视图 y 向下 → 窗口坐标 y 向上）
@@ -156,7 +208,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        if !suppressAutoClose && !debugHoldOpen { close() }
+        if !suppressAutoClose && !debugHoldOpen { close(restoresFocus: false) }
     }
 
     /// 粘贴完成后把面板重新变为 key，继续选择下一条
@@ -173,27 +225,40 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     /// 粘贴前的焦点还原：轮询等待目标 App 真正成为前台后再回调（修复粘贴落空）。
-    /// macOS 常见「首次 activate 被忽略」→ 等待过半仍未前台时再激活一次，总窗口 2.5s
-    private func restoreFocusAndWait(completion: @escaping () -> Void) {
-        guard let target = targetAppForRestore() else {
-            completion()
+    /// macOS 常见「首次 activate 被忽略」→ 等待过半仍未前台时再激活一次，总窗口 2.5s。
+    /// completion 的 Bool = 目标是否真的到了前台；超时必须如实上报，宁可不粘也不能粘错窗口。
+    private func restoreFocusAndWait(dockPreferred: Bool = false, completion: @escaping (Bool) -> Void) {
+        guard let target = targetAppForRestore(dockPreferred: dockPreferred) else {
+            completion(false)
             return
         }
+        let session = pasteSession
         activateApp(target)
-        waitUntilFrontmost(target, attempts: 50, interval: 0.05, reActivateAt: 25, target: target) { _ in
-            completion()
+        waitUntilFrontmost(target, attempts: 50, interval: 0.05, reActivateAt: 25, target: target) { [weak self] ok in
+            guard let self = self, session == self.pasteSession else { return }
+            completion(ok)
         }
     }
 
-    /// 还原目标：优先呼出面板前的 App；兜底取最靠前的普通应用（排除自己）
-    private func targetAppForRestore() -> NSRunningApplication? {
-        if let prev = previousApp,
-           prev.processIdentifier != ProcessInfo.processInfo.processIdentifier,
-           !prev.isTerminated {
+    /// 还原目标：优先呼出面板前的 App；兜底取最靠前的普通应用（排除自己）。
+    /// dockPreferred=true（弹壳 Dock）：dock 不抢焦点，previousApp 往往陈旧——
+    /// 以当前前台应用为准（用户正在输入的 App 就是它），自身前台时才退回 previousApp
+    private func targetAppForRestore(dockPreferred: Bool = false) -> NSRunningApplication? {
+        let myPID = ProcessInfo.processInfo.processIdentifier
+        if dockPreferred {
+            if let f = NSWorkspace.shared.frontmostApplication,
+               f.processIdentifier != myPID, f.activationPolicy == .regular {
+                return f
+            }
+            if let prev = previousApp, prev.processIdentifier != myPID, !prev.isTerminated {
+                return prev
+            }
+        } else if let prev = previousApp,
+                  prev.processIdentifier != myPID, !prev.isTerminated {
             return prev
         }
         return NSWorkspace.shared.runningApplications.first { app in
-            app.processIdentifier != ProcessInfo.processInfo.processIdentifier &&
+            app.processIdentifier != myPID &&
             app.activationPolicy == .regular && !app.isTerminated
         }
     }
@@ -206,8 +271,12 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
     }
 
     private func waitUntilFrontmost(_ app: NSRunningApplication, attempts: Int, interval: TimeInterval, reActivateAt: Int = -1, target: NSRunningApplication? = nil, done: @escaping (Bool) -> Void) {
-        if NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier || attempts <= 0 {
+        if NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier {
             done(true)
+            return
+        }
+        if attempts <= 0 {
+            done(false)   // 超时仍未到前台：如实上报（调用方放弃粘贴）
             return
         }
         if reActivateAt > 0, attempts == reActivateAt, let target = target {
@@ -289,6 +358,10 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
             }
             if pk.matches(.translate, event: event) { self.translateSelected(); return nil }
             if pk.matches(.ocr, event: event) { self.ocrSelected(); return nil }
+            if pk.matches(.searchFocus, event: event) {
+                focusSearch()
+                return nil
+            }
             if pk.matches(.quick, event: event), let n = pk.quickDigit(event) {
                 self.activate(at: n - 1)
                 return nil
@@ -297,10 +370,17 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         }
 
         // 本应用内部点击在面板外 → 关闭面板并吞掉该次点击；面板内点击放行（按钮/手势）
+        // 全局 ⌘F：面板可见但焦点在别的应用时，⌘F 也能拉回面板并聚焦搜索
+        globalSearchMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.panel?.isVisible == true, !self.suppressAutoClose, !self.debugHoldOpen else { return }
+            guard PanelKeyConfig.shared.matches(.searchFocus, event: event) else { return }
+            DispatchQueue.main.async { self.focusSearch() }
+        }
+
         localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self = self, let p = self.panel, p.isVisible else { return event }
             if !self.suppressAutoClose, !self.debugHoldOpen, !p.frame.contains(NSEvent.mouseLocation) {
-                self.close()
+                self.close(restoresFocus: false)
                 return nil
             }
             return event
@@ -309,13 +389,14 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             guard let self = self, let p = self.panel, p.isVisible, !self.suppressAutoClose, !self.debugHoldOpen else { return }
             if !p.frame.contains(NSEvent.mouseLocation) {
-                self.close()
+                self.close(restoresFocus: false)
             }
         }
     }
 
     private func removeMonitors() {
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+        if let m = globalSearchMonitor { NSEvent.removeMonitor(m); globalSearchMonitor = nil }
         if let m = localMouseMonitor { NSEvent.removeMonitor(m); localMouseMonitor = nil }
         if let m = globalMouseMonitor { NSEvent.removeMonitor(m); globalMouseMonitor = nil }
     }
@@ -362,42 +443,85 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
     func delete(at index: Int) {
         let items = filteredItems()
         guard items.indices.contains(index) else { return }
-        store.remove(items[index].id)
+        delete(items[index])
+    }
+
+    /// 按条目删除（闭包捕获 id 而非 index：后台新入册导致列表重排时不会删错条目）
+    func delete(_ item: ClipboardItem) {
+        store.remove(item.id)
         if selectedIndex >= filteredItems().count { selectedIndex = max(0, filteredItems().count - 1) }
         if filteredItems().isEmpty { selectedIndex = -1 }
         notifySelection()
         Toast.shared.show("已删除该条历史")
     }
 
+    /// 设置/移除条目标签
+    func setTag(_ tag: String?, id: String) {
+        store.setTag(tag, id: id)
+    }
+
     /// 点选：复制到剪贴板 → 还原焦点 →（可选）自动粘贴
-    private func activate(_ item: ClipboardItem, copyOnly: Bool) {
-        let keepOpenNow = keepOpen
+    /// dismissAfterPaste=true（弹壳 Dock 用）：粘贴完成后隐藏 dock
+    func activateDockItem(at index: Int) {
+        let items = filteredItems()
+        guard items.indices.contains(index) else { return }
+        activate(items[index], copyOnly: false, dismissAfterPaste: true)
+    }
+
+    private func activate(_ item: ClipboardItem, copyOnly: Bool, dismissAfterPaste: Bool = false) {
+        let keepOpenNow = keepOpen && !dismissAfterPaste
         if !keepOpenNow { close() }
+        if dismissAfterPaste { ShellDockController.shared.hide() }
 
         switch item.kind {
         case .text:
             writeTextToPasteboard(item.text ?? "")
         case .image:
-            if let img = store.imageFor(item) {
-                copyImageToClipboardSuppressingMonitor(img)
+            guard let img = store.imageFor(item) else {
+                // 读图失败绝不能继续走粘贴：否则粘出去的是剪贴板里的旧内容
+                Toast.shared.showImportant("该条目已失效（源图可能已被清理）")
+                return
             }
+            copyImageToClipboardSuppressingMonitor(img)
+        case .file:
+            guard let path = item.filePath, FileManager.default.fileExists(atPath: path) else {
+                Toast.shared.showImportant("该条目已失效（源文件可能已被移动或删除）")
+                return
+            }
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.writeObjects([NSURL(fileURLWithPath: path)])
         }
+        // 统一显式置顶：文本此前依赖监听回声、图片被 suppress 无从更新，行为不一致
+        store.touch(item)
 
         let pasteAuto = UserDefaults.standard.object(forKey: "pasteAuto") as? Bool ?? true
         let doPaste = !copyOnly && pasteAuto && AXIsProcessTrusted()
 
         if doPaste {
             suppressAutoClose = true
-            restoreFocusAndWait { [weak self] in
-                simulatePaste()
-                Toast.shared.show("已粘贴到当前输入框")
-                guard let self = self else { return }
-                if keepOpenNow { self.reactivatePanel() }
+            pasteSession += 1
+            let session = pasteSession
+            restoreFocusAndWait(dockPreferred: dismissAfterPaste) { [weak self] ok in
+                guard let self = self, session == self.pasteSession else { return }
+                if ok {
+                    // 目标刚被激活（首次会有"跳一下"），等它恢复文本插入焦点再发 ⌘V，
+                    // 否则首次粘贴会落空（用户需点两次）
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                        guard let self = self, session == self.pasteSession else { return }
+                        simulatePaste()
+                        Toast.shared.show("已粘贴到当前输入框")
+                        if keepOpenNow { self.reactivatePanel() }
+                        // 取放完成：清空筛选回到全量列表，便于连续取下一条
+                        self.panelState.searchText = ""
+                        self.panelState.filter = .all
+                        self.panelState.tagFilter = nil
+                        self.resetSelection()
+                    }
+                } else {
+                    Toast.shared.showImportant("已复制 · 未能自动粘贴（目标窗口未就绪），请手动 ⌘V")
+                }
                 self.suppressAutoClose = false
-                // 取放完成：清空筛选回到全量列表，便于连续取下一条
-                self.panelState.searchText = ""
-                self.panelState.filter = .all
-                self.resetSelection()
             }
         } else {
             if !(copyOnly && keepOpenNow) {
@@ -410,19 +534,18 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
                 }
             }
             if !copyOnly && pasteAuto && !AXIsProcessTrusted() {
-                Toast.shared.show("已复制 · 请手动 ⌘V（系统设置→隐私与安全性→辅助功能 授权后重启应用可自动粘贴）")
+                Toast.shared.showImportant("已复制 · 请手动 ⌘V（系统设置→隐私与安全性→辅助功能 授权后重启应用可自动粘贴）")
             } else {
                 Toast.shared.show(copyOnly ? "已复制（未粘贴）" : "已复制，可手动粘贴")
             }
         }
-
-        if !keepOpenNow { store.touch(item) }
     }
 
     func pin(_ item: ClipboardItem) {
         guard item.kind == .image, let img = store.imageFor(item) else { return }
         PinController.shared.pin(image: img)
-        store.remove(item.id)
+        // 保留图片文件：紧接着用同一文件回插为 pinned 条目
+        store.remove(item.id, keepingFile: true)
         var t = item
         t.pinned = true
         t.timestamp = Date()
@@ -550,34 +673,34 @@ struct HistoryPanelView: View {
                 .font(.system(size: 10.5))
                 .foregroundStyle(RubickTheme.muted(scheme))
             Spacer()
-            Button(action: { HistoryPanelController.shared.translateSelected() }) {
-                Image(systemName: "character.bubble")
-                    .font(.system(size: 11))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(RubickTheme.primary(scheme))
-            .help("翻译选中条目")
-            Button(action: { HistoryPanelController.shared.ocrSelected() }) {
-                Image(systemName: "text.viewfinder")
-                    .font(.system(size: 11))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(RubickTheme.primary(scheme))
-            .help("识别选中图片文字")
-            Button(action: { SettingsController.shared.show() }) {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 11))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(RubickTheme.muted(scheme))
-            .help("设置")
-            Button(action: { confirmClearHistory() }) {
-                Image(systemName: "trash")
-                    .font(.system(size: 11))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(RubickTheme.muted(scheme))
-            .help("清空历史")
+            Image(systemName: "character.bubble")
+                .font(.system(size: 11))
+                .foregroundStyle(RubickTheme.primary(scheme))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+                .nonKeyTap { HistoryPanelController.shared.translateSelected() }
+                .help("翻译选中条目")
+            Image(systemName: "text.viewfinder")
+                .font(.system(size: 11))
+                .foregroundStyle(RubickTheme.primary(scheme))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+                .nonKeyTap { HistoryPanelController.shared.ocrSelected() }
+                .help("识别选中图片文字")
+            Image(systemName: "gearshape")
+                .font(.system(size: 11))
+                .foregroundStyle(RubickTheme.muted(scheme))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+                .nonKeyTap { SettingsController.shared.show() }
+                .help("设置")
+            Image(systemName: "trash")
+                .font(.system(size: 11))
+                .foregroundStyle(RubickTheme.muted(scheme))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+                .nonKeyTap { confirmClearHistory() }
+                .help("清空历史")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -605,6 +728,9 @@ struct HistoryPanelView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .focused($searchFocused)
+                .onChange(of: panelState.searchFocusRequest) { _ in
+                    searchFocused = true
+                }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -619,12 +745,13 @@ struct HistoryPanelView: View {
     private var filterChips: some View {
         HStack(spacing: 8) {
             ForEach(PanelState.FilterKind.allCases, id: \.rawValue) { kind in
-                let active = panelState.filter == kind
-                Button(kind.label) {
-                    panelState.filter = kind
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 11))
+                let active = panelState.filter == kind && panelState.tagFilter == nil
+                Text(kind.label)
+                    .font(.system(size: 11))
+                    .nonKeyTap {
+                        panelState.filter = kind
+                        panelState.tagFilter = nil
+                    }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .background(Capsule().fill(active
@@ -635,10 +762,30 @@ struct HistoryPanelView: View {
                                                 : RubickTheme.hairline(scheme), lineWidth: 1))
                 .foregroundStyle(active ? RubickTheme.primary(scheme) : RubickTheme.muted(scheme))
             }
+            // 用户标签 chips（有打标签的条目时出现）
+            ForEach(userTags, id: \.self) { t in
+                let active = panelState.tagFilter == t
+                HStack(spacing: 3) {
+                    Circle().fill(PanelState.tagColor(t)).frame(width: 6, height: 6)
+                    Text(t)
+                }
+                .font(.system(size: 11))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(PanelState.tagColor(t).opacity(active ? 0.14 : 0.05)))
+                .overlay(Capsule().strokeBorder(PanelState.tagColor(t).opacity(active ? 0.9 : 0.35), lineWidth: 1))
+                .foregroundStyle(PanelState.tagColor(t))
+                .nonKeyTap { panelState.tagFilter = active ? nil : t }
+            }
             Spacer()
         }
         .padding(.horizontal, 14)
         .padding(.bottom, 8)
+    }
+
+    /// 全部历史中出现过的用户标签
+    private var userTags: [String] {
+        Array(Set(store.items.compactMap { $0.tag })).sorted()
     }
 
     // MARK: 空态
@@ -691,22 +838,52 @@ struct HistoryPanelView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     typeChip(item)
+                    if let tag = item.tag {
+                        HStack(spacing: 3) {
+                            Circle().fill(PanelState.tagColor(tag)).frame(width: 6, height: 6)
+                            Text(tag).font(.system(size: 10))
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(PanelState.tagColor(tag).opacity(0.1)))
+                        .foregroundStyle(PanelState.tagColor(tag))
+                    }
                     Spacer()
                     Text(timeAgo(item.timestamp))
                         .font(.system(size: 10))
                         .foregroundStyle(RubickTheme.muted(scheme))
-                        .fontWeight(item.kind == .text && (item.text ?? "").contains("\n") ? .regular : .regular)
                 }
                 if item.kind == .text {
-                    Text(item.text ?? "")
+                    Text((item.text ?? "").prefix(4000))
                         .font(.system(size: 11.5, design: (item.text ?? "").contains("\n") ? .monospaced : .default))
                         .foregroundStyle(RubickTheme.onSurface(scheme))
                         .lineLimit(2)
                         .truncationMode(.tail)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                } else if item.kind == .file {
+                    HStack(spacing: 10) {
+                        Image(nsImage: NSWorkspace.shared.icon(forFile: item.filePath ?? ""))
+                            .resizable()
+                            .frame(width: 32, height: 32)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text((item.filePath as NSString?)?.lastPathComponent ?? "（无效路径）")
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(RubickTheme.onSurface(scheme))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Text((item.filePath as NSString?)?.deletingLastPathComponent ?? "")
+                                .font(.system(size: 10))
+                                .foregroundStyle(RubickTheme.muted(scheme))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(RubickTheme.surfaceHigh(scheme).opacity(0.5)))
                 } else {
                     Group {
-                        if let img = store.imageFor(item) {
+                        if let img = store.thumbnail(for: item, maxPixel: 800) {
                             Image(nsImage: img)
                                 .resizable()
                                 .scaledToFill()
@@ -721,24 +898,31 @@ struct HistoryPanelView: View {
                 }
             }
             .contentShape(Rectangle())
-            .onTapGesture {
-                if NSApp.currentEvent?.modifierFlags.contains(.option) == true { return }
-                HistoryPanelController.shared.activate(at: index)
-            }
-            .simultaneousGesture(
-                TapGesture().modifiers(.option).onEnded {
+            .nonKeyTap {
+                if NSApp.currentEvent?.modifierFlags.contains(.option) == true {
                     HistoryPanelController.shared.activate(at: index, copyOnly: true)
+                } else {
+                    HistoryPanelController.shared.activate(at: index)
                 }
-            )
+            }
             .contextMenu {
                 if item.kind == .text {
                     Button("翻译") { HistoryPanelController.shared.translate(item) }
-                } else {
+                } else if item.kind == .image {
                     Button("识别文字…") { HistoryPanelController.shared.ocr(item) }
                     Button("钉图") { HistoryPanelController.shared.pin(item) }
                 }
+                Menu("标记") {
+                    ForEach(["重要", "工作", "灵感"], id: \.self) { t in
+                        Button(t) { HistoryPanelController.shared.setTag(t, id: item.id) }
+                    }
+                    if item.tag != nil {
+                        Divider()
+                        Button("移除标记") { HistoryPanelController.shared.setTag(nil, id: item.id) }
+                    }
+                }
                 Divider()
-                Button("删除", role: .destructive) { HistoryPanelController.shared.delete(at: index) }
+                Button("删除", role: .destructive) { HistoryPanelController.shared.delete(item) }
             }
 
             // 悬停操作按钮（独立命中区域；仅悬停该行时出现，保持列表安静）
@@ -746,13 +930,18 @@ struct HistoryPanelView: View {
                 if item.kind == .text {
                     actionButton("character.bubble") { HistoryPanelController.shared.translate(item) }
                         .help("翻译")
-                } else {
+                } else if item.kind == .image {
                     actionButton("text.viewfinder") { HistoryPanelController.shared.ocr(item) }
                         .help("识别文字")
                     actionButton("pin.fill") { HistoryPanelController.shared.pin(item) }
                         .help("钉图")
+                } else {
+                    actionButton("arrow.down.circle") {
+                        if let p = item.filePath { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p)]) }
+                    }
+                    .help("在 Finder 中显示")
                 }
-                actionButton("trash") { HistoryPanelController.shared.delete(at: index) }
+                actionButton("trash") { HistoryPanelController.shared.delete(item) }
                     .help("删除")
             }
             .opacity(hoveringIds.contains(item.id) ? 1 : 0)
@@ -784,6 +973,9 @@ struct HistoryPanelView: View {
         case .image:
             color = .blue
             label = "图片"
+        case .file:
+            color = .red
+            label = "文件"
         }
         return Text(label)
             .font(.system(size: 10, weight: .medium))
@@ -794,15 +986,14 @@ struct HistoryPanelView: View {
     }
 
     private func actionButton(_ symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 10))
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(selectedIsCurrent(symbol) ? Color.white : RubickTheme.muted(scheme))
-        .frame(width: 24, height: 24)
-        .background(RoundedRectangle(cornerRadius: 5).fill(RubickTheme.surfaceContainer(scheme)))
-        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
+        Image(systemName: symbol)
+            .font(.system(size: 10))
+            .foregroundStyle(RubickTheme.muted(scheme))
+            .frame(width: 24, height: 24)
+            .background(RoundedRectangle(cornerRadius: 5).fill(RubickTheme.surfaceContainer(scheme)))
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
+            .contentShape(Rectangle())
+            .nonKeyTap(perform: action)
     }
 
     private func selectedIsCurrent(_ symbol: String) -> Bool { false }

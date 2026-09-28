@@ -44,6 +44,29 @@ func simulatePaste() {
     up?.post(tap: .cghidEventTap)
 }
 
+// MARK: - 非 key 面板可靠点击
+
+import SwiftUI
+
+extension View {
+    /// 非 key 面板可靠的点击判定：DragGesture(0)，位移 <6pt 视为点击。
+    /// macOS 26/27 激活语义变更后，菜单栏 App 常态处于未激活态，
+    /// SwiftUI Button/onTapGesture 在未激活的 nonactivatingPanel 上不触发（Dock/面板实测）。
+    func nonKeyTap(perform: @escaping () -> Void) -> some View {
+        gesture(DragGesture(minimumDistance: 0).onEnded { v in
+            if hypot(v.translation.width, v.translation.height) < 6 { perform() }
+        })
+    }
+}
+
+// MARK: - 多屏定位
+
+/// 返回包含给定全局点的屏幕。NSScreen.main 是键盘焦点屏：副屏内容用它夹紧
+/// 会弹到主屏（标注编辑器/Toast/贴图多屏错位的根因）。找不到时兜底 NSScreen.main。
+func screenContaining(_ point: NSPoint) -> NSScreen? {
+    NSScreen.screens.first { $0.frame.contains(point) } ?? NSScreen.main
+}
+
 // MARK: - 辅助功能权限（首次启动引导）
 
 func requestAccessibilityIfNeeded() {

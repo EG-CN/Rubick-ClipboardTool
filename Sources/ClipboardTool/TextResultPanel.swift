@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - 文本结果面板（OCR 识别结果 / 翻译结果，Stitch 发光卡片风格）
 // 功能清单 12.2.3 / 12.3.1：可复制 / 翻译 / 存为历史文本条目
 
-final class TextResultPanel {
+final class TextResultPanel: NSObject, NSWindowDelegate {
     enum Kind {
         case ocr
         case translation
@@ -19,7 +19,7 @@ final class TextResultPanel {
     private var currentKind: Kind = .ocr
     private var currentResult = ""
 
-    private init() {}
+    private override init() { super.init() }
 
     func show(kind: Kind, source: String, result: String) {
         currentKind = kind
@@ -59,6 +59,7 @@ final class TextResultPanel {
             p.standardWindowButton(.miniaturizeButton)?.isHidden = true
             p.standardWindowButton(.zoomButton)?.isHidden = true
             p.isReleasedWhenClosed = false
+            p.delegate = self
             p.contentView = NSHostingView(rootView: view)
             panel = p
         } else {
@@ -73,6 +74,11 @@ final class TextResultPanel {
     func hide() {
         panel?.orderOut(nil)
         removeKeyMonitor()
+    }
+
+    /// 失焦自动关闭（此前点别处面板常驻置顶不消失）
+    func windowDidResignKey(_ notification: Notification) {
+        hide()
     }
 
     /// 拖动面板（头部拖动条调用；视图 y 向下 → 窗口坐标 y 向上）

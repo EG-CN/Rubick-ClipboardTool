@@ -56,7 +56,7 @@ final class ShotActionBar {
     private func positionNearMouse() -> NSPoint {
         let m = NSEvent.mouseLocation
         var p = NSPoint(x: m.x + 14, y: m.y - 64)
-        if let screen = NSScreen.main {
+        if let screen = screenContaining(m) {
             let vis = screen.visibleFrame
             p.x = min(max(p.x, vis.minX + 8), vis.maxX - 240)
             p.y = min(max(p.y, vis.minY + 8), vis.maxY - 64)

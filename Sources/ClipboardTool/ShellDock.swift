@@ -10,6 +10,7 @@ final class ShellDockController {
 
     private var panel: NSPanel?
     private(set) var isVisible = false
+    private var escMonitor: Any?
 
     private init() {}
 
@@ -18,11 +19,14 @@ final class ShellDockController {
     }
 
     func show() {
+        // 激活前抓取前台应用：dockPreferred 粘贴目标判定依赖它
+        HistoryPanelController.shared.captureFrontmost()
         let store = HistoryStore.shared
         let panelState = HistoryPanelController.shared.panelState
         // 与主面板同语义：呼出即重置筛选，展示全量最近
         panelState.searchText = ""
         panelState.filter = .all
+        panelState.tagFilter = nil
         HistoryPanelController.shared.resetSelection()
 
         if panel == nil {
@@ -53,13 +57,36 @@ final class ShellDockController {
                                width: width, height: 72)
             p.setFrame(frame, display: true)
         }
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
         panel?.orderFrontRegardless()
         isVisible = true
+        // 全局键盘监听：⎋ 收起（dock 非激活面板、永不成为 key，只能靠全局监听）
+        // ⌘1-9 直取第 N 条（与主面板数字键心智一致）
+        if escMonitor == nil {
+            escMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self else { return }
+                if event.keyCode == 53 {
+                    DispatchQueue.main.async { self.hide() }
+                    return
+                }
+                if event.modifierFlags.contains(.command),
+                   let ch = event.charactersIgnoringModifiers, let n = ch.first?.wholeNumberValue,
+                   (1...9).contains(n) {
+                    DispatchQueue.main.async {
+                        HistoryPanelController.shared.activateDockItem(at: n - 1)
+                        self.hide()
+                    }
+                }
+            }
+        }
     }
 
     func hide() {
         panel?.orderOut(nil)
         isVisible = false
+        if let m = escMonitor { NSEvent.removeMonitor(m); escMonitor = nil }
+        NSApp.setActivationPolicy(.accessory)
     }
 }
 
@@ -70,6 +97,7 @@ struct ShellDockView: View {
     @EnvironmentObject var panelState: PanelState
     @State private var selected = 0
     @State private var hoveringIndex: Int?
+    @State private var dockHovering = false
     @Environment(\.colorScheme) private var scheme
 
     private var items: [ClipboardItem] { store.items.filter { panelState.matches($0) } }
@@ -108,6 +136,29 @@ struct ShellDockView: View {
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(RubickTheme.panelGradientBorder(scheme), lineWidth: 0.8)
         )
+        // 手动关闭（悬停时右上角浮现）：必须用 overlay——之前是 HStack 子元素，
+        // 出现时被挤到 720pt 面板边界外裁掉，永远看不见
+        .overlay(alignment: .topTrailing) {
+            if dockHovering {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(RubickTheme.muted(scheme))
+                    .padding(.top, 6)
+                    .padding(.trailing, 12)
+                    .contentShape(Rectangle())
+                    // 非激活面板里 Button/onTapGesture 不触发，只能用 DragGesture(0)
+                    .gesture(DragGesture(minimumDistance: 0).onEnded { v in
+                        if hypot(v.translation.width, v.translation.height) < 6 {
+                            ShellDockController.shared.hide()
+                        }
+                    })
+                    .help("关闭弹壳（⎋ / ⌘⇧V 也可收起）")
+                    .transition(.opacity)
+            }
+        }
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) { dockHovering = hovering }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .panelSelectionChanged)) { _ in
             selected = HistoryPanelController.shared.selectedIndex
         }
@@ -125,6 +176,8 @@ struct ShellDockView: View {
                 textOrLinkTab(item, isActive: isActive)
             case .image:
                 imageTab(item, isActive: isActive)
+            case .file:
+                fileTab(item, isActive: isActive)
             }
         }
         .padding(.top, isActive ? 9 : 6)
@@ -144,9 +197,13 @@ struct ShellDockView: View {
         // 标签页「升起」感：激活卡下缘探到底线之下（更高的卡片 + 负底边距）
         .offset(y: isActive ? 4 : 0)
         .contentShape(Rectangle())
-        .onTapGesture {
-            HistoryPanelController.shared.activate(at: index)
-        }
+        // 非激活面板永不成为 key，onTapGesture 在其中不触发（点卡片全无反应的根因）；
+        // DragGesture(0) 不依赖 key 窗口，位移 <6pt 视为点击
+        .gesture(DragGesture(minimumDistance: 0).onEnded { v in
+            if hypot(v.translation.width, v.translation.height) < 6 {
+                HistoryPanelController.shared.activateDockItem(at: index)
+            }
+        })
         .onHover { hovering in
             hoveringIndex = hovering ? index : (hoveringIndex == index ? nil : hoveringIndex)
             if hovering { HistoryPanelController.shared.setSelected(index) }
@@ -212,11 +269,27 @@ struct ShellDockView: View {
         }
     }
 
+    /// 文件标签：文件图标 + 文件名主视觉
+    private func fileTab(_ item: ClipboardItem, isActive: Bool) -> some View {
+        let name = (item.filePath as NSString?)?.lastPathComponent ?? ""
+        return HStack(spacing: 5) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: item.filePath ?? ""))
+                .resizable()
+                .frame(width: 16, height: 16)
+            Text(name)
+                .font(.system(size: isActive ? 11 : 10.5, weight: .semibold))
+                .foregroundStyle(RubickTheme.onSurface(scheme).opacity(isActive ? 1 : 0.8))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 140, alignment: .leading)
+        }
+    }
+
     /// 图片标签：圆角缩略图
     @ViewBuilder
     private func imageTab(_ item: ClipboardItem, isActive: Bool) -> some View {
         Group {
-            if let img = store.imageFor(item) {
+            if let img = store.thumbnail(for: item, maxPixel: 140) {
                 Image(nsImage: img)
                     .resizable()
                     .scaledToFill()

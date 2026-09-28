@@ -5,7 +5,7 @@ import Carbon.HIToolbox
 
 final class PanelKeyConfig: ObservableObject {
     enum PanelAction: String, CaseIterable {
-        case navUp, navDown, paste, close, deleteItem, pin, translate, ocr, quick
+        case navUp, navDown, paste, close, deleteItem, pin, translate, ocr, quick, searchFocus
     }
 
     struct Key {
@@ -36,6 +36,7 @@ final class PanelKeyConfig: ObservableObject {
         keys[.translate] = read(d, "pk.translate", keyCode: UInt16(kVK_ANSI_T), mods: 0, display: "T")
         keys[.ocr] = read(d, "pk.ocr", keyCode: UInt16(kVK_ANSI_O), mods: 0, display: "O")
         keys[.quick] = read(d, "pk.quick", keyCode: UInt16(kVK_ANSI_1), mods: UInt32(cmdKey), display: "⌘1–9", quick: true)
+        keys[.searchFocus] = read(d, "pk.searchFocus", keyCode: UInt16(kVK_ANSI_F), mods: UInt32(cmdKey), display: "⌘F")
     }
 
     private func read(_ d: UserDefaults, _ key: String, keyCode: UInt16, mods: UInt32, display: String, quick: Bool = false) -> Key {
@@ -66,6 +67,8 @@ final class PanelKeyConfig: ObservableObject {
         case .translate: def = Key(keyCode: UInt16(kVK_ANSI_T), mods: 0, display: "T", quick: false)
         case .ocr: def = Key(keyCode: UInt16(kVK_ANSI_O), mods: 0, display: "O", quick: false)
         case .quick: def = Key(keyCode: UInt16(kVK_ANSI_1), mods: UInt32(cmdKey), display: "⌘1–9", quick: true)
+        case .searchFocus:
+            def = Key(keyCode: UInt16(kVK_ANSI_F), mods: UInt32(cmdKey), display: "⌘F", quick: false)
         }
         update(action, keyCode: def.keyCode, mods: def.mods, display: def.display, quick: def.quick)
     }
@@ -81,6 +84,7 @@ final class PanelKeyConfig: ObservableObject {
         case .translate: return "pk.translate"
         case .ocr: return "pk.ocr"
         case .quick: return "pk.quick"
+        case .searchFocus: return "pk.searchFocus"
         }
     }
 
@@ -119,6 +123,7 @@ final class PanelKeyConfig: ObservableObject {
         case .translate: return "翻译所选条目"
         case .ocr: return "识别图片文字"
         case .quick: return "快速选择前 9 条"
+        case .searchFocus: return "聚焦搜索框"
         }
     }
 
@@ -133,6 +138,7 @@ final class PanelKeyConfig: ObservableObject {
         let quick = k[.quick]?.display ?? "⌘1–9"
         let translate = k[.translate]?.display ?? "T"
         let ocr = k[.ocr]?.display ?? "O"
-        return "\(up) \(down) 选择 · \(paste) 粘贴 · \(del) 删除 · \(translate) 翻译 · \(ocr) 识别 · \(close) 关闭 · \(quick) 快选"
+        let search = k[.searchFocus]?.display ?? "⌘F"
+        return "\(up) \(down) 选择 · \(paste) 粘贴 · \(del) 删除 · \(translate) 翻译 · \(ocr) 识别 · \(search) 搜索 · \(close) 关闭 · \(quick) 快选"
     }
 }

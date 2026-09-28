@@ -199,6 +199,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         monitor.onImage = { [weak self] img in
             self?.store.addImage(img)
         }
+        monitor.onFile = { [weak self] path in
+            self?.store.addFile(path)
+        }
         monitor.start()
         screenshotController.onCaptured = { [weak self] img in
             // 标注确认产物替换剪贴板（抑制监听，历史由 addImage 显式入册一次）
@@ -220,24 +223,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 panelController.toggle(fromHotkey: true)   // 快捷键呼出：面板跟随鼠标弹出
             }
         case .screenshot:
-            panelController.close()
-            ShotActionBar.shared.hide()
+            hideOverlaysForCapture()
             screenshotController.captureInteractive()
         case .dragTranslate:
-            panelController.close()
-            ShotActionBar.shared.hide()
+            hideOverlaysForCapture()
             CaptureController.shared.captureForTranslation()
         case .pinClipboard:
-            panelController.close()
-            ShotActionBar.shared.hide()
+            hideOverlaysForCapture()
             pinImageFromPasteboard()
         case .dragOCR:
-            panelController.close()
-            ShotActionBar.shared.hide()
+            hideOverlaysForCapture()
             CaptureController.shared.captureForOCR()
+        case .longScreenshot:
+            hideOverlaysForCapture()
+            CaptureController.shared.captureForLong()
         case .openSettings:
             settingsController.toggle()
         }
+    }
+
+    /// 截图/划词/取字/钉图前收起自家浮层：Dock、Toast 都是屏幕上的常驻浮窗，
+    /// 全屏捕获会把它们一起拍进成图（截图自污染 / 划词把 Dock 文字识别进去）
+    private func hideOverlaysForCapture() {
+        panelController.close()
+        ShellDockController.shared.hide()
+        ShotActionBar.shared.hide()
+        Toast.shared.hide()
     }
 
     /// 钉剪贴板贴图（Snipaste F3 式）：剪贴板有图则直接置顶到鼠标位置，不改动剪贴板内容

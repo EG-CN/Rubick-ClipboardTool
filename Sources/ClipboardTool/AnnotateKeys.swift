@@ -7,7 +7,7 @@ import Carbon.HIToolbox
 final class AnnotateKeyConfig: ObservableObject {
     enum Action: String, CaseIterable {
         case confirm, cancel, undo, redo
-        case toolRect, toolEllipse, toolArrow, toolPen, toolText, toolMosaic, toolHighlight
+        case toolRect, toolEllipse, toolArrow, toolPen, toolText, toolStep, toolMosaic, toolHighlight
         case ocr, translate
     }
 
@@ -37,6 +37,7 @@ final class AnnotateKeyConfig: ObservableObject {
         keys[.toolPen] = read(d, "ak.toolPen", UInt16(kVK_ANSI_4), 0, "4")
         keys[.toolText] = read(d, "ak.toolText", UInt16(kVK_ANSI_5), 0, "5")
         keys[.toolMosaic] = read(d, "ak.toolMosaic", UInt16(kVK_ANSI_6), 0, "6")
+        keys[.toolStep] = read(d, "ak.toolStep", UInt16(kVK_ANSI_8), 0, "8")
         keys[.toolHighlight] = read(d, "ak.toolHighlight", UInt16(kVK_ANSI_7), 0, "7")
         keys[.ocr] = read(d, "ak.ocr", UInt16(kVK_ANSI_O), 0, "O")
         keys[.translate] = read(d, "ak.translate", UInt16(kVK_ANSI_T), 0, "T")
@@ -73,6 +74,7 @@ final class AnnotateKeyConfig: ObservableObject {
         case .toolPen: return Key(keyCode: UInt16(kVK_ANSI_4), mods: 0, display: "4")
         case .toolText: return Key(keyCode: UInt16(kVK_ANSI_5), mods: 0, display: "5")
         case .toolMosaic: return Key(keyCode: UInt16(kVK_ANSI_6), mods: 0, display: "6")
+        case .toolStep: return Key(keyCode: UInt16(kVK_ANSI_8), mods: 0, display: "8")
         case .toolHighlight: return Key(keyCode: UInt16(kVK_ANSI_7), mods: 0, display: "7")
         case .ocr: return Key(keyCode: UInt16(kVK_ANSI_O), mods: 0, display: "O")
         case .translate: return Key(keyCode: UInt16(kVK_ANSI_T), mods: 0, display: "T")
@@ -101,6 +103,7 @@ final class AnnotateKeyConfig: ObservableObject {
         case .toolPen: return "画笔"
         case .toolText: return "文字"
         case .toolMosaic: return "马赛克"
+        case .toolStep: return "步骤序号"
         case .toolHighlight: return "高亮"
         case .ocr: return "识别图中文字"
         case .translate: return "翻译选中文字"

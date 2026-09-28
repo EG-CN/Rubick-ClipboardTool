@@ -7,7 +7,7 @@ import CoreImage
 
 struct Annotation: Identifiable, Equatable {
     enum Tool: String, CaseIterable {
-        case rect, ellipse, arrow, pen, text, mosaic, highlight
+        case rect, ellipse, arrow, pen, text, step, mosaic, highlight
 
         var symbol: String {
             switch self {
@@ -16,6 +16,7 @@ struct Annotation: Identifiable, Equatable {
             case .arrow: return "arrow.up.right"
             case .pen: return "scribble"
             case .text: return "textformat"
+            case .step: return "number.circle"
             case .mosaic: return "square.grid.3x3"
             case .highlight: return "highlighter"
             }
@@ -27,6 +28,7 @@ struct Annotation: Identifiable, Equatable {
             case .arrow: return "箭头"
             case .pen: return "画笔"
             case .text: return "文字"
+            case .step: return "序号"
             case .mosaic: return "马赛克"
             case .highlight: return "高亮"
             }
@@ -244,7 +246,11 @@ final class AnnotationController {
         let m = AnnotateModel()
         model = m
 
-        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        // 用选区所在屏（多屏下 NSScreen.main 是焦点屏，会弹到主屏）
+        let anchorRect = rect ?? CGRect(origin: NSEvent.mouseLocation, size: .zero)
+        let screen = screenContaining(NSPoint(x: anchorRect.midX, y: anchorRect.midY))
+            ?? NSScreen.screens.first
+        guard let screen else { return }
         let vis = screen.visibleFrame
         let chromeH: CGFloat = 178   // 头部拖动条 + 两行工具栏 + 间距
         let pad: CGFloat = 24
@@ -329,7 +335,8 @@ final class AnnotationController {
             // 文字标注输入中：放行（Esc 取消输入）
             if fr is NSTextView {
                 if event.keyCode == 53 {
-                    model.textEditing = nil
+                    // ⎋ 退出编辑态：提交草稿而不是丢弃（空草稿自然无操作，误输可 ⌘Z 撤销）
+                    model.commitText()
                     return nil
                 }
                 return event
@@ -356,7 +363,8 @@ final class AnnotationController {
             }
             let toolMap: [(AnnotateKeyConfig.Action, Annotation.Tool)] = [
                 (.toolRect, .rect), (.toolEllipse, .ellipse), (.toolArrow, .arrow),
-                (.toolPen, .pen), (.toolText, .text), (.toolMosaic, .mosaic)
+                (.toolPen, .pen), (.toolText, .text), (.toolStep, .step),
+                (.toolMosaic, .mosaic), (.toolHighlight, .highlight)
             ]
             for (action, tool) in toolMap where ak.matches(action, event: event) {
                 model.tool = tool
@@ -391,7 +399,8 @@ final class AnnotationController {
         if ak.matches(.translate, event: event) { model.translateSideSelection(); return }
         let toolMap: [(AnnotateKeyConfig.Action, Annotation.Tool)] = [
             (.toolRect, .rect), (.toolEllipse, .ellipse), (.toolArrow, .arrow),
-            (.toolPen, .pen), (.toolText, .text), (.toolMosaic, .mosaic)
+            (.toolPen, .pen), (.toolText, .text), (.toolStep, .step),
+            (.toolMosaic, .mosaic), (.toolHighlight, .highlight)
         ]
         for (action, tool) in toolMap where ak.matches(action, event: event) {
             model.tool = tool
@@ -436,7 +445,7 @@ final class AnnotationController {
 
     private func confirm() {
         guard let m = model, let img = currentImage else { return }
-        m.textEditing = nil
+        m.commitText()
         let out = Self.flatten(image: img, annotations: m.annotations) ?? img
         finish(out)
     }
@@ -464,8 +473,10 @@ final class AnnotationController {
 
     static func flatten(image: NSImage, annotations: [Annotation]) -> NSImage? {
         let size = image.size
-        let pw = max(Int(size.width), 1)
-        let ph = max(Int(size.height), 1)
+        let baseCG = image.cgImage()
+        // 以源图真实像素密度建位图（Retina 2x 不再减半）；rep.size 保持点尺寸，绘制坐标不变
+        let pw = max(baseCG?.width ?? 0, Int(size.width), 1)
+        let ph = max(baseCG?.height ?? 0, Int(size.height), 1)
         guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pw, pixelsHigh: ph,
                                          bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
                                          isPlanar: false, colorSpaceName: .deviceRGB,
@@ -474,7 +485,6 @@ final class AnnotationController {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
         image.draw(in: CGRect(origin: .zero, size: size))
-        let baseCG = image.cgImage()
         let ctx = NSGraphicsContext.current!.cgContext
         ctx.setLineCap(.round)
         ctx.setLineJoin(.round)
@@ -519,7 +529,7 @@ final class AnnotationController {
             let ePt = hasDir
                 ? CGPoint(x: a.endPoint.x * imageSize.width, y: (1 - a.endPoint.y) * imageSize.height)
                 : CGPoint(x: r.maxX, y: r.maxY)
-            drawArrow(from: sPt, to: ePt, ctx: ctx, color: color)
+            drawArrow(from: sPt, to: ePt, ctx: ctx, color: color, minHead: max(12 * scale, 4))
         case .pen:
             guard a.points.count > 1 else { break }
             let path = CGMutablePath()
@@ -550,12 +560,36 @@ final class AnnotationController {
             } else {
                 ctx.fill(r)
             }
+        case .step:
+            // 与预览同语义（CG 底部原点：引线向右下 = y 减小）
+            let c = CGPoint(x: a.rect.origin.x * imageSize.width,
+                            y: (1 - a.rect.origin.y) * imageSize.height)
+            let radius = max(a.fontSize * scale * 0.75, 10)
+            ctx.setStrokeColor(CGColor(gray: 1, alpha: 1))
+            ctx.setLineWidth(max(1.5 * scale, 1))
+            ctx.beginPath()
+            ctx.move(to: CGPoint(x: c.x + radius * 0.7, y: c.y - radius * 0.7))
+            ctx.addLine(to: CGPoint(x: c.x + radius * 1.7, y: c.y - radius * 1.7))
+            ctx.strokePath()
+            let circle = CGRect(x: c.x - radius, y: c.y - radius, width: radius * 2, height: radius * 2)
+            ctx.setFillColor(CGColor(gray: 1, alpha: 1))
+            ctx.fillEllipse(in: circle)
+            ctx.setStrokeColor(CGColor(gray: 0, alpha: 0.8))
+            ctx.strokeEllipse(in: circle)
+            let para = NSMutableParagraphStyle()
+            para.alignment = .center
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: radius, weight: .bold),
+                .foregroundColor: NSColor.black,
+                .paragraphStyle: para
+            ]
+            (a.text as NSString).draw(in: circle.offsetBy(dx: 0, dy: radius * 0.15), withAttributes: attrs)
         }
     }
 
-    private static func drawArrow(from start: CGPoint, to tip: CGPoint, ctx: CGContext, color: NSColor) {
+    private static func drawArrow(from start: CGPoint, to tip: CGPoint, ctx: CGContext, color: NSColor, minHead: CGFloat = 12) {
         let angle = atan2(tip.y - start.y, tip.x - start.x)
-        let headLen = max(hypot(tip.x - start.x, tip.y - start.y) * 0.18, 12)
+        let headLen = max(hypot(tip.x - start.x, tip.y - start.y) * 0.18, minHead)
         let headHalf = headLen * 0.5
         let base = CGPoint(x: tip.x - cos(angle) * headLen, y: tip.y - sin(angle) * headLen)
         let perp = angle + .pi / 2
@@ -569,6 +603,9 @@ final class AnnotationController {
         ctx.strokePath()
     }
 
+    /// 共享 CI 上下文（每次新建会在多块马赛克时反复分配，卡顿+内存峰值）
+    private static let sharedCIContext = CIContext()
+
     private static func drawMosaic(_ r: CGRect, imageSize: CGSize, baseCG: CGImage?, blockSize: CGFloat = 16, blur: Bool = false) {
         guard let baseCG = baseCG else {
             NSColor.gray.withAlphaComponent(0.5).setFill()
@@ -576,19 +613,21 @@ final class AnnotationController {
             return
         }
         let scalePx = CGFloat(baseCG.width) / imageSize.width
+        // r 已是 CG（底部原点）坐标；CIImage(cgImage:) 的取窗同为底部原点，直接按 minY 取，
+        // 不可再按 (H - maxY) 翻转——那会把打码内容取成垂直镜像区域（打码失效）
         let cropPx = CGRect(x: r.minX * scalePx,
-                            y: (imageSize.height - r.maxY) * scalePx,
+                            y: r.minY * scalePx,
                             width: r.width * scalePx,
                             height: r.height * scalePx)
         var ci = CIImage(cgImage: baseCG).cropped(to: cropPx)
         if blur {
             ci = ci.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 12])
         } else {
-            // 像素块 ≈ 22pt，与预览观感一致
-            let blockPx = max(22 * scalePx, 8)
+            // 颗粒 = blockSize 点 × 像素密度，与预览观感一致
+            let blockPx = max(blockSize * scalePx, 8)
             ci = ci.applyingFilter("CIPixellate", parameters: [kCIInputScaleKey: blockPx])
         }
-        if let cg = CIContext().createCGImage(ci, from: ci.extent) {
+        if let cg = sharedCIContext.createCGImage(ci, from: ci.extent) {
             NSImage(cgImage: cg, size: r.size).draw(in: r)
         }
     }
@@ -685,12 +724,14 @@ struct AnnotateEditorView: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { v in
                         let p = clamp(v.startLocation)
-                        // 首次按下：未选工具或文字工具时，命中已有文字 → 拖动它
+                        // 首次按下：仅未选工具或文字工具时才命中已有文字 → 拖动它；
+                        // 否则形状工具从文字上起笔会被劫持成拖字
                         if dragStart == nil, dragTextID == nil,
+                           model.tool == nil || model.tool == .text,
                            let hit = hitTextAnnotation(at: normalize(p)) {
                             dragTextID = hit.id
                             dragTextStart = p
-                            model.textEditing = nil
+                            model.commitText()
                             hoveredHelp = "文字：按住拖动移动 · 点击编辑内容"
                             return
                         }
@@ -698,7 +739,7 @@ struct AnnotateEditorView: View {
                             model.updateTextPosition(id: id, to: normalize(clamp(v.location)))
                             return
                         }
-                        model.textEditing = nil
+                        model.commitText()
                         dragStart = dragStart ?? p
                         dragCurrent = clamp(v.location)
                         if model.tool == .pen {
@@ -730,9 +771,27 @@ struct AnnotateEditorView: View {
                         if model.tool == .text {
                             let normStart = normalize(start)
                             if hypot(start.x - end.x, start.y - end.y) < 6 {
+                                model.commitText()   // 先落上一个草稿，避免切换新文字位时静默丢字
                                 model.textDraft = ""
                                 model.textEditing = (UUID(), normStart)
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { textFocused = true }
+                            }
+                            return
+                        }
+                        if model.tool == .step {
+                            // 步骤序号（规格 B1）：点击落号，编号取现有最大值+1（删除中间号不重复）
+                            if hypot(start.x - end.x, start.y - end.y) < 6 {
+                                let n = (model.annotations
+                                    .filter { $0.tool == .step }
+                                    .compactMap { Int($0.text) }
+                                    .max() ?? 0) + 1
+                                var a = Annotation(tool: .step)
+                                a.rect = CGRect(origin: normalize(start), size: .zero)
+                                a.text = "\(n)"
+                                a.fontSize = model.fontSize
+                                a.colorIndex = model.colorIndex
+                                a.displaySize = model.imageRect.size
+                                model.commit(a)
                             }
                             return
                         }
@@ -842,8 +901,10 @@ struct AnnotateEditorView: View {
                                 y: normalized.y * displaySize.height)
         for a in model.annotations.reversed() where a.tool == .text {
             let size = textSize(a.text, fontSize: a.fontSize)
+            // 渲染时文字画在 origin 上方一个行高（anchor .bottomLeading），命中框必须跟着偏移，
+            // 否则点字选不中、点字下方空白反而把字拖走
             let r = CGRect(x: a.rect.origin.x * displaySize.width,
-                           y: a.rect.origin.y * displaySize.height,
+                           y: a.rect.origin.y * displaySize.height - size.height,
                            width: size.width, height: size.height)
             if r.insetBy(dx: -4, dy: -4).contains(viewPoint) {
                 return a
@@ -977,6 +1038,21 @@ struct AnnotateEditorView: View {
             } else {
                 ctx.fill(Path(r), with: .color(color.opacity(a.fillOpacity)))
             }
+        case .step:
+            // 白底黑字圆号 + 右下引线（规格 B1）；预览与展平共用语义
+            let c = CGPoint(x: a.rect.origin.x * imageRect.width,
+                            y: a.rect.origin.y * imageRect.height)
+            let radius = max(a.fontSize * 0.75, 10)
+            var leader = Path()
+            leader.move(to: CGPoint(x: c.x + radius * 0.7, y: c.y + radius * 0.7))
+            leader.addLine(to: CGPoint(x: c.x + radius * 1.7, y: c.y + radius * 1.7))
+            ctx.stroke(leader, with: .color(.white), lineWidth: 1.5)
+            let circle = CGRect(x: c.x - radius, y: c.y - radius, width: radius * 2, height: radius * 2)
+            ctx.fill(Path(ellipseIn: circle), with: .color(.white))
+            ctx.stroke(Path(ellipseIn: circle), with: .color(.black.opacity(0.8)), lineWidth: 1.5)
+            ctx.draw(Text(a.text)
+                .font(.system(size: radius, weight: .bold))
+                .foregroundColor(.black), in: circle)
         }
     }
 
@@ -1027,7 +1103,7 @@ struct AnnotateEditorView: View {
             HStack(spacing: 8) {
                 contextualControls
                     .frame(minWidth: 240, alignment: .leading)
-                Text(hoveredHelp ?? "\(keyDisplay(.toolRect))–\(keyDisplay(.toolMosaic)) 工具 · \(keyDisplay(.ocr)) 识图 · \(keyDisplay(.undo)) 撤销 · ⎋ 取消")
+                Text(hoveredHelp ?? "\(keyDisplay(.toolRect))–\(keyDisplay(.toolHighlight)) 工具 · \(keyDisplay(.ocr)) 识图 · \(keyDisplay(.undo)) 撤销 · ⎋ 取消")
                     .font(.system(size: 9.5))
                     .foregroundStyle(hoveredHelp != nil ? RubickTheme.emeraldBright : .white.opacity(0.55))
                     .lineLimit(1)
@@ -1041,7 +1117,7 @@ struct AnnotateEditorView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 Button {
-                    model.textEditing = nil
+                    model.commitText()
                     onConfirm(AnnotationController.flatten(image: image, annotations: model.annotations) ?? image)
                 } label: {
                     Label("确认", systemImage: "checkmark")
@@ -1088,6 +1164,14 @@ struct AnnotateEditorView: View {
             }
             .pickerStyle(.segmented)
             .frame(width: 110)
+        case .step:
+            Picker("", selection: $model.fontSize) {
+                Text("小").tag(CGFloat(14))
+                Text("中").tag(CGFloat(18))
+                Text("大").tag(CGFloat(24))
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 110)
         case .mosaic:
             Picker("", selection: $model.mosaicStyle) {
                 Text("马赛克").tag(0)
@@ -1130,9 +1214,9 @@ struct AnnotateEditorView: View {
         model.runOCR(on: composite)
     }
 
-    /// 工具栏可见工具（高亮暂下架）
+    /// 工具栏可见工具（规格 A2：序号 + 高亮回归）
     private var visibleTools: [Annotation.Tool] {
-        [.rect, .ellipse, .arrow, .pen, .text, .mosaic]
+        [.rect, .ellipse, .arrow, .pen, .text, .step, .mosaic, .highlight]
     }
 
     private func toolButton(_ t: Annotation.Tool) -> some View {
@@ -1165,7 +1249,8 @@ struct AnnotateEditorView: View {
     private func keyForTool(_ t: Annotation.Tool) -> String? {
         let map: [Annotation.Tool: AnnotateKeyConfig.Action] = [
             .rect: .toolRect, .ellipse: .toolEllipse, .arrow: .toolArrow,
-            .pen: .toolPen, .text: .toolText, .mosaic: .toolMosaic, .highlight: .toolHighlight
+            .pen: .toolPen, .text: .toolText, .step: .toolStep,
+            .mosaic: .toolMosaic, .highlight: .toolHighlight
         ]
         guard let a = map[t] else { return nil }
         return keys.keys[a]?.display

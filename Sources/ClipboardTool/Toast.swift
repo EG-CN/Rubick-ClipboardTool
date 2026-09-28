@@ -11,7 +11,8 @@ final class Toast {
 
     private init() {}
 
-    func show(_ text: String) {
+    /// duration：结果类提示 1.8s；失败/引导类请用 showImportant（5s，长文案读得完）
+    func show(_ text: String, duration: TimeInterval = 1.8) {
         if panel == nil {
             let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 300, height: 34),
                             styleMask: [.borderless, .nonactivatingPanel],
@@ -34,16 +35,31 @@ final class Toast {
         p.orderFrontRegardless()
 
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.8, repeats: false) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] _ in
             self?.panel?.orderOut(nil)
         }
     }
 
+    /// 失败/引导类提示：5 秒，保证长文案读得完
+    func showImportant(_ text: String) {
+        show(text, duration: 5)
+    }
+
+    /// 立即收起（截图/捕获前调用：Toast 是屏幕浮层，会被全屏截图拍进成图）
+    func hide() {
+        timer?.invalidate()
+        timer = nil
+        panel?.orderOut(nil)
+    }
+
     private func position(_ p: NSPanel) {
-        guard let screen = NSScreen.main else { return }
+        // 出现在鼠标所在屏（键盘焦点屏在多屏下会提示错位），并钳制在屏内
+        guard let screen = screenContaining(NSEvent.mouseLocation) else { return }
         let vis = screen.visibleFrame
         let size = p.frame.size
-        p.setFrameOrigin(NSPoint(x: vis.midX - size.width / 2, y: vis.minY + 44))
+        let x = max(vis.minX, min(vis.midX - size.width / 2, vis.maxX - size.width))
+        let y = max(min(vis.minY + 44, vis.maxY - size.height - 8), vis.minY + 8)
+        p.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }
 
@@ -54,8 +70,10 @@ struct ToastView: View {
         Text(text)
             .font(.system(size: 12))
             .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
+            .frame(maxWidth: 420)
             .background(RoundedRectangle(cornerRadius: 16).fill(Color.black.opacity(0.78)))
     }
 }

@@ -14,6 +14,8 @@ final class ClipboardMonitor {
     var onImage: ((NSImage) -> Void)?
     /// 优先通道：剪贴板自带 PNG 字节时直通存储（免 NSImage 解码 + 免二次 PNG 编码）
     var onImageData: ((Data) -> Void)?
+    /// Finder ⌘C 复制的文件（fileURL 类型）
+    var onFile: ((String) -> Void)?
 
     /// 应用自身即将写剪贴板时调用：下一次变更不计入历史
     /// （显式 addImage 已入册，监听再收会造成重复；风险窗口 ≤0.5s，期间用户复制会被跳过，可接受）
@@ -44,6 +46,15 @@ final class ClipboardMonitor {
         }
 
         if ignorePasswordManagers, isPrivate(pb) { return }
+
+        // 文件复制（Finder 等）：先看类型表里有没有 fileURL 再读对象（无文件时零开销）；
+        // 纯 legacy alias 类型（部分脚本写入）暂不支持，Finder 路径恒有 fileURL
+        if pb.types?.contains(.fileURL) == true,
+           let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
+           let url = urls.first, url.isFileURL, FileManager.default.fileExists(atPath: url.path) {
+            onFile?(url.path)
+            return
+        }
 
         if let s = pb.string(forType: .string), !s.isEmpty {
             onText?(s)

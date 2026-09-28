@@ -24,28 +24,50 @@ final class CaptureSessionState: ObservableObject {
 
 /// 合成 / 裁剪（纯函数，可单元测试）
 enum ImageCompose {
+    /// 物理像素合成：按分片真实像素密度建位图（Retina 2x 全程不降采样）
     static func composite(_ shots: [ScreenShot], union: CGRect) -> NSImage? {
-        let img = NSImage(size: union.size)
-        img.lockFocus()
+        let scale = shots.map { CGFloat($0.image.width) / max($0.frame.width, 1) }.max() ?? 1
+        let pw = max(Int((union.width * scale).rounded()), 1)
+        let ph = max(Int((union.height * scale).rounded()), 1)
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pw, pixelsHigh: ph,
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                         isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        rep.size = union.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
         for d in shots {
             let dest = CGRect(x: d.frame.minX - union.minX,
                               y: d.frame.minY - union.minY,
                               width: d.frame.width, height: d.frame.height)
             NSImage(cgImage: d.image, size: d.frame.size).draw(in: dest)
         }
-        img.unlockFocus()
+        NSGraphicsContext.restoreGraphicsState()
+        let img = NSImage(size: union.size)
+        img.addRepresentation(rep)
         return img
     }
 
     static func crop(_ composite: NSImage, rectInUnion: CGRect, union: CGRect) -> NSImage? {
-        let out = NSImage(size: rectInUnion.size)
-        out.lockFocus()
+        // 继承合成图像素密度（Retina 2x），rep.size 仍为点尺寸
+        let scale = composite.cgImage().map { CGFloat($0.width) / max(composite.size.width, 1) } ?? 1
+        let pw = max(Int((rectInUnion.width * scale).rounded()), 1)
+        let ph = max(Int((rectInUnion.height * scale).rounded()), 1)
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pw, pixelsHigh: ph,
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                         isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        rep.size = rectInUnion.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
         let from = NSRect(x: rectInUnion.minX - union.minX,
                           y: rectInUnion.minY - union.minY,
                           width: rectInUnion.width, height: rectInUnion.height)
         composite.draw(in: NSRect(origin: .zero, size: rectInUnion.size),
                        from: from, operation: .copy, fraction: 1)
-        out.unlockFocus()
+        NSGraphicsContext.restoreGraphicsState()
+        let out = NSImage(size: rectInUnion.size)
+        out.addRepresentation(rep)
         return out
     }
 }
@@ -80,12 +102,19 @@ final class CaptureController {
         case normal      // 普通截图（→ 标注编辑器）
         case translate   // 划图翻译（→ OCR + 自动翻译）
         case ocr         // 划图取字（→ OCR + 复制到剪贴板，Easydict 静默模式）
+        case long        // 长截图（→ 滚动采集 + 拼接，实验性）
     }
 
     private var pendingPurpose: CapturePurpose = .normal
 
     func captureInteractive() {
         pendingPurpose = .normal
+        beginCapture()
+    }
+
+    /// 长截图（实验性）：框选区域 → 滚动采集 → 行对齐拼接（⌘⇧L）
+    func captureForLong() {
+        pendingPurpose = .long
         beginCapture()
     }
 
@@ -139,8 +168,14 @@ final class CaptureController {
                     return
                 }
 
-                // 各屏 AppKit 帧：直接取 NSScreen 原生坐标（免手工换算，多屏/异高屏都稳）
-                let appkitFrames: [CGRect] = screens.map { $0.frame }
+                // 各屏 AppKit 帧：按 displayID 与 NSScreen 精确配对——SC 与 NSScreen 的
+                // 数组顺序没有协议保证，按索引硬配在多屏时会整屏内容串位
+                let screensByDisplayID: [CGDirectDisplayID: NSScreen] = Dictionary(
+                    uniqueKeysWithValues: screens.compactMap { s in
+                        guard let n = s.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return nil }
+                        return (CGDirectDisplayID(n.uint32Value), s)
+                    })
+                let appkitFrames: [CGRect] = displays.compactMap { screensByDisplayID[$0.displayID]?.frame }
                 guard appkitFrames.count == displays.count else {
                     systemFallback()
                     return
@@ -155,9 +190,13 @@ final class CaptureController {
                 // 经典 API 优先：返回完整合成画面（含所有窗口）；macOS 26 上曾出现
                 // SCScreenshotManager 仅返回壁纸的情况，故以其兜底。
                 var shots: [ScreenShot] = []
-                for (i, d) in displays.enumerated() {
+                for d in displays {
+                    guard let screen = screensByDisplayID[d.displayID] else {
+                        systemFallback()
+                        return
+                    }
                     var cg: CGImage?
-                    if let num = screens[i].deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
+                    if let num = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
                         cg = CGDisplayCreateImage(CGDirectDisplayID(num.uint32Value))
                     }
                     if cg == nil {
@@ -168,7 +207,7 @@ final class CaptureController {
                         systemFallback()
                         return
                     }
-                    shots.append(ScreenShot(frame: appkitFrames[i], image: captured))
+                    shots.append(ScreenShot(frame: screen.frame, image: captured))
                 }
 
                 // 窗口列表（AppKit 坐标）+ 标题
@@ -229,7 +268,9 @@ final class CaptureController {
                 ? "拖选需要翻译的文字区域 · ↵ 确认 · ⎋ 取消"
                 : (pendingPurpose == .ocr
                    ? "拖选要取字的区域 · 识别后直接复制 · ⎋ 取消"
-                   : "拖拽框选 · 单击窗口直截 · ⌥ 禁吸附 · ⎋ 取消"),
+                   : (pendingPurpose == .long
+                      ? "框选长截图区域 · 确认后自动滚动采集 · ⎋ 取消"
+                      : "拖拽框选 · 单击窗口直截 · ⌥ 禁吸附 · ⎋ 取消")),
             onCancel: { [weak self] in self?.teardown(restoreFocus: true) },
             onConfirm: { [weak self] rect in
                 self?.finish(rect: rect, composite: composite, unionRect: unionRect)
@@ -246,6 +287,8 @@ final class CaptureController {
         window.isOpaque = false
         window.hasShadow = false
         window.ignoresMouseEvents = false
+        // 不开这个，mouseMoved 事件不会投递到本窗口，悬停选窗高亮整体失灵
+        window.acceptsMouseMovedEvents = true
         window.contentView = NSHostingView(rootView: view)
         overlayWindow = window
         // 成为 key（非激活面板不抢应用焦点）：保证首击即生效、按键走本地监听
@@ -291,14 +334,21 @@ final class CaptureController {
 
     private func finish(rect: CGRect, composite: NSImage, unionRect: CGRect) {
         teardown(restoreFocus: false)
-        guard let cropped = ImageCompose.crop(composite, rectInUnion: rect, union: unionRect) else {
+        // 取整到整点边界，避免半像素采样让成品边缘发虚
+        let r = rect.integral
+        if pendingPurpose == .long {
+            // 长截图：首帧裁剪后交给滚动采集拼接（不经编辑器）
+            LongScreenshot.shared.start(rect: r)
+            return
+        }
+        guard let cropped = ImageCompose.crop(composite, rectInUnion: r, union: unionRect) else {
             systemFallback()
             return
         }
         // 即拍即复制：选区确认的瞬间原图就进剪贴板（监听会自动入册历史）。
         // 此后无论标注后确认还是 ⎋ 取消，⌘V 拿到的都是这次截图——修复自绘路径从不写剪贴板的缺陷
         writeImageToPasteboard(cropped)
-        handleCapturedImage(cropped, at: rect)
+        handleCapturedImage(cropped, at: r)
     }
 
     /// 截图产物分发：普通截图 → 标注编辑器（选区原地弹出）；划图翻译 → OCR+翻译；划图取字 → OCR+复制
@@ -310,6 +360,11 @@ final class CaptureController {
             runOCRTranslate(image)
         case .ocr:
             runOCRCopy(image)
+        case .long:
+            // 长截图在 finish 已分流，正常不应到达；兜底走普通编辑器
+            AnnotationController.shared.show(image: image, at: rect) { [weak self] result in
+                self?.onCaptured?(result)
+            }
         case .normal:
             AnnotationController.shared.show(image: image, at: rect) { [weak self] result in
                 self?.onCaptured?(result)

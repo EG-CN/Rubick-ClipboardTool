@@ -12,6 +12,7 @@ final class HotkeyManager {
         case dragTranslate = 4
         case pinClipboard = 5
         case dragOCR = 6
+        case longScreenshot = 7
     }
 
     static let shared = HotkeyManager()
@@ -42,10 +43,12 @@ final class HotkeyManager {
         let d = UserDefaults.standard
         hotkeys[.togglePanel] = read(d, "hk.panel", keyCode: UInt32(kVK_ANSI_V), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧V")
         hotkeys[.screenshot] = read(d, "hk.screenshot", keyCode: UInt32(kVK_ANSI_A), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧A")
-        hotkeys[.openSettings] = read(d, "hk.settings", keyCode: UInt32(kVK_ANSI_Comma), mods: UInt32(cmdKey), display: "⌘,")
+        // ⌘, 是全系统 App 的「设置」快捷键，不能作为全局热键默认值（会劫持所有应用）
+        hotkeys[.openSettings] = read(d, "hk.settings", keyCode: UInt32(kVK_ANSI_Comma), mods: UInt32(optionKey | shiftKey), display: "⌥⇧,")
         hotkeys[.dragTranslate] = read(d, "hk.dragTranslate", keyCode: UInt32(kVK_ANSI_D), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧D")
         hotkeys[.pinClipboard] = read(d, "hk.pinClipboard", keyCode: UInt32(kVK_ANSI_P), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧P")
         hotkeys[.dragOCR] = read(d, "hk.dragOCR", keyCode: UInt32(kVK_ANSI_X), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧X")
+        hotkeys[.longScreenshot] = read(d, "hk.longShot", keyCode: UInt32(kVK_ANSI_L), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧L")
     }
 
     private func read(_ d: UserDefaults, _ key: String, keyCode: UInt32, mods: UInt32, display: String) -> Hotkey {
@@ -65,6 +68,7 @@ final class HotkeyManager {
         case .dragTranslate: return "hk.dragTranslate"
         case .pinClipboard: return "hk.pinClipboard"
         case .dragOCR: return "hk.dragOCR"
+        case .longScreenshot: return "hk.longShot"
         }
     }
 
@@ -77,7 +81,10 @@ final class HotkeyManager {
         }
         let hk = Hotkey(keyCode: keyCode, modifiers: modifiers, display: display)
         hotkeys[action] = hk
-        register(action, hotkey: hk)
+        if !register(action, hotkey: hk) {
+            // 注册失败要可见：否则设置页显示新组合但全局不生效，用户以为功能坏了
+            Toast.shared.showImportant("快捷键「\(display)」注册失败，可能与其他应用冲突")
+        }
         UserDefaults.standard.set(["keyCode": keyCode, "mods": modifiers, "display": display],
                                   forKey: keyString(action))
     }
@@ -90,20 +97,23 @@ final class HotkeyManager {
         case .screenshot:
             def = Hotkey(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧A")
         case .openSettings:
-            def = Hotkey(keyCode: UInt32(kVK_ANSI_Comma), modifiers: UInt32(cmdKey), display: "⌘,")
+            def = Hotkey(keyCode: UInt32(kVK_ANSI_Comma), modifiers: UInt32(optionKey | shiftKey), display: "⌥⇧,")
         case .dragTranslate:
             def = Hotkey(keyCode: UInt32(kVK_ANSI_D), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧D")
         case .pinClipboard:
             def = Hotkey(keyCode: UInt32(kVK_ANSI_P), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧P")
         case .dragOCR:
             def = Hotkey(keyCode: UInt32(kVK_ANSI_X), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧X")
+        case .longScreenshot:
+            def = Hotkey(keyCode: UInt32(kVK_ANSI_L), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧L")
         }
         update(action, keyCode: def.keyCode, modifiers: def.modifiers, display: def.display)
     }
 
     // MARK: Carbon 注册
 
-    private func register(_ action: Action, hotkey: Hotkey) {
+    @discardableResult
+    private func register(_ action: Action, hotkey: Hotkey) -> Bool {
         var ref: EventHotKeyRef?
         let status = RegisterEventHotKey(hotkey.keyCode,
                                          hotkey.modifiers,
@@ -113,7 +123,9 @@ final class HotkeyManager {
                                          &ref)
         if status == noErr, let r = ref {
             refs[action] = r
+            return true
         }
+        return false
     }
 
     private func installHandler() {

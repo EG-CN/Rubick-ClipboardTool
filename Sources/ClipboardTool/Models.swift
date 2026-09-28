@@ -7,6 +7,7 @@ import Combine
 enum ItemKind: String, Codable {
     case text
     case image
+    case file
 }
 
 struct ClipboardItem: Identifiable, Codable, Equatable {
@@ -16,6 +17,10 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
     var imageFile: String?
     var timestamp: Date
     var pinned: Bool
+    /// kind == .file 时的源文件路径
+    var filePath: String?
+    /// 用户标签（右键标记；nil = 未标记）
+    var tag: String?
 }
 
 // MARK: - 通知
@@ -49,6 +54,10 @@ final class HistoryStore: ObservableObject {
 
     /// 图片内存缓存：面板列表每帧都会取缩略图，不能每次都读盘（卡顿根因之一）
     private let imageCache = NSCache<NSString, NSImage>()
+    /// 缩略图缓存（列表/Dock 渲染专用，按目标尺寸降采样，不持全尺寸解码图）
+    private let thumbCache = NSCache<NSString, NSImage>()
+    /// 持久化串行队列：JSON 编码+写盘离开主线程（历史越大越卡的根因之三）
+    private let saveQueue = DispatchQueue(label: "clipboardtool.save", qos: .utility)
     /// 剪贴板图片入册串行队列：PNG 编码/磁盘比对/写文件全部离开主线程（卡顿根因之二）
     private let ingestQueue = DispatchQueue(label: "clipboardtool.ingest", qos: .userInitiated)
 
@@ -67,7 +76,26 @@ final class HistoryStore: ObservableObject {
         }
         try? fm.createDirectory(at: imagesDir, withIntermediateDirectories: true)
         imageCache.countLimit = 200
+        imageCache.totalCostLimit = 128 * 1024 * 1024   // 全尺寸解码图也要有内存上限
+        thumbCache.countLimit = 300
+        thumbCache.totalCostLimit = 48 * 1024 * 1024
         load()
+        sweepOrphanImages()
+    }
+
+    /// 启动清扫孤儿 PNG：历史版本的 trim/remove 只动索引不删文件，images/ 会无限累积
+    private func sweepOrphanImages() {
+        let referenced = Set(items.compactMap { $0.imageFile })
+        let dir = imagesDir
+        DispatchQueue.global(qos: .utility).async {
+            let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+            let cutoff = Date().addingTimeInterval(-60)
+            for f in files where f.pathExtension.lowercased() == "png" && !referenced.contains(f.lastPathComponent) {
+                // 跳过 60s 内的新文件：入册是"先写文件后插索引"，刚写的图不是孤儿
+                let mtime = (try? f.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+                if mtime < cutoff { try? FileManager.default.removeItem(at: f) }
+            }
+        }
     }
 
     func load() {
@@ -76,7 +104,19 @@ final class HistoryStore: ObservableObject {
         items = decoded
     }
 
+    /// 异步持久化：快照后入串行队列，主线程只做一次数组拷贝
     func save() {
+        let snapshot = items
+        let url = jsonURL
+        saveQueue.async {
+            guard let data = try? JSONEncoder().encode(snapshot) else { return }
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
+    /// 同步落盘（测试与关键路径用）
+    func saveNow() {
+        saveQueue.sync { }
         guard let data = try? JSONEncoder().encode(items) else { return }
         try? data.write(to: jsonURL, options: .atomic)
     }
@@ -86,7 +126,7 @@ final class HistoryStore: ObservableObject {
     func addText(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        // 全量去重：任何位置出现相同文字 → 置顶并更新时间（与原型一致）
+        // 全文入库：截断只允许发生在展示层——入库截断会让粘贴静默丢数据
         if let idx = items.firstIndex(where: { $0.kind == .text && $0.text == trimmed }) {
             var t = items.remove(at: idx)
             t.timestamp = Date()
@@ -161,18 +201,72 @@ final class HistoryStore: ObservableObject {
         guard let f = item.imageFile else { return nil }
         if let hit = imageCache.object(forKey: f as NSString) { return hit }
         guard let img = NSImage(contentsOf: imagesDir.appendingPathComponent(f)) else { return nil }
-        imageCache.setObject(img, forKey: f as NSString)
+        imageCache.setObject(img, forKey: f as NSString, cost: img.costEstimate)
         return img
     }
 
-    func remove(_ id: String) {
+    /// 渲染用缩略图：从磁盘直接降采样到目标像素（不整图解码，内存占用差一个量级）
+    func thumbnail(for item: ClipboardItem, maxPixel: CGFloat) -> NSImage? {
+        guard let f = item.imageFile else { return nil }
+        let key = "\(f)#\(Int(maxPixel))" as NSString
+        if let hit = thumbCache.object(forKey: key) { return hit }
+        let url = imagesDir.appendingPathComponent(f)
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return imageFor(item) }
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else {
+            return imageFor(item)
+        }
+        let img = NSImage(cgImage: cg, size: CGSize(width: cg.width, height: cg.height))
+        thumbCache.setObject(img, forKey: key, cost: img.costEstimate)
+        return img
+    }
+
+    private func deleteImageFile(_ name: String?) {
+        guard let name else { return }
+        imageCache.removeObject(forKey: name as NSString)
+        try? FileManager.default.removeItem(at: imagesDir.appendingPathComponent(name))
+    }
+
+    /// 文件条目（Finder ⌘C 等 fileURL 来源），按路径去重
+    func addFile(_ path: String) {
+        guard FileManager.default.fileExists(atPath: path) else { return }
+        if let idx = items.firstIndex(where: { $0.kind == .file && $0.filePath == path }) {
+            var t = items.remove(at: idx)
+            t.timestamp = Date()
+            items.insert(t, at: 0)
+        } else {
+            items.insert(ClipboardItem(id: UUID().uuidString, kind: .file, text: nil, imageFile: nil,
+                                       timestamp: Date(), pinned: false, filePath: path, tag: nil), at: 0)
+        }
+        trim()
+        save()
+        notify()
+    }
+
+    /// 设置/移除用户标签
+    func setTag(_ tag: String?, id: String) {
+        guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
+        items[idx].tag = tag
+        save()
+        notify()
+    }
+
+    func remove(_ id: String, keepingFile: Bool = false) {
+        let file = items.first { $0.id == id }?.imageFile
         items.removeAll { $0.id == id }
+        if !keepingFile { deleteImageFile(file) }
         save()
         notify()
     }
 
     func clear() {
+        let files = items.compactMap { $0.imageFile }
         items.removeAll()
+        files.forEach { deleteImageFile($0) }
         save()
         notify()
     }
@@ -188,9 +282,9 @@ final class HistoryStore: ObservableObject {
     }
 
     private func trim() {
-        if items.count > limit {
-            items = Array(items.prefix(limit))
-        }
+        guard items.count > limit else { return }
+        for d in items.dropFirst(limit) { deleteImageFile(d.imageFile) }
+        items = Array(items.prefix(limit))
     }
 
     private func notify() {
@@ -205,6 +299,12 @@ extension NSImage {
         guard let tiff = tiffRepresentation,
               let rep = NSBitmapImageRep(data: tiff) else { return nil }
         return rep.representation(using: .png, properties: [:])
+    }
+
+    /// 粗略解码内存占用（字节），供 NSCache totalCostLimit 计费
+    var costEstimate: Int {
+        if let cg = cgImage() { return max(cg.bytesPerRow * cg.height, 1) }
+        return Int(max(size.width, 1) * max(size.height, 1) * 4)
     }
 }
 

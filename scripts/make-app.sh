@@ -16,11 +16,13 @@ EXTRA="--disable-sandbox"
 
 if [ "$UNIVERSAL" = "1" ]; then
   echo "==> swift build -c release (arm64 + x86_64)"
-  swift build --arch arm64 -c release $EXTRA
-  swift build --arch x86_64 -c release $EXTRA
+  # --build-system native：Xcode 27 起 SwiftPM 默认 swiftbuild，其产物路径与下方
+  # lipo 读取的 .build/<triple>/release 不一致，会打出陈旧切片（2026-09-28 事故）
+  swift build --arch arm64 -c release $EXTRA --build-system native
+  swift build --arch x86_64 -c release $EXTRA --build-system native
 else
   echo "==> swift build -c release"
-  swift build -c release $EXTRA
+  swift build -c release $EXTRA --build-system native
 fi
 
 APP="build/拉比克.app"

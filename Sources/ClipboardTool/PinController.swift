@@ -7,8 +7,38 @@ final class PinController {
     static let shared = PinController()
 
     private(set) var pins: [NSPanel] = []
+    /// 贴图窗 → 模型（⌥半透明 / ⌘C 复制按光标所在贴图生效）
+    private var modelsByPanel: [NSPanel: PinModel] = [:]
+    private var interactionMonitors: [Any] = []
 
     private init() {}
+
+    /// ⌥ 按住=光标下贴图临时半透明；⌘C=复制光标下贴图内容。
+    /// 用全局监听：贴图是非激活面板、从不持有键盘焦点。
+    private func ensureInteractionMonitors() {
+        guard interactionMonitors.isEmpty else { return }
+        interactionMonitors.append(NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged, .mouseMoved]) { [weak self] _ in
+            self?.updateTranslucency()
+        })
+        interactionMonitors.append(NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.modifierFlags.contains(.command),
+                  event.charactersIgnoringModifiers == "c" else { return }
+            let m = NSEvent.mouseLocation
+            guard let entry = self?.modelsByPanel.first(where: { $0.key.frame.contains(m) }) else { return }
+            if let img = entry.value.currentImage {
+                copyImageToClipboardSuppressingMonitor(img)
+                Toast.shared.show("已复制贴图内容")
+            }
+        })
+    }
+
+    private func updateTranslucency() {
+        let m = NSEvent.mouseLocation
+        let opt = NSEvent.modifierFlags.contains(.option)
+        for (panel, model) in modelsByPanel where panel.isVisible {
+            model.translucent = opt && panel.frame.contains(m)
+        }
+    }
 
     @discardableResult
     func pin(image: NSImage, at origin: NSPoint? = nil) -> NSPanel {
@@ -17,13 +47,40 @@ final class PinController {
                             backing: .buffered, defer: false)
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.isMovableByWindowBackground = true
+        // 拖动由 SwiftUI DragGesture 驱动（见 PinImageView）：内容手势让 AppKit 的
+        // movableByWindowBackground 对整窗判定不可拖（历史形同虚设），关掉避免双重驱动
+        panel.isMovableByWindowBackground = false
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
         panel.hidesOnDeactivate = false
 
         let model = PinModel()
+        // 尺寸同步回调必须挂在 model（class，引用共享）上：直接给 view（struct）赋值
+        // 会在 ZoomHostingView 拷贝后失效，窗口将永远停在初始 460×340（透明死区吞点击）
+        model.onResize = { [weak panel] size in
+            guard let panel = panel else { return }
+            let old = panel.frame
+            let dy = size.height - old.height
+            var f = CGRect(origin: old.origin, size: size)
+            f.origin.y -= dy
+            // 以光标为锚点缩放（PixPin 式）：光标下的内容点保持静止
+            let m = NSEvent.mouseLocation
+            if old.width > 0, old.height > 0, old.insetBy(dx: -2, dy: -2).contains(m) {
+                let fx = (m.x - old.minX) / old.width
+                let fy = (m.y - old.minY) / old.height
+                f.origin.x = m.x - fx * f.width
+                f.origin.y = m.y - fy * f.height
+            }
+            // 大尺寸贴图（默认 70% 原图）初始不出屏：钳制在所在屏可见区域内
+            if let screen = screenContaining(NSPoint(x: f.midX, y: f.midY)) ?? NSScreen.main {
+                let vis = screen.visibleFrame
+                f.origin.x = min(max(f.origin.x, vis.minX), max(vis.minX, vis.maxX - f.width))
+                f.origin.y = min(max(f.origin.y, vis.minY), max(vis.minY, vis.maxY - f.height))
+            }
+            panel.setFrame(f, display: true)
+        }
+        // 拖动与双击由 ZoomHostingView 的 AppKit 层处理（performDrag 原生拖拽 + clickCount）
         var view = PinImageView(image: image, model: model) { [weak panel] in
             if let panel = panel { PinController.shared.close(panel) }
         }
@@ -31,24 +88,30 @@ final class PinController {
 
         host.onScroll = { delta, flags in
             if flags.contains(.option) {
-                // ⌥滚轮：不透明度（Snipaste 式贴图透明调节）
+                // ⌥滚轮：调节基准不透明度（Snipaste 式贴图透明调节），与缩放同向
                 let factor = delta > 0 ? 0.08 : -0.08
-                model.opacity = min(max(model.opacity + factor, 0.25), 1.0)
+                model.baseOpacity = min(max(model.baseOpacity + factor, 0.25), 1.0)
             } else {
                 let factor = delta > 0 ? 1.05 : 0.95
                 model.zoom = min(max(model.zoom * factor, 0.1), 6.0)
             }
         }
-
-        // 缩放后同步调整窗口尺寸（保持左上角位置稳定）
-        view.onResize = { size in
-            let dy = size.height - panel.frame.height
-            panel.setContentSize(size)
-            var f = panel.frame
-            f.origin.y -= dy
-            if f.origin.y < 40 { f.origin.y = 40 }
-            panel.setFrame(f, display: true)
+        host.onMagnify = { delta in
+            // 触控板捏合缩放（原仅支持滚轮）
+            model.zoom = min(max(model.zoom * (1 + delta), 0.1), 6.0)
         }
+        host.onDoubleClick = { [weak panel] in
+            if let panel { PinController.shared.close(panel) }
+        }
+        host.shouldDrag = { [weak model] point, size in
+            guard let model else { return true }
+            if model.ocrMode { return false }   // OCR 划选优先于拖拽
+            // 右上角悬停工具条区域：交给 SwiftUI 点击
+            return !(point.x > size.width - 40 && point.y < 96)
+        }
+        model.currentImage = image
+        modelsByPanel[panel] = model
+        ensureInteractionMonitors()
 
         panel.contentView = host
         panel.setFrameOrigin(origin ?? defaultOrigin())
@@ -61,16 +124,27 @@ final class PinController {
         let wasVisible = panel.isVisible
         panel.orderOut(nil)
         pins.removeAll { $0 === panel }
+        modelsByPanel[panel] = nil
         if wasVisible { Toast.shared.show("已取消钉图") }
+        teardownMonitorsIfIdle()
     }
 
     func unpinAll() {
         pins.forEach { $0.orderOut(nil) }
         pins.removeAll()
+        modelsByPanel.removeAll()
+        teardownMonitorsIfIdle()
+    }
+
+    private func teardownMonitorsIfIdle() {
+        guard pins.isEmpty else { return }
+        interactionMonitors.forEach { NSEvent.removeMonitor($0) }
+        interactionMonitors.removeAll()
     }
 
     private func defaultOrigin() -> NSPoint {
-        if let screen = NSScreen.main {
+        // 贴图落在鼠标所在屏（多屏下 NSScreen.main 会弹到焦点屏）
+        if let screen = screenContaining(NSEvent.mouseLocation) ?? NSScreen.main {
             let vis = screen.visibleFrame
             let offset = CGFloat(pins.count) * 28
             return NSPoint(x: vis.midX - 200 + offset, y: vis.midY - 140 - offset)
@@ -81,19 +155,58 @@ final class PinController {
 
 final class PinModel: ObservableObject {
     @Published var zoom: CGFloat = 1.0
-    /// 贴图不透明度（⌥滚轮调节，0.25–1.0）
+    /// 当前生效透明度（由 baseOpacity 与临时半透明状态推导）
     @Published var opacity: CGFloat = 1.0
+    /// 用户设定基准（⌥滚轮调节，0.25–1.0）
+    var baseOpacity: CGFloat = 1.0 { didSet { syncOpacity() } }
+    /// 按住 ⌥ 临时半透明，对照下层内容（Snipaste 式）
+    var translucent = false { didSet { syncOpacity() } }
+    private func syncOpacity() {
+        opacity = translucent ? max(baseOpacity * 0.35, 0.15) : baseOpacity
+    }
     /// 当前生效图（标注原位替换后变化；nil = 初始图）
     @Published var image: NSImage?
+    /// 钉入的图（含初始图；⌘C 复制贴图内容用）
+    var currentImage: NSImage?
+    /// OCR 划选模式（拖拽排除区）
+    @Published var ocrMode = false
     /// 图片替换计数（驱动尺寸重排）
     @Published var imageToken: Int = 0
+    /// 内容尺寸变化 → 调整贴图窗口（挂在 class 上保证闭包可达；struct 上赋值会被拷贝吞掉）
+    var onResize: ((CGSize) -> Void)?
 }
 
-/// 捕获 scrollWheel 的 NSHostingView 子类（修饰键透传：⌥=不透明度，无=缩放）
+/// 贴图交互宿主：滚轮/捏合缩放、原生拖拽、双击关闭。
+/// 指针交互必须留在 AppKit 层——SwiftUI DragGesture(0) 会生成手势识别器，
+/// 在 scrollWheel 之前吞掉滚轮事件（缩放失灵根因），且其窗口内坐标位移
+/// 与窗口移动互相反馈导致拖拽迟滞。
 final class ZoomHostingView<Content: View>: NSHostingView<Content> {
     var onScroll: ((CGFloat, NSEvent.ModifierFlags) -> Void)?
+    var onMagnify: ((CGFloat) -> Void)?
+    var onDoubleClick: (() -> Void)?
+    /// 返回 false 的区域不启动拖拽（悬停按钮区/OCR 划选），事件交还 SwiftUI 手势链
+    var shouldDrag: ((CGPoint, CGSize) -> Bool)?
+
     override func scrollWheel(with event: NSEvent) {
+        // 惯性阶段连发会让一次轻扫缩放过冲，只响应手势本体的滚动
+        if event.momentumPhase != [] { return }
         onScroll?(event.scrollingDeltaY, event.modifierFlags)
+    }
+    override func magnify(with event: NSEvent) {
+        onMagnify?(event.magnification)
+    }
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount >= 2 {
+            onDoubleClick?()
+            return
+        }
+        let p = convert(event.locationInWindow, from: nil)
+        if shouldDrag?(p, bounds.size) ?? true {
+            // 原生拖拽循环（与 movableByWindowBackground 同机制）：硬件级跟手
+            window?.performDrag(with: event)
+        } else {
+            super.mouseDown(with: event)   // SwiftUI 手势接管（悬停按钮 / OCR 划选）
+        }
     }
 }
 
@@ -101,12 +214,16 @@ struct PinImageView: View {
     let image: NSImage
     @ObservedObject var model: PinModel
     let onClose: () -> Void
-    var onResize: ((CGSize) -> Void)?
 
     @State private var fitScale: CGFloat = 1
     @State private var hovering = false
-    @State private var ocrMode = false
     @Environment(\.colorScheme) private var scheme
+
+    /// 钉图默认缩放 = 截图原始尺寸的比例（设置→截图 可调，默认 70%）
+    private static var defaultScale: CGFloat {
+        let s = UserDefaults.standard.object(forKey: "pin.defaultScale") as? Double ?? 0.7
+        return CGFloat(min(max(s, 0.25), 2.0))
+    }
 
     /// 当前生效图（标注完成后被原位替换）
     private var displayImage: NSImage { model.image ?? image }
@@ -120,12 +237,12 @@ struct PinImageView: View {
                 .frame(width: displayImage.size.width * fitScale * model.zoom,
                        height: displayImage.size.height * fitScale * model.zoom)
                 .opacity(model.opacity)
-            if ocrMode {
+            if model.ocrMode {
                 OCRPinOverlay { rect in
-                    ocrMode = false
+                    model.ocrMode = false
                     runPinOCR(rect)
                 } onExit: {
-                    ocrMode = false
+                    model.ocrMode = false
                 }
             }
         }
@@ -142,10 +259,9 @@ struct PinImageView: View {
         }
         .shadow(color: Color.black.opacity(0.35), radius: 7, y: 3)
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { onClose() }
         .contextMenu {
             Button("标注…") { annotateInPlace() }
-            Button("识别文字…") { ocrMode = true }
+            Button("识别文字…") { model.ocrMode = true }
             Button("复制图片") { writeImageToPasteboard(displayImage) }
             Button("另存为 PNG…") { saveImageAsPng(displayImage) }
             Divider()
@@ -174,17 +290,17 @@ struct PinImageView: View {
         }
         .onHover { hovering = $0 }
         .onAppear {
-            fitScale = min(420 / displayImage.size.width, 300 / displayImage.size.height)
-            onResize?(contentSize())
+            fitScale = Self.defaultScale
+            model.onResize?(contentSize())
         }
         .onChange(of: model.imageToken) { _ in
             // 标注原位替换图片后：重置缩放并按新尺寸重排
-            fitScale = min(420 / displayImage.size.width, 300 / displayImage.size.height)
+            fitScale = Self.defaultScale
             model.zoom = 1.0
-            onResize?(contentSize())
+            model.onResize?(contentSize())
         }
         .onChange(of: model.zoom) { _ in
-            onResize?(contentSize())
+            model.onResize?(contentSize())
         }
         .animation(.easeOut(duration: 0.15), value: hovering)
     }
@@ -193,6 +309,7 @@ struct PinImageView: View {
     private func annotateInPlace() {
         AnnotationController.shared.show(image: displayImage) { result in
             model.image = result
+            model.currentImage = result
             model.imageToken += 1
             Toast.shared.show("贴图已更新为标注结果")
         }
@@ -233,14 +350,17 @@ struct PinImageView: View {
     }
 
     private func hoverAction(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 11))
-                .frame(width: 24, height: 24)
-                .foregroundStyle(RubickTheme.onSurface(scheme))
-        }
-        .buttonStyle(.plain)
-        .help(help)
+        // 非 key 面板里 SwiftUI Button 不触发（ShellDock 同款教训），点击判定走 DragGesture(0)
+        Image(systemName: symbol)
+            .font(.system(size: 11))
+            .frame(width: 24, height: 24)
+            .foregroundStyle(RubickTheme.onSurface(scheme))
+            .background(RoundedRectangle(cornerRadius: 5).fill(.ultraThinMaterial))
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onEnded { v in
+                if hypot(v.translation.width, v.translation.height) < 6 { action() }
+            })
+            .help(help)
     }
 
     private func contentSize() -> CGSize {

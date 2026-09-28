@@ -32,12 +32,20 @@ final class SettingsController {
             w.center()
             w.isReleasedWhenClosed = false
             window = w
+            // 关窗即退出录制态：录制器的本地 keyDown 监控会无条件吞键，
+            // 不随窗口关闭清理的话整个 App 对键盘"死机"（P0）
+            NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w,
+                                                   queue: .main) { [weak self] _ in
+                guard let self = self, self.window === w else { return }
+                HotkeyRecorder.shared.stop(notify: false)
+            }
         }
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func close() {
+        HotkeyRecorder.shared.stop(notify: false)   // orderOut 不发 willCloseNotification，录制态在这里兜底清理
         window?.orderOut(nil)
     }
 }
@@ -190,6 +198,7 @@ func actionLabel(_ action: HotkeyManager.Action) -> String {
     case .dragTranslate: return "划图翻译（选区识别+翻译）"
     case .pinClipboard: return "钉剪贴板贴图（Snipaste F3 式）"
     case .dragOCR: return "划图取字（选区识别→复制）"
+    case .longScreenshot: return "长截图（实验性：滚动采集+拼接）"
     }
 }
 
@@ -217,6 +226,8 @@ struct SettingsView: View {
     @State private var snapOn = UserDefaults.standard.object(forKey: "capture.snap") as? Bool ?? false
     @State private var snapThreshold: Double = UserDefaults.standard.object(forKey: "capture.snapThreshold") as? Double ?? 8
     @State private var captureMode = UserDefaults.standard.string(forKey: "capture.mode") ?? "auto"
+    @State private var pinScale: Double = UserDefaults.standard.object(forKey: "pin.defaultScale") as? Double ?? 0.7
+    @State private var longShot = UserDefaults.standard.object(forKey: "capture.longShot") as? Bool ?? true
     @State private var llmTesting = false
 
     enum Pane: String, CaseIterable {
@@ -857,6 +868,24 @@ struct SettingsView: View {
                             }
                         }
                         Text("自动：已授权屏幕录制 → 自绘（含吸附），否则回退系统框选；标注编辑器两种模式都可用。")
+                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
+                        Toggle("长截图（实验性）", isOn: $longShot)
+                            .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
+                            .onChange(of: longShot) { v in UserDefaults.standard.set(v, forKey: "capture.longShot") }
+                        HStack {
+                            Text("贴图默认大小").font(.system(size: 12.5))
+                            Spacer()
+                            Slider(value: $pinScale, in: 0.25...2.0, step: 0.05)
+                                .frame(width: 180)
+                                .onChange(of: pinScale) { v in
+                                    UserDefaults.standard.set(v, forKey: "pin.defaultScale")
+                                }
+                            Text("\(Int(pinScale * 100))%")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(RubickTheme.muted(scheme))
+                                .frame(width: 40)
+                        }
+                        Text("钉图按截图原始尺寸的这个比例显示（默认 70%），钉住后可滚轮/捏合继续缩放。")
                             .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
                     }
                 }
