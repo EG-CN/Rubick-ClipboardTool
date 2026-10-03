@@ -1150,7 +1150,9 @@ struct AnnotateEditorView: View {
             .pickerStyle(.segmented)
             .frame(width: 150)
             .onChange(of: model.cornerRadius) { newValue in
-                if let idx = model.annotations.lastIndex(where: { $0.tool == .rect }) {
+                // 只作用于最后一条标注且它须是矩形：避免切回矩形工具时改到很早之前的旧标注
+                if let idx = model.annotations.lastIndex(where: { $0.tool == .rect }),
+                   idx == model.annotations.count - 1 {
                     var a = model.annotations[idx]
                     a.cornerRadius = newValue
                     model.annotations[idx] = a

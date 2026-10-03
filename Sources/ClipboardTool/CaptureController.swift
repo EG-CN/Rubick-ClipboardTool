@@ -217,11 +217,15 @@ final class CaptureController {
                         w.owningApplication?.bundleIdentifier != Bundle.main.bundleIdentifier &&
                         w.frame.width > 60 && w.frame.height > 60
                     }
-                    // 排除桌面/壁纸窗：尺寸≈整块屏幕,会让悬停与吸附永远命中"全屏"
+                    // 排除桌面/壁纸窗（Dock 拥有或无归属）；全屏应用窗口保留——
+                    // 此前按"≈整屏"一刀切，导致全屏 App 无法智能选窗
                     .filter { w in
-                        !displayFramesSC.contains { d in
+                        let isNearlyFull = displayFramesSC.contains { d in
                             w.frame.width >= d.width * 0.97 && w.frame.height >= d.height * 0.97
                         }
+                        guard isNearlyFull else { return true }
+                        let bid = w.owningApplication?.bundleIdentifier ?? ""
+                        return !(bid.isEmpty || bid == "com.apple.dock")
                     }
                     .map { w in
                         let f = w.frame
@@ -291,6 +295,13 @@ final class CaptureController {
         window.acceptsMouseMovedEvents = true
         window.contentView = NSHostingView(rootView: view)
         overlayWindow = window
+        if !AXIsProcessTrusted() {
+            Toast.shared.showImportant("提示：⎋/↵ 快捷键需辅助功能权限；拖拽与单击不受影响")
+        }
+        // 呼出加固：临时转 regular 激活——未激活时覆盖层在全屏空间不可见、
+        // 首击被激活消费、⎋/↵ 本地监听不触发（面板同款根因）；teardown 还原
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
         // 成为 key（非激活面板不抢应用焦点）：保证首击即生效、按键走本地监听
         window.makeKeyAndOrderFront(nil)
 
@@ -425,6 +436,7 @@ final class CaptureController {
     private func teardown(restoreFocus: Bool) {
         overlayWindow?.orderOut(nil)
         overlayWindow = nil
+        NSApp.setActivationPolicy(.accessory)
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
         if let m = globalKeyMonitor { NSEvent.removeMonitor(m); globalKeyMonitor = nil }
         if let m = hoverMonitor { NSEvent.removeMonitor(m); hoverMonitor = nil }
@@ -445,12 +457,32 @@ struct CaptureOverlayView: View {
     /// 可吸附窗口帧（视图坐标，左上原点）
     var windowFrames: [CGRect] = []
     @ObservedObject var session: CaptureSessionState
-    var hintText: String = "拖拽框选 · ↵ 确认 · ⎋ 取消"
+    var hintText: String = "拖拽框选 · 手柄微调 · ↵/✓ 确认 · ⎋ 取消"
     let onCancel: () -> Void
     let onConfirm: (CGRect) -> Void
 
     @State private var dragStart: CGPoint?
     @State private var dragCurrent: CGPoint?
+    /// 拖拽落定后的待确认选区：显示 8 手柄可微调（规格 A1）
+    @State private var pendingSelection: CGRect?
+    @State private var resizeBase: CGRect?
+    @State private var resizeHandle: SelHandle?
+
+    enum SelHandle: CaseIterable {
+        case tl, t, tr, l, r, bl, b, br
+        func point(in r: CGRect) -> CGPoint {
+            switch self {
+            case .tl: return CGPoint(x: r.minX, y: r.minY)
+            case .t:  return CGPoint(x: r.midX, y: r.minY)
+            case .tr: return CGPoint(x: r.maxX, y: r.minY)
+            case .l:  return CGPoint(x: r.minX, y: r.midY)
+            case .r:  return CGPoint(x: r.maxX, y: r.midY)
+            case .bl: return CGPoint(x: r.minX, y: r.maxY)
+            case .b:  return CGPoint(x: r.midX, y: r.maxY)
+            case .br: return CGPoint(x: r.maxX, y: r.maxY)
+            }
+        }
+    }
 
     /// 视图矩形（左上原点）→ AppKit 全局矩形（左下原点）
     private func globalRect(_ r: CGRect) -> CGRect {
@@ -464,12 +496,33 @@ struct CaptureOverlayView: View {
                       width: abs(a.x - b.x), height: abs(a.y - b.y))
     }
 
-    /// 吸附后选区（⌥ 临时禁用吸附）
-    private var selectionRect: CGRect? {
+    /// 吸附后选区（⌥ 临时禁用吸附）——仅拖拽中生效，落定后进入 pendingSelection
+    private var dragSelection: CGRect? {
         guard let raw = rawSelection else { return nil }
         let optionHeld = NSApp.currentEvent?.modifierFlags.contains(.option) == true
         guard CaptureController.shared.snapEnabled, !optionHeld, !windowFrames.isEmpty else { return raw }
         return SnapLogic.snappedRect(raw, windows: windowFrames, threshold: CaptureController.shared.snapThreshold).rect
+    }
+
+    /// 当前生效选区
+    private var selectionRect: CGRect? { dragSelection ?? pendingSelection }
+
+    private func confirmPending() {
+        guard let sel = pendingSelection, sel.width > 3, sel.height > 3 else { return }
+        onConfirm(globalRect(sel))
+    }
+
+    private func resizedRect(from base: CGRect, handle: SelHandle, t: CGSize) -> CGRect {
+        var minX = base.minX, minY = base.minY, maxX = base.maxX, maxY = base.maxY
+        if handle == .tl || handle == .l || handle == .bl { minX = base.minX + t.width }
+        if handle == .tr || handle == .r || handle == .br { maxX = base.maxX + t.width }
+        if handle == .tl || handle == .t || handle == .tr { minY = base.minY + t.height }
+        if handle == .bl || handle == .b || handle == .br { maxY = base.maxY + t.height }
+        var r = CGRect(x: min(minX, maxX), y: min(minY, maxY),
+                       width: abs(maxX - minX), height: abs(maxY - minY))
+        if r.width < 10 { r.size.width = 10 }
+        if r.height < 10 { r.size.height = 10 }
+        return r
     }
 
     var body: some View {
@@ -479,31 +532,33 @@ struct CaptureOverlayView: View {
                 .frame(width: unionRect.width, height: unionRect.height)
                 .ignoresSafeArea()
 
-            // 挖孔遮罩：选区处透出原图（跟手、所见即所截）
+            // 规格修复：选区外恒定压暗（此前悬停切换明暗跳变）
             if let sel = selectionRect {
                 DimWithHole(hole: sel)
                     .fill(Color.black.opacity(0.5), style: FillStyle(eoFill: true))
                     .allowsHitTesting(false)
-            } else if let hover = session.hoverWindowViewFrame {
-                // 悬停窗口高亮（未拖拽时，Snipaste 式）
-                Rectangle()
-                    .strokeBorder(RubickTheme.emeraldBright, lineWidth: 2)
-                    .background(RubickTheme.emerald.opacity(0.08))
-                    .frame(width: hover.width, height: hover.height)
-                    .position(x: hover.midX, y: hover.midY)
-                    .allowsHitTesting(false)
-            }
-            if rawSelection == nil && session.hoverWindowViewFrame == nil {
+            } else {
                 Color.black.opacity(0.5)
                     .allowsHitTesting(false)
             }
 
+            // 悬停窗口高亮（Snipaste 式，压暗之上提亮）
+            if dragStart == nil && pendingSelection == nil,
+               let hover = session.hoverWindowViewFrame {
+                Rectangle()
+                    .strokeBorder(RubickTheme.emeraldBright, lineWidth: 2)
+                    .background(RubickTheme.emerald.opacity(0.12))
+                    .frame(width: hover.width, height: hover.height)
+                    .position(x: hover.midX, y: hover.midY)
+                    .allowsHitTesting(false)
+            }
+
             if let sel = selectionRect {
-                // 仅一个绿色细框
                 Rectangle()
                     .strokeBorder(RubickTheme.emeraldBright, lineWidth: 1.5)
                     .frame(width: sel.width, height: sel.height)
                     .position(x: sel.midX, y: sel.midY)
+                    .allowsHitTesting(false)
                 Text("\(Int(sel.width)) × \(Int(sel.height))")
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .foregroundStyle(.white)
@@ -511,25 +566,65 @@ struct CaptureOverlayView: View {
                     .padding(.vertical, 3)
                     .background(Capsule().fill(.black.opacity(0.7)))
                     .position(x: sel.minX + 6, y: max(sel.minY - 15, 14))
-            } else if session.hoverWindowViewFrame == nil {
+                    .allowsHitTesting(false)
+            } else if session.hoverWindowViewFrame == nil && dragStart == nil && pendingSelection == nil {
                 hintPill(hintText)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.top, 18)
+                    .allowsHitTesting(false)
+            }
+
+            // 待确认选区：8 手柄微调（规格 A1）+ 选区下方 ✓/✗（规格 A2 落点）
+            if let sel = pendingSelection {
+                ForEach(SelHandle.allCases, id: \.self) { h in
+                    Circle()
+                        .fill(Color.white)
+                        .overlay(Circle().strokeBorder(Color.black.opacity(0.55), lineWidth: 1))
+                        .frame(width: 9, height: 9)
+                        .position(h.point(in: sel))
+                        .contentShape(Circle().inset(by: -6))
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { v in
+                                    if resizeHandle != h || resizeBase == nil {
+                                        resizeHandle = h
+                                        resizeBase = sel
+                                    }
+                                    if let base = resizeBase {
+                                        pendingSelection = resizedRect(from: base, handle: h, t: v.translation)
+                                    }
+                                }
+                                .onEnded { _ in resizeHandle = nil; resizeBase = nil }
+                        )
+                }
+                HStack(spacing: 8) {
+                    confirmPill(icon: "checkmark", label: "确认", tint: .green) { confirmPending() }
+                    confirmPill(icon: "xmark", label: "取消", tint: .white) { pendingSelection = nil }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(.black.opacity(0.72)))
+                .position(x: sel.midX,
+                          y: sel.maxY + 26 > unionRect.height - 16 ? max(sel.minY - 28, 20) : sel.maxY + 26)
             }
         }
         .contentShape(Rectangle())
         .onReceive(NotificationCenter.default.publisher(for: .init("cbt.captureConfirm"))) { _ in
-            if let sel = selectionRect, sel.width > 3, sel.height > 3 {
-                onConfirm(globalRect(sel))
-            }
+            confirmPending()
         }
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { v in
+                    guard pendingSelection == nil else { return }   // 待确认态不再起框
                     dragStart = dragStart ?? v.startLocation
                     dragCurrent = v.location
                 }
                 .onEnded { v in
+                    // 待确认态：点选区外取消；选区内静默（确认走 ✓/↵）
+                    if let sel = pendingSelection {
+                        if !sel.insetBy(dx: -8, dy: -8).contains(v.location) { pendingSelection = nil }
+                        return
+                    }
                     dragCurrent = v.location
                     defer { dragStart = nil; dragCurrent = nil }
                     guard let raw = rawSelection, raw.width > 3, raw.height > 3 else {
@@ -541,11 +636,28 @@ struct CaptureOverlayView: View {
                         }
                         return
                     }
-                    onConfirm(globalRect(selectionRect ?? raw))
+                    // 拖拽落定 → 待确认态（8 手柄微调，↵/✓ 确认）
+                    pendingSelection = selectionRect ?? raw
                 }
         )
         .onAppear { NSCursor.crosshair.set() }
         .onDisappear { NSCursor.arrow.set() }
+    }
+
+    private func confirmPill(icon: String, label: String, tint: Color, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon).font(.system(size: 9, weight: .bold))
+            Text(label).font(.system(size: 10.5, weight: .semibold))
+        }
+        .foregroundStyle(tint == .green ? Color.green : Color.white.opacity(0.9))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(Color.white.opacity(0.12)))
+        .overlay(Capsule().strokeBorder(tint == .green ? Color.green.opacity(0.7) : Color.white.opacity(0.35), lineWidth: 1))
+        .contentShape(Rectangle())
+        .gesture(DragGesture(minimumDistance: 0).onEnded { v in
+            if hypot(v.translation.width, v.translation.height) < 6 { action() }
+        })
     }
 
     private func hintPill(_ text: String) -> some View {
