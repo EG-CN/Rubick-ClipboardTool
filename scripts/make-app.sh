@@ -69,6 +69,7 @@ if [ -n "$IDENTITY" ]; then
     codesign --force --deep -s - "$APP"
   fi
 else
+  xattr -cr "$APP"   # ad-hoc 路径同样清扩展属性（Desktop 同步域会给新 bundle 盖戳致拒签）
   codesign --force --deep -s - "$APP"
   echo ""
   echo "==> ⚠ 当前为 ad-hoc 签名：每次重新构建后，辅助功能（自动粘贴）授权会失效。"
