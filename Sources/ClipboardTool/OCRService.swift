@@ -58,7 +58,8 @@ final class OCRService {
     }
 
     /// 识别图片文字；rect 为视图坐标（原点左上，nil = 整图）
-    func recognize(image: NSImage, rect: CGRect? = nil, completion: @escaping (Result<OCRResult, Error>) -> Void) {
+    /// languageCorrection=false：划字取原文（纠错会改字）
+    func recognize(image: NSImage, rect: CGRect? = nil, languageCorrection: Bool = true, completion: @escaping (Result<OCRResult, Error>) -> Void) {
         guard let cg = image.cgImage() else {
             completion(.failure(OCRError.noImage))
             return
@@ -81,7 +82,7 @@ final class OCRService {
 
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = true
+        request.usesLanguageCorrection = languageCorrection
         if let langs = language.visionLanguages {
             request.recognitionLanguages = langs
         }

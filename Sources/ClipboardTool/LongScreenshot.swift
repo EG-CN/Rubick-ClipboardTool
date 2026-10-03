@@ -88,6 +88,18 @@ final class LongScreenshot {
             Toast.shared.showImportant("长截图（实验性）未开启：设置 → 截图")
             return
         }
+        // 跨屏选区钳制到中心点所在屏（多屏拼接不支持）
+        var rect = rect
+        let spanning = NSScreen.screens.filter { $0.frame.intersects(rect) }
+        if spanning.count > 1 {
+            let c = NSPoint(x: rect.midX, y: rect.midY)
+            guard let center = screenContaining(c) else {
+                Toast.shared.showImportant("长截图：无法定位所在屏幕")
+                return
+            }
+            rect = rect.intersection(center.frame)
+            Toast.shared.show("长截图已限制在单屏范围内")
+        }
         guard let screen = screenContaining(NSPoint(x: rect.midX, y: rect.midY)),
               let num = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
             Toast.shared.showImportant("长截图：无法定位所在屏幕")
@@ -148,6 +160,7 @@ final class LongScreenshot {
 
         var frames: [(image: CGImage, sampler: StitchEngine.Sampler)] = []
         var offsets: [Int] = []
+        var lastOffset: Int?
 
         for frame in 0..<maxFrames {
             if cancelled { break }
@@ -162,14 +175,16 @@ final class LongScreenshot {
                 }
                 if offset == 0 { break }         // 页面到底
                 offsets.append(offset)
+                lastOffset = offset
             }
             frames.append((cropped, sampler))
             // 内存：Sampler 只在对齐相邻帧时有用，算完即弃（25 帧 RGBA 常驻可逼近 1GB）
             if frames.count > 1 { frames[frames.count - 2].sampler.data = [] }
-            // 滚动一屏（线单位，负值 = 向下滚）
+            // 滚动一屏（线单位，负值 = 向下滚）；滚动量自适应：内容稀疏处加大步长
+            let step = lastOffset.map { min(30, max(10, $0 / 6)) } ?? 12
             let src = CGEventSource(stateID: .combinedSessionState)
             if let ev = CGEvent(scrollWheelEvent2Source: src, units: .line, wheelCount: 1,
-                                wheel1: -10, wheel2: 0, wheel3: 0) {
+                                wheel1: -Int32(step), wheel2: 0, wheel3: 0) {
                 ev.post(tap: .cghidEventTap)
             }
             try? await Task.sleep(nanoseconds: 450_000_000)
@@ -177,8 +192,11 @@ final class LongScreenshot {
 
         guard let first = frames.first else { return .failure("未采集到帧") }
         guard frames.count > 1 else {
-            // 只有 1 帧：页面无滚动，退化为普通截图
-            return .success(NSImage(cgImage: first.image, size: CGSize(width: first.image.width, height: first.image.height)))
+            // 只有 1 帧：页面无滚动，退化为普通截图（保持 Retina 点尺寸）
+            let scale = CGFloat(first.image.width) / max(rect.width, 1)
+            return .success(NSImage(cgImage: first.image,
+                                    size: CGSize(width: CGFloat(first.image.width) / scale,
+                                                 height: CGFloat(first.image.height) / scale)))
         }
 
         let pw = first.image.width

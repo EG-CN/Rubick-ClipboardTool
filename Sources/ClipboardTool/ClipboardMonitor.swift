@@ -16,6 +16,8 @@ final class ClipboardMonitor {
     var onImageData: ((Data) -> Void)?
     /// Finder ⌘C 复制的文件（fileURL 类型）
     var onFile: ((String) -> Void)?
+    /// 内容入册时的前台应用 bundle id（来源图标用）
+    private(set) var lastSourceBundleID: String?
 
     /// 应用自身即将写剪贴板时调用：下一次变更不计入历史
     /// （显式 addImage 已入册，监听再收会造成重复；风险窗口 ≤0.5s，期间用户复制会被跳过，可接受）
@@ -46,6 +48,7 @@ final class ClipboardMonitor {
         }
 
         if ignorePasswordManagers, isPrivate(pb) { return }
+        lastSourceBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
 
         // 文件复制（Finder 等）：先看类型表里有没有 fileURL 再读对象（无文件时零开销）；
         // 纯 legacy alias 类型（部分脚本写入）暂不支持，Finder 路径恒有 fileURL

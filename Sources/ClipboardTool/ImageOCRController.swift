@@ -32,6 +32,11 @@ final class ImageOCRController {
             p.isReleasedWhenClosed = false
             p.contentView = NSHostingView(rootView: view)
             panel = p
+            // 关窗即清 Esc 监听（此前红钮关闭后监听残留）
+            NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: p,
+                                                   queue: .main) { [weak self] _ in
+                self?.removeKeyMonitor()
+            }
         } else {
             panel?.title = "识别文字 — 拖拽划选区域，Esc 取消"
             panel?.contentView = NSHostingView(rootView: view)

@@ -43,6 +43,11 @@ final class PanelState: ObservableObject {
     @Published var tagFilter: String?
     /// ⌘F 聚焦搜索（控制器 +1，视图监听后置焦）
     @Published var searchFocusRequest = 0
+    /// 多选集合（⌘点击切换；非空时显示批量操作条）
+    @Published var multiSelection: Set<String> = []
+    func toggleMulti(_ id: String) {
+        if multiSelection.contains(id) { multiSelection.remove(id) } else { multiSelection.insert(id) }
+    }
 
     /// 标签圆点颜色（按标签名哈希取色相，稳定可辨识）
     static func tagColor(_ tag: String) -> Color {
@@ -107,6 +112,21 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
     /// 设置项：粘贴后保持面板打开（可连续粘贴多条，⎋ 关闭）
     var keepOpen: Bool { UserDefaults.standard.object(forKey: "keepPanelOpen") as? Bool ?? true }
 
+    /// 记住面板呼出位置（关闭则跟随鼠标/菜单栏）
+    var rememberPosition: Bool { UserDefaults.standard.object(forKey: "panel.rememberPosition") as? Bool ?? true }
+    private var savedFrame: CGRect? {
+        guard let raw = UserDefaults.standard.string(forKey: "panel.lastFrame") else { return nil }
+        let c = raw.split(separator: ",").compactMap { Double($0) }
+        guard c.count == 4 else { return nil }
+        return CGRect(x: c[0], y: c[1], width: c[2], height: c[3])
+    }
+    private func persistFrame() {
+        guard let p = panel else { return }
+        let f = p.frame
+        UserDefaults.standard.set("\(f.origin.x),\(f.origin.y),\(f.width),\(f.height)",
+                                  forKey: "panel.lastFrame")
+    }
+
     func toggle(fromHotkey: Bool = false) {
         if isVisible { close() } else { show(fromHotkey: fromHotkey) }
     }
@@ -164,7 +184,14 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
             p.delegate = self
             panel = p
         }
-        if fromHotkey { positionNearMouse() } else { positionNearStatusItem() }
+        if rememberPosition, let f = savedFrame,
+           NSScreen.screens.contains(where: { $0.frame.intersects(f) }) {
+            panel?.setFrame(f, display: true)
+        } else if fromHotkey {
+            positionNearMouse()
+        } else {
+            positionNearStatusItem()
+        }
         // macOS 26/27：accessory App 的 NSApp.activate 不再生效，未激活时面板
         // 不显示在当前（全屏）空间、点击也不可靠——临时转 regular 激活，关闭还原
         NSApp.setActivationPolicy(.regular)
@@ -184,6 +211,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
     /// 弹回前台会和用户的应用切换打架（"被弹回"）；⎋/热键主动关闭才还原焦点
     func close(restoresFocus: Bool = true) {
         guard isVisible else { return }
+        persistFrame()
         panel?.orderOut(nil)
         removeMonitors()
         NSApp.setActivationPolicy(.accessory)
@@ -197,6 +225,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         f.origin.x += delta.x
         f.origin.y -= delta.y
         p.setFrameOrigin(f.origin)
+        persistFrame()
     }
 
     /// 面板当前全局 frame（拖动用）
@@ -205,6 +234,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
     /// 直接定位：跟随鼠标实时坐标（1:1 跟手）
     func moveTo(x: CGFloat, y: CGFloat) {
         panel?.setFrameOrigin(NSPoint(x: x, y: y))
+        persistFrame()
     }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -334,7 +364,17 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
             // 搜索框编辑中：字符/删除放行给输入框（Maccy 式即打即搜）；
             // 但导航/粘贴/快选/关闭仍被面板拦截，纯键盘流不中断（P/T/O 等单键动作编辑态让位于输入）
             if let fr = NSApp.keyWindow?.firstResponder, fr is NSTextView {
-                if pk.matches(.close, event: event) { self.close(); return nil }
+                if pk.matches(.close, event: event) {
+                // 分层退出：先清搜索/筛选，再按才关面板
+                if !panelState.searchText.isEmpty || panelState.tagFilter != nil {
+                    panelState.searchText = ""
+                    panelState.tagFilter = nil
+                    resetSelection()
+                    return nil
+                }
+                self.close()
+                return nil
+            }
                 if pk.matches(.navUp, event: event) { self.moveSelection(-1); return nil }
                 if pk.matches(.navDown, event: event) { self.moveSelection(1); return nil }
                 if pk.matches(.paste, event: event) { self.activateSelected(); return nil }
@@ -347,7 +387,17 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
             if pk.matches(.navUp, event: event) { self.moveSelection(-1); return nil }
             if pk.matches(.navDown, event: event) { self.moveSelection(1); return nil }
             if pk.matches(.paste, event: event) { self.activateSelected(); return nil }
-            if pk.matches(.close, event: event) { self.close(); return nil }
+            if pk.matches(.close, event: event) {
+                // 分层退出：先清搜索/筛选，再按才关面板
+                if !panelState.searchText.isEmpty || panelState.tagFilter != nil {
+                    panelState.searchText = ""
+                    panelState.tagFilter = nil
+                    resetSelection()
+                    return nil
+                }
+                self.close()
+                return nil
+            }
             if pk.matches(.deleteItem, event: event) { self.deleteSelected(); return nil }
             if pk.matches(.pin, event: event) {
                 if self.filteredItems().indices.contains(self.selectedIndex) {
@@ -458,6 +508,16 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
     /// 设置/移除条目标签
     func setTag(_ tag: String?, id: String) {
         store.setTag(tag, id: id)
+    }
+
+    /// 批量删除多选条目（⌘点击勾选，筛选行尾批量操作）
+    func deleteMultiSelection() {
+        let ids = panelState.multiSelection
+        guard !ids.isEmpty else { return }
+        store.removeMany(ids)
+        panelState.multiSelection = []
+        resetSelection()
+        Toast.shared.show("已删除 \(ids.count) 条")
     }
 
     /// 点选：复制到剪贴板 → 还原焦点 →（可选）自动粘贴
@@ -778,9 +838,45 @@ struct HistoryPanelView: View {
                 .nonKeyTap { panelState.tagFilter = active ? nil : t }
             }
             Spacer()
+            if !panelState.multiSelection.isEmpty {
+                Text("已选 \(panelState.multiSelection.count) 条")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(RubickTheme.muted(scheme))
+                Text("删除")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.red.opacity(0.1)))
+                    .contentShape(Capsule())
+                    .nonKeyTap { HistoryPanelController.shared.deleteMultiSelection() }
+                Text("取消")
+                    .font(.system(size: 11))
+                    .foregroundStyle(RubickTheme.muted(scheme))
+                    .contentShape(Capsule())
+                    .nonKeyTap { panelState.multiSelection = [] }
+            }
         }
         .padding(.horizontal, 14)
         .padding(.bottom, 8)
+    }
+
+    private func metaText(_ item: ClipboardItem) -> String? {
+        switch item.kind {
+        case .image:
+            guard let w = item.metaWidth, let h = item.metaHeight else { return nil }
+            return "\(w)×\(h)"
+        case .text:
+            guard let t = item.text, t.count > 200 else { return nil }
+            return "\(t.count) 字"
+        case .file:
+            return nil
+        }
+    }
+
+    static func appIcon(_ bundleID: String) -> NSImage? {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        return NSWorkspace.shared.icon(forFile: url.path)
     }
 
     /// 全部历史中出现过的用户标签
@@ -857,7 +953,19 @@ struct HistoryPanelView: View {
                         .background(Capsule().fill(PanelState.tagColor(tag).opacity(0.1)))
                         .foregroundStyle(PanelState.tagColor(tag))
                     }
+                    if let bid = item.sourceApp, !bid.isEmpty, let img = Self.appIcon(bid) {
+                        Image(nsImage: img)
+                            .resizable()
+                            .frame(width: 13, height: 13)
+                            .opacity(0.8)
+                            .help("来源：\(bid)")
+                    }
                     Spacer()
+                    if let meta = metaText(item) {
+                        Text(meta)
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(RubickTheme.muted(scheme).opacity(0.9))
+                    }
                     Text(timeAgo(item.timestamp))
                         .font(.system(size: 10))
                         .foregroundStyle(RubickTheme.muted(scheme))
@@ -908,7 +1016,10 @@ struct HistoryPanelView: View {
             }
             .contentShape(Rectangle())
             .nonKeyTap {
-                if NSApp.currentEvent?.modifierFlags.contains(.option) == true {
+                let mods = NSApp.currentEvent?.modifierFlags ?? []
+                if mods.contains(.command) {
+                    panelState.toggleMulti(item.id)
+                } else if mods.contains(.option) {
                     HistoryPanelController.shared.activate(at: index, copyOnly: true)
                 } else {
                     HistoryPanelController.shared.activate(at: index)
@@ -958,6 +1069,11 @@ struct HistoryPanelView: View {
         }
         .padding(10)
         .spellSlot(hovering: hoveringIds.contains(item.id), selected: selected == index, cornerRadius: 8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(RubickTheme.emeraldBright,
+                              lineWidth: panelState.multiSelection.contains(item.id) ? 1.5 : 0)
+        )
         .onHover { hovering in
             if hovering {
                 hoveringIds.insert(item.id)

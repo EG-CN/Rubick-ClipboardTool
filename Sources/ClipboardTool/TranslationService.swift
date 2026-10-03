@@ -167,6 +167,10 @@ final class TranslationService {
         case .zhToEn: return (zh, en)
         case .enToZh: return (en, zh)
         case .auto:
+            let kana = text.unicodeScalars.contains { (0x3040...0x30FF).contains($0.value) }
+            let hangul = text.unicodeScalars.contains { (0xAC00...0xD7AF).contains($0.value) || (0x1100...0x11FF).contains($0.value) }
+            if hangul { return (Locale.Language(identifier: "ko"), zh) }
+            if kana { return (Locale.Language(identifier: "ja"), zh) }
             let cjk = text.unicodeScalars.filter { s in
                 (0x4E00...0x9FFF).contains(s.value) || (0x3400...0x4DBF).contains(s.value)
             }.count

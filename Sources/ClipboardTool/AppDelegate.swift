@@ -191,16 +191,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.limit = UserDefaults.standard.object(forKey: "historyLimit") as? Int ?? 50
         monitor.ignorePasswordManagers = UserDefaults.standard.object(forKey: "ignorePassword") as? Bool ?? true
         monitor.onText = { [weak self] text in
-            self?.store.addText(text)
+            self?.store.addText(text, sourceApp: self?.monitor.lastSourceBundleID)
         }
         monitor.onImageData = { [weak self] data in
-            self?.store.addImageData(data)
+            self?.store.addImageData(data, sourceApp: self?.monitor.lastSourceBundleID)
         }
         monitor.onImage = { [weak self] img in
-            self?.store.addImage(img)
+            self?.store.addImage(img, sourceApp: self?.monitor.lastSourceBundleID)
         }
         monitor.onFile = { [weak self] path in
-            self?.store.addFile(path)
+            self?.store.addFile(path, sourceApp: self?.monitor.lastSourceBundleID)
         }
         monitor.start()
         screenshotController.onCaptured = { [weak self] img in

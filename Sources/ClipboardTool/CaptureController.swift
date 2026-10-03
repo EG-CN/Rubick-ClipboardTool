@@ -415,7 +415,7 @@ final class CaptureController {
     /// 划图取字：Vision 本地 OCR → 识别结果直接进剪贴板（历史自动入册，⌘V 即贴）
     private func runOCRCopy(_ image: NSImage) {
         Toast.shared.show("正在识别文字…")
-        OCRService.shared.recognize(image: image) { result in
+        OCRService.shared.recognize(image: image, languageCorrection: false) { result in
             DispatchQueue.main.async {
                 switch result {
                 case .success(let r):

@@ -228,6 +228,7 @@ struct SettingsView: View {
     @State private var captureMode = UserDefaults.standard.string(forKey: "capture.mode") ?? "auto"
     @State private var pinScale: Double = UserDefaults.standard.object(forKey: "pin.defaultScale") as? Double ?? 0.7
     @State private var longShot = UserDefaults.standard.object(forKey: "capture.longShot") as? Bool ?? true
+    @State private var rememberPosition = UserDefaults.standard.object(forKey: "panel.rememberPosition") as? Bool ?? true
     @State private var llmTesting = false
 
     enum Pane: String, CaseIterable {
@@ -404,6 +405,11 @@ struct SettingsView: View {
                         .onChange(of: panelForm) { newValue in
                             UserDefaults.standard.set(newValue, forKey: "panel.form")
                         }
+                        Toggle("记住面板呼出位置", isOn: $rememberPosition)
+                            .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
+                            .onChange(of: rememberPosition) { v in
+                                UserDefaults.standard.set(v, forKey: "panel.rememberPosition")
+                            }
                         Text("⌘⇧V 的呼出形态：完整历史面板，或贴屏幕底部的标签页弹壳（单击卡片直接粘贴）。")
                             .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
                     }

@@ -333,7 +333,7 @@ struct PinImageView: View {
             rectInPixels = nil
         }
         Toast.shared.show("正在识别文字…")
-        OCRService.shared.recognize(image: displayImage, rect: rectInPixels) { result in
+        OCRService.shared.recognize(image: displayImage, rect: rectInPixels, languageCorrection: false) { result in
             DispatchQueue.main.async {
                 switch result {
                 case .success(let r):

@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import Combine
+import CryptoKit
 
 // MARK: - 剪贴板条目模型
 
@@ -21,6 +22,14 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
     var filePath: String?
     /// 用户标签（右键标记；nil = 未标记）
     var tag: String?
+    /// 图片内容哈希（PNG SHA256 前 32 位，全历史去重用）
+    var contentHash: String?
+    /// 来源应用 bundle id（捕捉剪贴板内容时的前台应用）
+    var sourceApp: String?
+    /// 图片像素宽（kind == .image）
+    var metaWidth: Int?
+    /// 图片像素高
+    var metaHeight: Int?
 }
 
 // MARK: - 通知
@@ -123,7 +132,7 @@ final class HistoryStore: ObservableObject {
 
     // MARK: 写入（带去重 + 上限裁剪 + 持久化）
 
-    func addText(_ text: String) {
+    func addText(_ text: String, sourceApp: String? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         // 全文入库：截断只允许发生在展示层——入库截断会让粘贴静默丢数据
@@ -133,50 +142,61 @@ final class HistoryStore: ObservableObject {
             items.insert(t, at: 0)
         } else {
             items.insert(ClipboardItem(id: UUID().uuidString, kind: .text, text: trimmed,
-                                       imageFile: nil, timestamp: Date(), pinned: false), at: 0)
+                                       imageFile: nil, timestamp: Date(), pinned: false,
+                                       filePath: nil, tag: nil, contentHash: nil,
+                                       sourceApp: sourceApp, metaWidth: nil, metaHeight: nil), at: 0)
         }
         trim()
         save()
         notify()
     }
 
-    func addImage(_ image: NSImage) {
-        // cgImage 提取与队列外状态捕获轻量，留主线程；PNG 编码走后台（截图管线入口）
-        let prev = imageFileOfFirstImageItem()
+    func addImage(_ image: NSImage, sourceApp: String? = nil) {
+        // cgImage 提取轻量，留主线程；PNG 编码走后台（截图管线入口）
         let cg = image.cgImage()
         ingestQueue.async { [weak self] in
             guard let self, let cg else { return }
             let rep = NSBitmapImageRep(cgImage: cg)
             guard let png = rep.representation(using: .png, properties: [:]) else { return }
-            self.compareAndStore(png, prev: prev)
+            self.compareAndStore(png, sourceApp: sourceApp)
         }
     }
 
     /// 监听器入口：剪贴板里已是 PNG 字节时零编码直写入册
-    func addImageData(_ data: Data) {
-        let prev = imageFileOfFirstImageItem()
+    func addImageData(_ data: Data, sourceApp: String? = nil) {
         ingestQueue.async { [weak self] in
-            self?.compareAndStore(data, prev: prev)
+            self?.compareAndStore(data, sourceApp: sourceApp)
         }
     }
 
-    /// 主线程取最近一条图片的文件名（避免后台线程读 @Published）
-    private func imageFileOfFirstImageItem() -> (id: String, file: String)? {
-        guard let first = items.first, first.kind == .image, let f = first.imageFile else { return nil }
-        return (first.id, f)
+    /// 后台（串行 FIFO）：内容哈希全历史去重 + 落盘，然后回主线程更新索引。
+    /// （修复 A/B/A 重复：哈希比对覆盖全部历史，不再只看最近一张）
+    private func compareAndStore(_ png: Data, sourceApp: String?) {
+        let hash = Self.sha256Hex(png)
+        let dims = Self.imageDimensions(png)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let idx = self.items.firstIndex(where: { $0.kind == .image && $0.contentHash == hash }) {
+                self.applyDedupe(id: self.items[idx].id)
+            } else {
+                let name = UUID().uuidString + ".png"
+                try? png.write(to: self.imagesDir.appendingPathComponent(name), options: .atomic)
+                self.applyNewFile(name, hash: hash, sourceApp: sourceApp,
+                                  width: dims?.width, height: dims?.height)
+            }
+        }
     }
 
-    /// 后台（串行 FIFO）：字节级去重比对 + 落盘，然后回主线程更新索引
-    private func compareAndStore(_ png: Data, prev: (id: String, file: String)?) {
-        if let prev,
-           let existing = try? Data(contentsOf: imagesDir.appendingPathComponent(prev.file)),
-           existing == png {
-            DispatchQueue.main.async { [weak self] in self?.applyDedupe(id: prev.id) }
-        } else {
-            let name = UUID().uuidString + ".png"
-            try? png.write(to: imagesDir.appendingPathComponent(name), options: .atomic)
-            DispatchQueue.main.async { [weak self] in self?.applyNewFile(name) }
-        }
+    static func sha256Hex(_ data: Data) -> String {
+        String(SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined().prefix(32))
+    }
+
+    static func imageDimensions(_ png: Data) -> (width: Int, height: Int)? {
+        guard let src = CGImageSourceCreateWithData(png as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? Int,
+              let h = props[kCGImagePropertyPixelHeight] as? Int else { return nil }
+        return (w, h)
     }
 
     private func applyDedupe(id: String) {
@@ -189,9 +209,11 @@ final class HistoryStore: ObservableObject {
         notify()
     }
 
-    private func applyNewFile(_ name: String) {
+    private func applyNewFile(_ name: String, hash: String?, sourceApp: String?, width: Int?, height: Int?) {
         items.insert(ClipboardItem(id: UUID().uuidString, kind: .image, text: nil,
-                                   imageFile: name, timestamp: Date(), pinned: false), at: 0)
+                                   imageFile: name, timestamp: Date(), pinned: false,
+                                   filePath: nil, tag: nil, contentHash: hash,
+                                   sourceApp: sourceApp, metaWidth: width, metaHeight: height), at: 0)
         trim()
         save()
         notify()
@@ -232,7 +254,7 @@ final class HistoryStore: ObservableObject {
     }
 
     /// 文件条目（Finder ⌘C 等 fileURL 来源），按路径去重
-    func addFile(_ path: String) {
+    func addFile(_ path: String, sourceApp: String? = nil) {
         guard FileManager.default.fileExists(atPath: path) else { return }
         if let idx = items.firstIndex(where: { $0.kind == .file && $0.filePath == path }) {
             var t = items.remove(at: idx)
@@ -240,7 +262,8 @@ final class HistoryStore: ObservableObject {
             items.insert(t, at: 0)
         } else {
             items.insert(ClipboardItem(id: UUID().uuidString, kind: .file, text: nil, imageFile: nil,
-                                       timestamp: Date(), pinned: false, filePath: path, tag: nil), at: 0)
+                                       timestamp: Date(), pinned: false, filePath: path, tag: nil,
+                                       contentHash: nil, sourceApp: sourceApp, metaWidth: nil, metaHeight: nil), at: 0)
         }
         trim()
         save()
@@ -259,6 +282,16 @@ final class HistoryStore: ObservableObject {
         let file = items.first { $0.id == id }?.imageFile
         items.removeAll { $0.id == id }
         if !keepingFile { deleteImageFile(file) }
+        save()
+        notify()
+    }
+
+    /// 批量删除（多选操作）
+    func removeMany(_ ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        let files = items.filter { ids.contains($0.id) }.compactMap { $0.imageFile }
+        items.removeAll { ids.contains($0.id) }
+        files.forEach { deleteImageFile($0) }
         save()
         notify()
     }

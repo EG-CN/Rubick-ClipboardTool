@@ -257,3 +257,70 @@ final class StitchEngineTests: XCTestCase {
         XCTAssertEqual(StitchEngine.scrollOffset(prev: prev, next: next, maxSearch: 100), 45)
     }
 }
+
+/// v1.4.0：哈希去重全历史 / 翻译语向日韩
+final class V14FeatureTests: XCTestCase {
+
+    private func solidImage(_ color: NSColor, size: NSSize = NSSize(width: 40, height: 40)) -> NSImage {
+        let img = NSImage(size: size)
+        img.lockFocus()
+        color.setFill()
+        NSBezierPath(rect: NSRect(origin: .zero, size: size)).fill()
+        img.unlockFocus()
+        return img
+    }
+
+    /// A 图 → 文本 → A 图：跨历史去重（修复 A/B/A 重复）
+    func testImageHashDedupeAcrossHistory() {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cbt-hash-" + UUID().uuidString, isDirectory: true)
+        let store = HistoryStore(baseDir: dir)
+        store.limit = 50
+        let red = solidImage(.red)
+        store.addImage(red)
+        store.addText("中间隔一条文本")
+        store.addImage(red)
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline && store.items.count < 2 {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        XCTAssertEqual(store.items.filter { $0.kind == .image }.count, 1, "A/B/A 应只保留一条")
+        // 不同图不误伤
+        store.addImage(solidImage(.blue))
+        let deadline2 = Date().addingTimeInterval(10)
+        while Date() < deadline2 && store.items.filter({ $0.kind == .image }).count < 2 {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        XCTAssertEqual(store.items.filter { $0.kind == .image }.count, 2, "新图应正常入册")
+    }
+
+    /// 翻译语向：日文/韩文 auto → 目标简体中文
+    func testDetectPairJapaneseKorean() {
+        let ja = TranslationService.detectPair("こんにちは、世界。", direction: .auto)
+        XCTAssertEqual(ja.target.languageCode, "zh")
+        XCTAssertEqual(ja.source.languageCode, "ja")
+        let ko = TranslationService.detectPair("안녕하세요", direction: .auto)
+        XCTAssertEqual(ko.target.languageCode, "zh")
+        XCTAssertEqual(ko.source.languageCode, "ko")
+        // 纯英文仍走 en→zh
+        let en = TranslationService.detectPair("hello world", direction: .auto)
+        XCTAssertEqual(en.target.languageCode, "zh")
+        XCTAssertEqual(en.source.languageCode, "en")
+    }
+
+    /// 图片元信息入册（像素宽高）
+    func testImageMetaDimensions() {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cbt-meta-" + UUID().uuidString, isDirectory: true)
+        let store = HistoryStore(baseDir: dir)
+        store.addImage(solidImage(.green, size: NSSize(width: 64, height: 32)))
+        let deadline = Date().addingTimeInterval(10)
+        while store.items.isEmpty && Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        // Retina 下 lockFocus 的 backing 是 2x：64×32pt 实际 128×64px（元信息记录真实像素）
+        XCTAssertEqual(store.items.first?.metaWidth, 128)
+        XCTAssertEqual(store.items.first?.metaHeight, 64)
+    }
+}
