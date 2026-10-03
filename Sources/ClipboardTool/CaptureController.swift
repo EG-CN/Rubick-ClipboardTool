@@ -158,13 +158,16 @@ final class CaptureController {
     // MARK: 自绘流程
 
     private func startCustom() {
-        Task { @MainActor in
+        if overlayWindow != nil { teardown(restoreFocus: false) }   // 双触发：先拆旧覆盖层与监听
+        // 像素采集/合成必须留在后台（MainActor 整段提升会让 CGDisplayCreateImage
+        // 与全屏合成阻塞主线程）；仅 UI 触点（systemFallback/presentOverlay）回主线程
+        Task {
             do {
                 let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
                 let displays = content.displays
                 let screens = NSScreen.screens
                 guard !displays.isEmpty else {
-                    systemFallback()
+                    await MainActor.run { self.systemFallback() }
                     return
                 }
 
@@ -177,7 +180,7 @@ final class CaptureController {
                     })
                 let appkitFrames: [CGRect] = displays.compactMap { screensByDisplayID[$0.displayID]?.frame }
                 guard appkitFrames.count == displays.count else {
-                    systemFallback()
+                    await MainActor.run { self.systemFallback() }
                     return
                 }
                 let unionRect = appkitFrames.dropFirst().reduce(appkitFrames[0]) { $0.union($1) }
@@ -192,7 +195,7 @@ final class CaptureController {
                 var shots: [ScreenShot] = []
                 for d in displays {
                     guard let screen = screensByDisplayID[d.displayID] else {
-                        systemFallback()
+                        await MainActor.run { self.systemFallback() }
                         return
                     }
                     var cg: CGImage?
@@ -204,7 +207,7 @@ final class CaptureController {
                         cg = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: SCStreamConfiguration())
                     }
                     guard let captured = cg else {
-                        systemFallback()
+                        await MainActor.run { self.systemFallback() }
                         return
                     }
                     shots.append(ScreenShot(frame: screen.frame, image: captured))
@@ -436,7 +439,7 @@ final class CaptureController {
     private func teardown(restoreFocus: Bool) {
         overlayWindow?.orderOut(nil)
         overlayWindow = nil
-        NSApp.setActivationPolicy(.accessory)
+        ActivationPolicyKeeper.shared.release("overlay")
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
         if let m = globalKeyMonitor { NSEvent.removeMonitor(m); globalKeyMonitor = nil }
         if let m = hoverMonitor { NSEvent.removeMonitor(m); hoverMonitor = nil }
@@ -509,20 +512,20 @@ struct CaptureOverlayView: View {
 
     private func confirmPending() {
         guard let sel = pendingSelection, sel.width > 3, sel.height > 3 else { return }
-        onConfirm(globalRect(sel))
+        // 钳制在合成画布内：拖出边界的部分不参与采样
+        let g = globalRect(sel)
+        guard let clamped = g.intersection(unionRect) as CGRect?, !clamped.isNull, clamped.width > 3, clamped.height > 3 else { return }
+        onConfirm(clamped)
     }
 
     private func resizedRect(from base: CGRect, handle: SelHandle, t: CGSize) -> CGRect {
+        // 锚定对边语义：拖左手柄时右边缘固定，越过后钳在 10px，不翻转吸附
         var minX = base.minX, minY = base.minY, maxX = base.maxX, maxY = base.maxY
-        if handle == .tl || handle == .l || handle == .bl { minX = base.minX + t.width }
-        if handle == .tr || handle == .r || handle == .br { maxX = base.maxX + t.width }
-        if handle == .tl || handle == .t || handle == .tr { minY = base.minY + t.height }
-        if handle == .bl || handle == .b || handle == .br { maxY = base.maxY + t.height }
-        var r = CGRect(x: min(minX, maxX), y: min(minY, maxY),
-                       width: abs(maxX - minX), height: abs(maxY - minY))
-        if r.width < 10 { r.size.width = 10 }
-        if r.height < 10 { r.size.height = 10 }
-        return r
+        if handle == .tl || handle == .l || handle == .bl { minX = min(base.maxX - 10, base.minX + t.width) }
+        if handle == .tr || handle == .r || handle == .br { maxX = max(base.minX + 10, base.maxX + t.width) }
+        if handle == .tl || handle == .t || handle == .tr { minY = min(base.maxY - 10, base.minY + t.height) }
+        if handle == .bl || handle == .b || handle == .br { maxY = max(base.minY + 10, base.maxY + t.height) }
+        return CGRect(x: minX, y: minY, width: max(maxX - minX, 10), height: max(maxY - minY, 10))
     }
 
     var body: some View {
@@ -620,6 +623,8 @@ struct CaptureOverlayView: View {
                     dragCurrent = v.location
                 }
                 .onEnded { v in
+                    // 手柄拖拽中：主手势的 onEnded 一律忽略（防双手势竞争误清选区）
+                    if resizeHandle != nil || resizeBase != nil { return }
                     // 待确认态：点选区外取消；选区内静默（确认走 ✓/↵）
                     if let sel = pendingSelection {
                         if !sel.insetBy(dx: -8, dy: -8).contains(v.location) { pendingSelection = nil }

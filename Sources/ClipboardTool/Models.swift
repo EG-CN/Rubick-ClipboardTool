@@ -69,6 +69,8 @@ final class HistoryStore: ObservableObject {
     private let saveQueue = DispatchQueue(label: "clipboardtool.save", qos: .utility)
     /// 剪贴板图片入册串行队列：PNG 编码/磁盘比对/写文件全部离开主线程（卡顿根因之二）
     private let ingestQueue = DispatchQueue(label: "clipboardtool.ingest", qos: .userInitiated)
+    /// hash → item id（仅 ingest 串行队列读写；覆盖同爆发连发的去重窗口）
+    private var hashToID: [String: String] = [:]
 
     /// baseDir 传 nil 时使用默认 Application Support 目录；测试可注入临时目录
     init(baseDir: URL? = nil) {
@@ -111,6 +113,24 @@ final class HistoryStore: ObservableObject {
         guard let data = try? Data(contentsOf: jsonURL),
               let decoded = try? JSONDecoder().decode([ClipboardItem].self, from: data) else { return }
         items = decoded
+        backfillImageHashes()
+    }
+
+    /// 升级补算：旧版本入库的图片条目无 contentHash，后台读文件补算（一次性）
+    private func backfillImageHashes() {
+        let missing = items.filter { $0.kind == .image && $0.contentHash == nil && $0.imageFile != nil }
+        guard !missing.isEmpty else { return }
+        let dir = imagesDir
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            for m in missing {
+                guard let data = try? Data(contentsOf: dir.appendingPathComponent(m.imageFile!)) else { continue }
+                let hash = HistoryStore.sha256Hex(data)
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, let idx = self.items.firstIndex(where: { $0.id == m.id }) else { return }
+                    self.items[idx].contentHash = hash
+                }
+            }
+        }
     }
 
     /// 异步持久化：快照后入串行队列，主线程只做一次数组拷贝
@@ -152,38 +172,47 @@ final class HistoryStore: ObservableObject {
     }
 
     func addImage(_ image: NSImage, sourceApp: String? = nil) {
-        // cgImage 提取轻量，留主线程；PNG 编码走后台（截图管线入口）
+        // cgImage 提取与去重快照读取留主线程；编码/落盘全部后台（主线程只改数组）
         let cg = image.cgImage()
+        let knownItems = items.compactMap { $0.kind == .image ? ($0.id, $0.contentHash) : nil }
         ingestQueue.async { [weak self] in
             guard let self, let cg else { return }
             let rep = NSBitmapImageRep(cgImage: cg)
             guard let png = rep.representation(using: .png, properties: [:]) else { return }
-            self.compareAndStore(png, sourceApp: sourceApp)
+            self.compareAndStore(png, sourceApp: sourceApp, knownItems: knownItems)
         }
     }
 
     /// 监听器入口：剪贴板里已是 PNG 字节时零编码直写入册
     func addImageData(_ data: Data, sourceApp: String? = nil) {
+        let knownItems = items.compactMap { $0.kind == .image ? ($0.id, $0.contentHash) : nil }
         ingestQueue.async { [weak self] in
-            self?.compareAndStore(data, sourceApp: sourceApp)
+            self?.compareAndStore(data, sourceApp: sourceApp, knownItems: knownItems)
         }
     }
 
-    /// 后台（串行 FIFO）：内容哈希全历史去重 + 落盘，然后回主线程更新索引。
-    /// （修复 A/B/A 重复：哈希比对覆盖全部历史，不再只看最近一张）
-    private func compareAndStore(_ png: Data, sourceApp: String?) {
+    /// 后台（串行 FIFO）：内容哈希全历史去重 + 后台落盘，主线程仅插索引。
+    /// （修复 A/B/A 重复：哈希比对覆盖全部历史 + in-flight 索引覆盖同爆发连发）
+    private func compareAndStore(_ png: Data, sourceApp: String?, knownItems: [(id: String, hash: String?)]) {
         let hash = Self.sha256Hex(png)
         let dims = Self.imageDimensions(png)
+        // 命中①：主线程快照里已有同哈希条目
+        if let pair = knownItems.first(where: { $0.hash == hash }) {
+            DispatchQueue.main.async { [weak self] in self?.applyDedupe(id: pair.id) }
+            return
+        }
+        // 命中②：本爆发早前一帧同哈希（串行队列内 hash→id 索引，主线程 applyNewFile 尚未执行也能去重）
+        if let id = hashToID[hash] {
+            DispatchQueue.main.async { [weak self] in self?.applyDedupe(id: id) }
+            return
+        }
+        let id = UUID().uuidString
+        let name = id + ".png"
+        try? png.write(to: imagesDir.appendingPathComponent(name), options: .atomic)   // 后台落盘
+        hashToID[hash] = id
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            if let idx = self.items.firstIndex(where: { $0.kind == .image && $0.contentHash == hash }) {
-                self.applyDedupe(id: self.items[idx].id)
-            } else {
-                let name = UUID().uuidString + ".png"
-                try? png.write(to: self.imagesDir.appendingPathComponent(name), options: .atomic)
-                self.applyNewFile(name, hash: hash, sourceApp: sourceApp,
-                                  width: dims?.width, height: dims?.height)
-            }
+            self?.applyNewFile(id: id, name: name, hash: hash, sourceApp: sourceApp,
+                               width: dims?.width, height: dims?.height)
         }
     }
 
@@ -209,8 +238,8 @@ final class HistoryStore: ObservableObject {
         notify()
     }
 
-    private func applyNewFile(_ name: String, hash: String?, sourceApp: String?, width: Int?, height: Int?) {
-        items.insert(ClipboardItem(id: UUID().uuidString, kind: .image, text: nil,
+    private func applyNewFile(id: String, name: String, hash: String?, sourceApp: String?, width: Int?, height: Int?) {
+        items.insert(ClipboardItem(id: id, kind: .image, text: nil,
                                    imageFile: name, timestamp: Date(), pinned: false,
                                    filePath: nil, tag: nil, contentHash: hash,
                                    sourceApp: sourceApp, metaWidth: width, metaHeight: height), at: 0)

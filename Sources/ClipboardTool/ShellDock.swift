@@ -57,8 +57,7 @@ final class ShellDockController {
                                width: width, height: 72)
             p.setFrame(frame, display: true)
         }
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        ActivationPolicyKeeper.shared.acquire("dock")
         panel?.orderFrontRegardless()
         isVisible = true
         // 全局键盘监听：⎋ 收起（dock 非激活面板、永不成为 key，只能靠全局监听）
@@ -86,7 +85,7 @@ final class ShellDockController {
         panel?.orderOut(nil)
         isVisible = false
         if let m = escMonitor { NSEvent.removeMonitor(m); escMonitor = nil }
-        NSApp.setActivationPolicy(.accessory)
+        ActivationPolicyKeeper.shared.release("dock")
     }
 }
 

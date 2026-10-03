@@ -73,6 +73,7 @@ final class LongScreenshot {
 
     private var running = false
     private var cancelled = false
+    private var clampedToSingleScreen = false
     private var escMonitor: Any?
     private let maxFrames = 25
     private let maxSearch = 600
@@ -98,7 +99,7 @@ final class LongScreenshot {
                 return
             }
             rect = rect.intersection(center.frame)
-            Toast.shared.show("长截图已限制在单屏范围内")
+            clampedToSingleScreen = true
         }
         guard let screen = screenContaining(NSPoint(x: rect.midX, y: rect.midY)),
               let num = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
@@ -124,14 +125,16 @@ final class LongScreenshot {
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             let result = await self.run(rect: rect, displayID: displayID)
-            await MainActor.run {
+            await MainActor.run { [weak self] in
+                guard let self else { return }
                 self.running = false
                 if let m = self.escMonitor { NSEvent.removeMonitor(m); self.escMonitor = nil }
                 switch result {
                 case .success(let image):
                     writeImageToPasteboard(image)
                     HistoryStore.shared.addImage(image)
-                    Toast.shared.showImportant("长截图完成（\(Int(image.size.width))×\(Int(image.size.height))）已进剪贴板")
+                    let note = clampedToSingleScreen ? "（已限制单屏）" : ""
+                    Toast.shared.showImportant("长截图完成\(note)（\(Int(image.size.width))×\(Int(image.size.height))）已进剪贴板")
                 case .failure(let msg):
                     Toast.shared.showImportant("长截图失败：\(msg)")
                 }
@@ -169,8 +172,11 @@ final class LongScreenshot {
                   let sampler = StitchEngine.Sampler(image: cropped) else {
                 return .failure("截屏失败（第 \(frame + 1) 帧）")
             }
+            // 步长自适应上限须与对齐搜索窗联动（Retina 像素行），否则步长大会撞穿搜索窗
+            let step = lastOffset.map { min(24, max(10, $0 / 8)) } ?? 12
+            let searchWindow = max(maxSearch, step * 60)
             if let last = frames.last {
-                guard let offset = StitchEngine.scrollOffset(prev: last.sampler, next: sampler, maxSearch: maxSearch) else {
+                guard let offset = StitchEngine.scrollOffset(prev: last.sampler, next: sampler, maxSearch: searchWindow) else {
                     break   // 对齐失败：以已采集内容收尾
                 }
                 if offset == 0 { break }         // 页面到底
@@ -180,8 +186,7 @@ final class LongScreenshot {
             frames.append((cropped, sampler))
             // 内存：Sampler 只在对齐相邻帧时有用，算完即弃（25 帧 RGBA 常驻可逼近 1GB）
             if frames.count > 1 { frames[frames.count - 2].sampler.data = [] }
-            // 滚动一屏（线单位，负值 = 向下滚）；滚动量自适应：内容稀疏处加大步长
-            let step = lastOffset.map { min(30, max(10, $0 / 6)) } ?? 12
+            // 滚动一屏（线单位，负值 = 向下滚）
             let src = CGEventSource(stateID: .combinedSessionState)
             if let ev = CGEvent(scrollWheelEvent2Source: src, units: .line, wheelCount: 1,
                                 wheel1: -Int32(step), wheel2: 0, wheel3: 0) {

@@ -120,7 +120,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         guard c.count == 4 else { return nil }
         return CGRect(x: c[0], y: c[1], width: c[2], height: c[3])
     }
-    private func persistFrame() {
+    func persistFrame() {
         guard let p = panel else { return }
         let f = p.frame
         UserDefaults.standard.set("\(f.origin.x),\(f.origin.y),\(f.width),\(f.height)",
@@ -193,12 +193,12 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
             positionNearStatusItem()
         }
         // macOS 26/27：accessory App 的 NSApp.activate 不再生效，未激活时面板
-        // 不显示在当前（全屏）空间、点击也不可靠——临时转 regular 激活，关闭还原
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        // 不显示在当前（全屏）空间、点击也不可靠——经协调器转 regular，关闭释放
+        ActivationPolicyKeeper.shared.acquire("panel")
         panelState.searchText = ""
         panelState.filter = .all
         panelState.tagFilter = nil   // 呼出即重置筛选（含标签），上次会话的筛选不残留
+        panelState.multiSelection = []   // 多选同样不跨会话残留
         panel?.makeKeyAndOrderFront(nil)
         // 保持 regular 常驻（面板可见于全屏空间的前提）；粘贴后由
         // reactivatePanel 重新激活，避免首次点击被激活消费
@@ -214,7 +214,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         persistFrame()
         panel?.orderOut(nil)
         removeMonitors()
-        NSApp.setActivationPolicy(.accessory)
+        ActivationPolicyKeeper.shared.release("panel")
         if restoresFocus { restoreFocus() }
     }
 
@@ -225,7 +225,6 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         f.origin.x += delta.x
         f.origin.y -= delta.y
         p.setFrameOrigin(f.origin)
-        persistFrame()
     }
 
     /// 面板当前全局 frame（拖动用）
@@ -234,7 +233,6 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
     /// 直接定位：跟随鼠标实时坐标（1:1 跟手）
     func moveTo(x: CGFloat, y: CGFloat) {
         panel?.setFrameOrigin(NSPoint(x: x, y: y))
-        persistFrame()
     }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -365,10 +363,13 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
             // 但导航/粘贴/快选/关闭仍被面板拦截，纯键盘流不中断（P/T/O 等单键动作编辑态让位于输入）
             if let fr = NSApp.keyWindow?.firstResponder, fr is NSTextView {
                 if pk.matches(.close, event: event) {
-                // 分层退出：先清搜索/筛选，再按才关面板
-                if !panelState.searchText.isEmpty || panelState.tagFilter != nil {
+                // 分层退出：搜索/筛选/多选 → 关面板
+                if !panelState.searchText.isEmpty || panelState.tagFilter != nil
+                    || panelState.filter != .all || !panelState.multiSelection.isEmpty {
                     panelState.searchText = ""
                     panelState.tagFilter = nil
+                    panelState.filter = .all
+                    panelState.multiSelection = []
                     resetSelection()
                     return nil
                 }
@@ -388,10 +389,13 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
             if pk.matches(.navDown, event: event) { self.moveSelection(1); return nil }
             if pk.matches(.paste, event: event) { self.activateSelected(); return nil }
             if pk.matches(.close, event: event) {
-                // 分层退出：先清搜索/筛选，再按才关面板
-                if !panelState.searchText.isEmpty || panelState.tagFilter != nil {
+                // 分层退出：搜索/筛选/多选 → 关面板
+                if !panelState.searchText.isEmpty || panelState.tagFilter != nil
+                    || panelState.filter != .all || !panelState.multiSelection.isEmpty {
                     panelState.searchText = ""
                     panelState.tagFilter = nil
+                    panelState.filter = .all
+                    panelState.multiSelection = []
                     resetSelection()
                     return nil
                 }
@@ -775,7 +779,10 @@ struct HistoryPanelView: View {
                         grabOffset = CGPoint(x: m.x - f.minX, y: m.y - f.minY)
                     }
                 }
-                .onEnded { _ in grabOffset = nil }
+                .onEnded { _ in
+                    grabOffset = nil
+                    HistoryPanelController.shared.persistFrame()
+                }
         )
     }
 
@@ -874,9 +881,13 @@ struct HistoryPanelView: View {
         }
     }
 
+    private static let iconCache = NSCache<NSString, NSImage>()
     static func appIcon(_ bundleID: String) -> NSImage? {
+        if let hit = iconCache.object(forKey: bundleID as NSString) { return hit }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
-        return NSWorkspace.shared.icon(forFile: url.path)
+        let img = NSWorkspace.shared.icon(forFile: url.path)
+        iconCache.setObject(img, forKey: bundleID as NSString)
+        return img
     }
 
     /// 全部历史中出现过的用户标签

@@ -319,8 +319,9 @@ final class V14FeatureTests: XCTestCase {
         while store.items.isEmpty && Date() < deadline {
             RunLoop.main.run(until: Date().addingTimeInterval(0.05))
         }
-        // Retina 下 lockFocus 的 backing 是 2x：64×32pt 实际 128×64px（元信息记录真实像素）
-        XCTAssertEqual(store.items.first?.metaWidth, 128)
-        XCTAssertEqual(store.items.first?.metaHeight, 64)
+        // lockFocus backing 随宿主屏缩放：断言与实际像素一致（1x=64×32，2x=128×64）
+        let scale = Int(NSScreen.main?.backingScaleFactor ?? 2)
+        XCTAssertEqual(store.items.first?.metaWidth, 64 * scale)
+        XCTAssertEqual(store.items.first?.metaHeight, 32 * scale)
     }
 }

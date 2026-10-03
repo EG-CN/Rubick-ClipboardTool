@@ -44,6 +44,30 @@ func simulatePaste() {
     up?.post(tap: .cghidEventTap)
 }
 
+// MARK: - 激活策略协调器
+
+/// 面板/覆盖层谁需要前台谁登记（引用计数），最后一个释放者才还原 accessory。
+/// 修复三个控制器各自无条件翻转 .regular/.accessory 互相拆台
+/// （面板关闭打掉覆盖层的 regular、Dock 还原掉面板的 regular 等）。
+final class ActivationPolicyKeeper {
+    static let shared = ActivationPolicyKeeper()
+    private var owners: Set<String> = []
+    private init() {}
+
+    func acquire(_ owner: String) {
+        owners.insert(owner)
+        if NSApp.activationPolicy() != .regular { NSApp.setActivationPolicy(.regular) }
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func release(_ owner: String) {
+        owners.remove(owner)
+        if owners.isEmpty, NSApp.activationPolicy() == .regular {
+            NSApp.setActivationPolicy(.accessory)
+        }
+    }
+}
+
 // MARK: - 非 key 面板可靠点击
 
 import SwiftUI
