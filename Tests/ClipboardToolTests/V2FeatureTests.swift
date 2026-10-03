@@ -28,6 +28,15 @@ final class V2FeatureTests: XCTestCase {
         let win = CGRect(x: 10, y: 10, width: 100, height: 100)
         XCTAssertEqual(SnapLogic.window(under: CGPoint(x: 50, y: 50), windows: [win]), win)
         XCTAssertNil(SnapLogic.window(under: CGPoint(x: 500, y: 500), windows: [win]))
+        // z 序语义：windows 自前向后排序，重叠时命中最顶层（列表靠前）者，
+        // 而非面积最小者——修复"吸附到后面应用"的回归
+        let frontSmall = CGRect(x: 40, y: 40, width: 30, height: 30)
+        let backBig = CGRect(x: 0, y: 0, width: 100, height: 100)
+        XCTAssertEqual(
+            SnapLogic.window(under: CGPoint(x: 50, y: 50), windows: [frontSmall, backBig]),
+            frontSmall, "列表靠前 = 顶层，应优先命中")
+        let behindFirst = SnapLogic.window(under: CGPoint(x: 50, y: 50), windows: [backBig, frontSmall])
+        XCTAssertEqual(behindFirst, backBig, "调用方未排序时按传入顺序命中（契约：调用方负责 z 序）")
     }
 
     func testNearlyEqualsTolerance() {

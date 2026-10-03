@@ -31,11 +31,10 @@ enum SnapLogic {
     }
 
     /// 光标悬停的窗口（窗口检测吸附，单击直截整窗）。
-    /// 命中多个时取**最小面积**者——桌面等大窗不应遮住其上的小窗口
+    /// windows 必须已按 z 序**自前向后**排序：命中多个时取最靠前的（最顶层）窗口，
+    /// 修复重叠窗口时选中后面应用的问题。桌面壁纸等大窗本就排在最后，无需面积启发式。
     static func window(under point: CGPoint, windows: [CGRect]) -> CGRect? {
-        windows
-            .filter { $0.contains(point) }
-            .min { $0.width * $0.height < $1.width * $1.height }
+        windows.first { $0.contains(point) }
     }
 
     /// 选区是否与窗口几乎重合（单击判定容差）

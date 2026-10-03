@@ -441,6 +441,18 @@ final class AnnotationController {
         txt.fontSize = 24
         txt.displaySize = m.imageRect.size
         m.commit(txt)
+        var step1 = Annotation(tool: .step)
+        step1.rect = CGRect(origin: CGPoint(x: 0.08, y: 0.5), size: .zero)
+        step1.text = "1"
+        step1.fontSize = 18
+        step1.displaySize = m.imageRect.size
+        m.commit(step1)
+        var step2 = Annotation(tool: .step)
+        step2.rect = CGRect(origin: CGPoint(x: 0.25, y: 0.68), size: .zero)
+        step2.text = "2"
+        step2.fontSize = 18
+        step2.displaySize = m.imageRect.size
+        m.commit(step2)
     }
 
     private func confirm() {
@@ -561,29 +573,25 @@ final class AnnotationController {
                 ctx.fill(r)
             }
         case .step:
-            // 与预览同语义（CG 底部原点：引线向右下 = y 减小）
+            // 白底黑字圆号，数字精确居中（无引线——用户反馈观感差）
             let c = CGPoint(x: a.rect.origin.x * imageSize.width,
                             y: (1 - a.rect.origin.y) * imageSize.height)
             let radius = max(a.fontSize * scale * 0.75, 10)
-            ctx.setStrokeColor(CGColor(gray: 1, alpha: 1))
-            ctx.setLineWidth(max(1.5 * scale, 1))
-            ctx.beginPath()
-            ctx.move(to: CGPoint(x: c.x + radius * 0.7, y: c.y - radius * 0.7))
-            ctx.addLine(to: CGPoint(x: c.x + radius * 1.7, y: c.y - radius * 1.7))
-            ctx.strokePath()
             let circle = CGRect(x: c.x - radius, y: c.y - radius, width: radius * 2, height: radius * 2)
             ctx.setFillColor(CGColor(gray: 1, alpha: 1))
             ctx.fillEllipse(in: circle)
             ctx.setStrokeColor(CGColor(gray: 0, alpha: 0.8))
+            ctx.setLineWidth(max(1.2 * scale, 1))
             ctx.strokeEllipse(in: circle)
-            let para = NSMutableParagraphStyle()
-            para.alignment = .center
             let attrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: radius, weight: .bold),
-                .foregroundColor: NSColor.black,
-                .paragraphStyle: para
+                .font: NSFont.systemFont(ofSize: radius * 1.05, weight: .bold),
+                .foregroundColor: NSColor.black
             ]
-            (a.text as NSString).draw(in: circle.offsetBy(dx: 0, dy: radius * 0.15), withAttributes: attrs)
+            let ts = (a.text as NSString).size(withAttributes: attrs)
+            // CG 底部原点：draw(at:) 的 y 为文本基线，文字向上延伸 → 垂直居中取 cy - h/2（实测校准）
+            let origin = CGPoint(x: circle.midX - ts.width / 2,
+                                 y: circle.midY - ts.height / 2)
+            (a.text as NSString).draw(at: origin, withAttributes: attrs)
         }
     }
 
@@ -1039,19 +1047,15 @@ struct AnnotateEditorView: View {
                 ctx.fill(Path(r), with: .color(color.opacity(a.fillOpacity)))
             }
         case .step:
-            // 白底黑字圆号 + 右下引线（规格 B1）；预览与展平共用语义
+            // 白底黑字圆号，数字居中（与展平同语义，无引线）
             let c = CGPoint(x: a.rect.origin.x * imageRect.width,
                             y: a.rect.origin.y * imageRect.height)
             let radius = max(a.fontSize * 0.75, 10)
-            var leader = Path()
-            leader.move(to: CGPoint(x: c.x + radius * 0.7, y: c.y + radius * 0.7))
-            leader.addLine(to: CGPoint(x: c.x + radius * 1.7, y: c.y + radius * 1.7))
-            ctx.stroke(leader, with: .color(.white), lineWidth: 1.5)
             let circle = CGRect(x: c.x - radius, y: c.y - radius, width: radius * 2, height: radius * 2)
             ctx.fill(Path(ellipseIn: circle), with: .color(.white))
-            ctx.stroke(Path(ellipseIn: circle), with: .color(.black.opacity(0.8)), lineWidth: 1.5)
+            ctx.stroke(Path(ellipseIn: circle), with: .color(.black.opacity(0.8)), lineWidth: 1.2)
             ctx.draw(Text(a.text)
-                .font(.system(size: radius, weight: .bold))
+                .font(.system(size: radius * 1.05, weight: .bold))
                 .foregroundColor(.black), in: circle)
         }
     }
@@ -1229,6 +1233,14 @@ struct AnnotateEditorView: View {
                 if t == .text {
                     Text("T")
                         .font(.system(size: 15, weight: .heavy))
+                } else if t == .step {
+                    // 与落笔样式一致的白底黑字圆号（SF Symbol number.circle 观感差）
+                    ZStack {
+                        Circle().fill(Color.white)
+                        Circle().strokeBorder(Color.black.opacity(0.75), lineWidth: 1)
+                        Text("1").font(.system(size: 10, weight: .bold)).foregroundColor(.black)
+                    }
+                    .frame(width: 17, height: 17)
                 } else {
                     Image(systemName: t.symbol)
                         .font(.system(size: 13))

@@ -213,7 +213,13 @@ final class CaptureController {
                     shots.append(ScreenShot(frame: screen.frame, image: captured))
                 }
 
-                // 窗口列表（AppKit 坐标）+ 标题
+                // 窗口列表（AppKit 坐标）+ 标题；按 z 序自前向后排序——
+                // 吸附/单击直截必须命中最顶层窗口（此前未排序，重叠时命中后面应用）
+                let cgList = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]) ?? []
+                var zOrder: [CGWindowID: Int] = [:]
+                for (idx, entry) in cgList.enumerated() {
+                    if let n = entry["kCGWindowNumber"] as? Int { zOrder[CGWindowID(n)] = idx }
+                }
                 let displayFramesSC = displays.map { $0.frame }   // SC 坐标，供整屏窗过滤
                 let windows: [(frame: CGRect, title: String)] = content.windows
                     .filter { w in
@@ -230,6 +236,7 @@ final class CaptureController {
                         let bid = w.owningApplication?.bundleIdentifier ?? ""
                         return !(bid.isEmpty || bid == "com.apple.dock")
                     }
+                    .sorted { (zOrder[$0.windowID] ?? Int.max) < (zOrder[$1.windowID] ?? Int.max) }
                     .map { w in
                         let f = w.frame
                         let appkit = CGRect(x: f.minX,
