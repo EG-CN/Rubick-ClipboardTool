@@ -82,18 +82,18 @@ struct ShotActionView: View {
             Text("已复制")
                 .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(.primary.opacity(0.85))
-            Button("钉图", action: onPin)
+            Text("钉图")
                 .font(.system(size: 11, weight: .medium))
-                .buttonStyle(.plain)
                 .foregroundStyle(RubickTheme.primary(scheme))
-            Button {
-                onClose()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.primary.opacity(0.45))
-            }
-            .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .nonKeyTap(perform: onPin)
+                .help("钉图（⌘⇧P 同效）")
+            Image(systemName: "xmark")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.primary.opacity(0.45))
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+                .nonKeyTap(perform: onClose)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)

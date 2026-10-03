@@ -825,6 +825,15 @@ struct HistoryPanelView: View {
                     }
                 }
             }
+            // 面板开着时新入册条目即时可见（修复"计数涨了列表不动"）
+            .onChange(of: store.items.count) { _ in
+                if !panelState.searchText.isEmpty || panelState.tagFilter != nil || panelState.filter != .all {
+                    return   // 筛选态不强滚，避免打断浏览
+                }
+                if let first = items.first, first.id == store.items.first?.id {
+                    withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(first.id) }
+                }
+            }
         }
     }
 

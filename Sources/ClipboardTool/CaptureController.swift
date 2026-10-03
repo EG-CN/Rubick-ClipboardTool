@@ -158,7 +158,7 @@ final class CaptureController {
     // MARK: 自绘流程
 
     private func startCustom() {
-        Task {
+        Task { @MainActor in
             do {
                 let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
                 let displays = content.displays
