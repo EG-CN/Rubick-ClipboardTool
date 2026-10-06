@@ -29,7 +29,15 @@ enum StitchEngine {
         self.bytesPerRow = w * 4
     }
 
-        /// 位图内存自顶向下：row 0 = 视觉顶行。比对 RG 两通道（灰阶 UI 单通道易误匹配）
+        /// 位图内存自顶向下：row 0 = 视觉顶行。取色：hexAt(x,y) 读 RGB
+    func hexAt(_ x: Int, _ y: Int) -> String? {
+        guard x >= 0, x < width, y >= 0, y < height else { return nil }
+        let o = y * bytesPerRow + x * 4
+        guard o + 2 < data.count else { return nil }
+        return String(format: "#%02X%02X%02X", data[o], data[o + 1], data[o + 2])
+    }
+
+    /// 位图内存自顶向下：row 0 = 视觉顶行。比对 RG 两通道（灰阶 UI 单通道易误匹配）
         func rowEquals(_ rowA: Int, in a: Sampler, _ rowB: Int, tolerance: Int = 3, step: Int = 11) -> Bool {
             let offA = rowA * bytesPerRow
             let offB = rowB * a.bytesPerRow

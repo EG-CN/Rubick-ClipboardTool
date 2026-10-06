@@ -13,6 +13,7 @@ final class HotkeyManager {
         case pinClipboard = 5
         case dragOCR = 6
         case longScreenshot = 7
+        case delayedScreenshot = 8
     }
 
     static let shared = HotkeyManager()
@@ -49,6 +50,7 @@ final class HotkeyManager {
         hotkeys[.pinClipboard] = read(d, "hk.pinClipboard", keyCode: UInt32(kVK_ANSI_P), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧P")
         hotkeys[.dragOCR] = read(d, "hk.dragOCR", keyCode: UInt32(kVK_ANSI_X), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧X")
         hotkeys[.longScreenshot] = read(d, "hk.longShot", keyCode: UInt32(kVK_ANSI_L), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧L")
+        hotkeys[.delayedScreenshot] = read(d, "hk.delayShot", keyCode: UInt32(kVK_ANSI_G), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧G")
     }
 
     private func read(_ d: UserDefaults, _ key: String, keyCode: UInt32, mods: UInt32, display: String) -> Hotkey {
@@ -69,6 +71,7 @@ final class HotkeyManager {
         case .pinClipboard: return "hk.pinClipboard"
         case .dragOCR: return "hk.dragOCR"
         case .longScreenshot: return "hk.longShot"
+        case .delayedScreenshot: return "hk.delayShot"
         }
     }
 
@@ -106,6 +109,8 @@ final class HotkeyManager {
             def = Hotkey(keyCode: UInt32(kVK_ANSI_X), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧X")
         case .longScreenshot:
             def = Hotkey(keyCode: UInt32(kVK_ANSI_L), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧L")
+        case .delayedScreenshot:
+            def = Hotkey(keyCode: UInt32(kVK_ANSI_G), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧G")
         }
         update(action, keyCode: def.keyCode, modifiers: def.modifiers, display: def.display)
     }

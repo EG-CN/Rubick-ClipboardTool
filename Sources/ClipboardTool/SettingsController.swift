@@ -199,6 +199,7 @@ func actionLabel(_ action: HotkeyManager.Action) -> String {
     case .pinClipboard: return "钉剪贴板贴图（Snipaste F3 式）"
     case .dragOCR: return "划图取字（选区识别→复制）"
     case .longScreenshot: return "长截图（实验性：滚动采集+拼接）"
+    case .delayedScreenshot: return "延时截图（倒计时后框选）"
     }
 }
 
@@ -228,6 +229,7 @@ struct SettingsView: View {
     @State private var captureMode = UserDefaults.standard.string(forKey: "capture.mode") ?? "auto"
     @State private var pinScale: Double = UserDefaults.standard.object(forKey: "pin.defaultScale") as? Double ?? 0.7
     @State private var longShot = UserDefaults.standard.object(forKey: "capture.longShot") as? Bool ?? true
+    @State private var delaySeconds = UserDefaults.standard.object(forKey: "capture.delaySeconds") as? Int ?? 3
     @State private var rememberPosition = UserDefaults.standard.object(forKey: "panel.rememberPosition") as? Bool ?? true
     @State private var llmTesting = false
 
@@ -875,6 +877,21 @@ struct SettingsView: View {
                         }
                         Text("自动：已授权屏幕录制 → 自绘（含吸附），否则回退系统框选；标注编辑器两种模式都可用。")
                             .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
+                        HStack {
+                            Text("延时截图").font(.system(size: 12.5))
+                            Spacer()
+                            Picker("", selection: $delaySeconds) {
+                                Text("1 秒").tag(1)
+                                Text("3 秒").tag(3)
+                                Text("5 秒").tag(5)
+                                Text("10 秒").tag(10)
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 220)
+                            .onChange(of: delaySeconds) { v in
+                                UserDefaults.standard.set(v, forKey: "capture.delaySeconds")
+                            }
+                        }
                         Toggle("长截图（实验性）", isOn: $longShot)
                             .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
                             .onChange(of: longShot) { v in UserDefaults.standard.set(v, forKey: "capture.longShot") }

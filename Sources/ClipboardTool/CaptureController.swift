@@ -19,6 +19,10 @@ struct ScreenShot {
 
 /// 选框会话状态（悬停高亮的窗口，视图坐标）
 final class CaptureSessionState: ObservableObject {
+    /// 光标下取色（HEX，悬停实时刷新；⌥+单击复制）
+    @Published var cursorColorHex: String?
+    /// 光标位置（视图坐标，供取色气泡定位）
+    @Published var cursorViewPoint: CGPoint?
     @Published var hoverWindowViewFrame: CGRect?
 }
 
@@ -116,6 +120,20 @@ final class CaptureController {
     func captureForLong() {
         pendingPurpose = .long
         beginCapture()
+    }
+
+    /// 延时截图（⌘⇧G）：倒计时给你时间展开菜单/悬浮态，然后进入框选
+    func captureDelayed() {
+        let seconds = UserDefaults.standard.object(forKey: "capture.delaySeconds") as? Int ?? 3
+        pendingPurpose = .normal
+        Task { @MainActor in
+            for remain in stride(from: max(seconds, 1), through: 1, by: -1) {
+                Toast.shared.show("⏳ \(remain) 秒后进入截图…", duration: 1.1)
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            Toast.shared.hide()
+            beginCapture()
+        }
     }
 
     /// 划图翻译（Bob 式）：滑选文字区域 → OCR → 自动翻译（功能清单 12.9）
@@ -314,6 +332,10 @@ final class CaptureController {
         NSApp.activate(ignoringOtherApps: true)
         // 成为 key（非激活面板不抢应用焦点）：保证首击即生效、按键走本地监听
         window.makeKeyAndOrderFront(nil)
+
+        // 取色采样器：合成图一次性解码缓存（悬停 O(1) 取像素）
+        var colorSampler: StitchEngine.Sampler?
+        if let cg = composite.cgImage() { colorSampler = StitchEngine.Sampler(image: cg) }
 
         // 悬停窗口高亮（鼠标移动即刷新，Snipaste 式）
         hoverMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .otherMouseDragged]) { [weak self, weak session] event in
@@ -640,8 +662,13 @@ struct CaptureOverlayView: View {
                     dragCurrent = v.location
                     defer { dragStart = nil; dragCurrent = nil }
                     guard let raw = rawSelection, raw.width > 3, raw.height > 3 else {
-                        // 单击：命中的窗口直截整窗（Snipaste 式），空白处取消
-                        if let win = SnapLogic.window(under: v.location, windows: windowFrames) {
+                        // ⌥+单击：复制光标下色值（取色器）
+                        if NSApp.currentEvent?.modifierFlags.contains(.option) == true,
+                           let hex = session.cursorColorHex {
+                            writeTextToPasteboard(hex)
+                            Toast.shared.show("已复制色值 \(hex)")
+                        } else if let win = SnapLogic.window(under: v.location, windows: windowFrames) {
+                            // 单击：命中的窗口直截整窗（Snipaste 式），空白处取消
                             onConfirm(globalRect(win))
                         } else {
                             onCancel()

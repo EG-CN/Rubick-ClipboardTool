@@ -237,6 +237,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .longScreenshot:
             hideOverlaysForCapture()
             CaptureController.shared.captureForLong()
+        case .delayedScreenshot:
+            hideOverlaysForCapture()
+            CaptureController.shared.captureDelayed()
         case .openSettings:
             settingsController.toggle()
         }
