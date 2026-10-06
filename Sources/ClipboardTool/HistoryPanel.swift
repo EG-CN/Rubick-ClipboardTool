@@ -164,7 +164,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
             let host = NSHostingView(rootView: HistoryPanelView()
                 .environmentObject(store)
                 .environmentObject(panelState))
-            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 500),
+            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 760, height: 520),
                             styleMask: [.titled, .fullSizeContentView],
                             backing: .buffered, defer: false)
             p.titleVisibility = .hidden
@@ -532,7 +532,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         activate(items[index], copyOnly: false, dismissAfterPaste: true)
     }
 
-    private func activate(_ item: ClipboardItem, copyOnly: Bool, dismissAfterPaste: Bool = false) {
+    func activate(_ item: ClipboardItem, copyOnly: Bool, dismissAfterPaste: Bool = false) {
         let keepOpenNow = keepOpen && !dismissAfterPaste
         if !keepOpenNow { close() }
         if dismissAfterPaste { ShellDockController.shared.hide() }
@@ -686,17 +686,26 @@ struct HistoryPanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            searchField
-            filterChips
-            if items.isEmpty {
-                emptyView
-            } else {
-                list
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    header
+                    searchField
+                    filterChips
+                    if !panelState.multiSelection.isEmpty { bulkBar }
+                    if items.isEmpty {
+                        emptyView
+                    } else {
+                        list
+                    }
+                }
+                .frame(width: 340)
+                Divider()
+                    .overlay(RubickTheme.hairline(scheme).opacity(0.6))
+                inspector
             }
             footer
         }
-        .frame(width: 360, height: 500)
+        .frame(width: 760, height: 520)
         .background(.ultraThinMaterial)
         .background(RubickTheme.panelAurora(scheme))
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -733,7 +742,9 @@ struct HistoryPanelView: View {
                 .font(.system(size: 9))
                 .foregroundStyle(RubickTheme.muted(scheme).opacity(0.5))
                 .help("按住标题栏拖动面板")
-            Text("\(store.items.count) / \(store.limit) 条")
+            Text(items.count == store.items.count
+                 ? "\(store.items.count) / \(store.limit) 条"
+                 : "\(items.count) / \(store.limit) 条（筛选后）")
                 .font(.system(size: 10.5))
                 .foregroundStyle(RubickTheme.muted(scheme))
             Spacer()
@@ -846,27 +857,35 @@ struct HistoryPanelView: View {
                 .nonKeyTap { panelState.tagFilter = active ? nil : t }
             }
             Spacer()
-            if !panelState.multiSelection.isEmpty {
-                Text("已选 \(panelState.multiSelection.count) 条")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(RubickTheme.muted(scheme))
-                Text("删除")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.red)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.red.opacity(0.1)))
-                    .contentShape(Capsule())
-                    .nonKeyTap { HistoryPanelController.shared.deleteMultiSelection() }
-                Text("取消")
-                    .font(.system(size: 11))
-                    .foregroundStyle(RubickTheme.muted(scheme))
-                    .contentShape(Capsule())
-                    .nonKeyTap { panelState.multiSelection = [] }
-            }
         }
         .padding(.horizontal, 14)
         .padding(.bottom, 8)
+    }
+
+    /// 多选批量操作条（⌘点击勾选后出现）
+    private var bulkBar: some View {
+        HStack(spacing: 8) {
+            Text("已选 \(panelState.multiSelection.count) 条")
+                .font(.system(size: 10.5))
+                .foregroundStyle(RubickTheme.muted(scheme))
+            Text("删除所选")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.red)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Color.red.opacity(0.1)))
+                .contentShape(Capsule())
+                .nonKeyTap { HistoryPanelController.shared.deleteMultiSelection() }
+            Text("取消选择")
+                .font(.system(size: 11))
+                .foregroundStyle(RubickTheme.muted(scheme))
+                .contentShape(Capsule())
+                .nonKeyTap { panelState.multiSelection = [] }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 5)
+        .background(Color.red.opacity(0.04))
     }
 
     private func metaText(_ item: ClipboardItem) -> String? {
@@ -895,6 +914,131 @@ struct HistoryPanelView: View {
     private var userTags: [String] {
         Array(Set(store.items.compactMap { $0.tag })).sorted()
     }
+
+    // MARK: 检查器（Arcane Obsidian 右栏：选中条目详情）
+
+    private var selectedItem: ClipboardItem? {
+        items.indices.contains(selected) ? items[selected] : nil
+    }
+
+    @ViewBuilder
+    private var inspector: some View {
+        ScrollView {
+            if let item = selectedItem {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        typeChip(item)
+                        Spacer()
+                        Text(timeAgo(item.timestamp))
+                            .font(.system(size: 10))
+                            .foregroundStyle(RubickTheme.muted(scheme))
+                    }
+                    switch item.kind {
+                    case .text:
+                        Text(item.text ?? "")
+                            .font(.system(size: 12, design: (item.text ?? "").contains("\n") ? .monospaced : .default))
+                            .foregroundStyle(RubickTheme.onSurface(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    case .file:
+                        HStack(spacing: 10) {
+                            Image(nsImage: NSWorkspace.shared.icon(forFile: item.filePath ?? ""))
+                                .resizable().frame(width: 40, height: 40)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text((item.filePath as NSString?)?.lastPathComponent ?? "")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(RubickTheme.onSurface(scheme))
+                                Text(item.filePath ?? "")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(RubickTheme.muted(scheme))
+                            }
+                        }
+                    case .image:
+                        Group {
+                            if let img = store.thumbnail(for: item, maxPixel: 1400) {
+                                Image(nsImage: img).resizable().scaledToFit()
+                            } else {
+                                Rectangle().fill(RubickTheme.surfaceHigh(scheme))
+                            }
+                        }
+                        .frame(maxHeight: 300)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    Divider().overlay(RubickTheme.hairline(scheme))
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let bid = item.sourceApp, !bid.isEmpty {
+                            HStack(spacing: 6) {
+                                if let img = Self.appIcon(bid) {
+                                    Image(nsImage: img).resizable().frame(width: 14, height: 14)
+                                }
+                                Text("来源：\(bid)").font(.system(size: 10.5))
+                            }
+                            .foregroundStyle(RubickTheme.muted(scheme))
+                        }
+                        if let w = item.metaWidth, let h = item.metaHeight {
+                            inspectorMeta("尺寸", "\(w)×\(h) px")
+                        }
+                        if let t = item.text, !t.isEmpty {
+                            inspectorMeta("字数", "\(t.count)")
+                        }
+                        if let hash = item.contentHash {
+                            inspectorMeta("指纹", String(hash.prefix(12)) + "…")
+                        }
+                    }
+                    HStack(spacing: 10) {
+                        inspectorAction("doc.on.doc", "复制") { HistoryPanelController.shared.activate(item, copyOnly: true) }
+                        inspectorAction("arrow.down.circle", "粘贴") { HistoryPanelController.shared.activate(item, copyOnly: false) }
+                        if item.kind == .image {
+                            inspectorAction("pin.fill", "钉图") { HistoryPanelController.shared.pin(item) }
+                            inspectorAction("text.viewfinder", "取字") { HistoryPanelController.shared.ocr(item) }
+                        }
+                        if item.kind == .text {
+                            inspectorAction("character.bubble", "翻译") { HistoryPanelController.shared.translate(item) }
+                        }
+                    }
+                }
+                .padding(14)
+            } else {
+                VStack(spacing: 8) {
+                    Spacer()
+                    Image(systemName: "sidebar.trailing")
+                        .font(.system(size: 22))
+                        .foregroundStyle(RubickTheme.muted(scheme).opacity(0.6))
+                    Text("选中条目查看详情")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(RubickTheme.muted(scheme))
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    private func inspectorMeta(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .top) {
+            Text(label).font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
+            Spacer()
+            Text(value)
+                .font(.system(size: 10.5, design: .monospaced))
+                .foregroundStyle(RubickTheme.onSurface(scheme).opacity(0.85))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+    }
+
+    private func inspectorAction(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
+        VStack(spacing: 3) {
+            Image(systemName: symbol).font(.system(size: 13))
+            Text(label).font(.system(size: 9))
+        }
+        .foregroundStyle(RubickTheme.onSurface(scheme))
+        .frame(width: 52, height: 44)
+        .background(RoundedRectangle(cornerRadius: 7).fill(RubickTheme.surfaceContainer(scheme)))
+        .contentShape(Rectangle())
+        .nonKeyTap(perform: action)
+    }
+
+    private func inspectorMetaRowUnused() {}
 
     // MARK: 空态
 
