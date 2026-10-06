@@ -1054,12 +1054,16 @@ struct AnnotateEditorView: View {
             let circle = CGRect(x: c.x - radius, y: c.y - radius, width: radius * 2, height: radius * 2)
             ctx.fill(Path(ellipseIn: circle), with: .color(.white))
             ctx.stroke(Path(ellipseIn: circle), with: .color(.black.opacity(0.8)), lineWidth: 1.2)
-            // GraphicsContext.draw(Text, in:) 默认贴左上角——用 frame(alignment:.center) 强制居中，
-            // 与展平导出的居中行为一致（否则预览偏左上、导出后数字跳到中间）
+            // draw(Text, in:) 贴 rect 左上角 → 估算文字尺寸、把矩形定到圆心实现居中
+            //（展平导出已实测校准居中，两侧视觉一致）
+            let digits = CGFloat(max(a.text.count, 1))
+            let labelW = radius * 1.05 * 0.68 * digits
+            let labelH = radius * 1.05 * 1.25
+            let labelRect = CGRect(x: circle.midX - labelW / 2, y: circle.midY - labelH / 2,
+                                   width: labelW, height: labelH)
             ctx.draw(Text(a.text)
                 .font(.system(size: radius * 1.05, weight: .bold))
-                .foregroundColor(.black)
-                .frame(width: radius * 2, height: radius * 2, alignment: .center), in: circle)
+                .foregroundColor(.black), in: labelRect)
         }
     }
 
