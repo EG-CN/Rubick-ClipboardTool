@@ -1054,9 +1054,12 @@ struct AnnotateEditorView: View {
             let circle = CGRect(x: c.x - radius, y: c.y - radius, width: radius * 2, height: radius * 2)
             ctx.fill(Path(ellipseIn: circle), with: .color(.white))
             ctx.stroke(Path(ellipseIn: circle), with: .color(.black.opacity(0.8)), lineWidth: 1.2)
+            // GraphicsContext.draw(Text, in:) 默认贴左上角——用 frame(alignment:.center) 强制居中，
+            // 与展平导出的居中行为一致（否则预览偏左上、导出后数字跳到中间）
             ctx.draw(Text(a.text)
                 .font(.system(size: radius * 1.05, weight: .bold))
-                .foregroundColor(.black), in: circle)
+                .foregroundColor(.black)
+                .frame(width: radius * 2, height: radius * 2, alignment: .center), in: circle)
         }
     }
 
