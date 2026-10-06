@@ -82,6 +82,8 @@ final class CaptureController {
     var onCaptured: ((NSImage) -> Void)?
 
     private var overlayWindow: NSWindow?
+    private var colorSampler: StitchEngine.Sampler?
+    private var delayTask: Task<Void, Never>?
     private var keyMonitor: Any?
     private var globalKeyMonitor: Any?
     private var hoverMonitor: Any?
@@ -122,16 +124,27 @@ final class CaptureController {
         beginCapture()
     }
 
-    /// 延时截图（⌘⇧G）：倒计时给你时间展开菜单/悬浮态，然后进入框选
+    /// 延时截图（⌘⇧G）：倒计时给你时间展开菜单/悬浮态，然后进入框选。
+    /// 倒计时中再按 ⌘⇧G = 取消；其它截图热键会取消本任务（见 beginCapture）
     func captureDelayed() {
-        let seconds = UserDefaults.standard.object(forKey: "capture.delaySeconds") as? Int ?? 3
-        pendingPurpose = .normal
-        Task { @MainActor in
+        if let t = delayTask {
+            t.cancel()
+            delayTask = nil
+            Toast.shared.show("已取消延时截图")
+            return
+        }
+        Toast.shared.show("⏳ 倒计时开始，再按 ⌘⇧G 可取消", duration: 1.2)
+        delayTask = Task { @MainActor in
+            let seconds = UserDefaults.standard.object(forKey: "capture.delaySeconds") as? Int ?? 3
             for remain in stride(from: max(seconds, 1), through: 1, by: -1) {
+                if Task.isCancelled { return }
                 Toast.shared.show("⏳ \(remain) 秒后进入截图…", duration: 1.1)
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
+            guard !Task.isCancelled else { return }
+            delayTask = nil
             Toast.shared.hide()
+            pendingPurpose = .normal
             beginCapture()
         }
     }
@@ -149,6 +162,8 @@ final class CaptureController {
     }
 
     private func beginCapture() {
+        delayTask?.cancel()
+        delayTask = nil
         let allowed = Self.screenRecordingAllowed()
         if mode == "system" {
             systemFallback()
@@ -333,8 +348,7 @@ final class CaptureController {
         // 成为 key（非激活面板不抢应用焦点）：保证首击即生效、按键走本地监听
         window.makeKeyAndOrderFront(nil)
 
-        // 取色采样器：合成图一次性解码缓存（悬停 O(1) 取像素）
-        var colorSampler: StitchEngine.Sampler?
+        // 取色采样器：合成图一次性解码缓存（悬停 O(1) 取像素；teardown 释放）
         if let cg = composite.cgImage() { colorSampler = StitchEngine.Sampler(image: cg) }
 
         // 悬停窗口高亮（鼠标移动即刷新，Snipaste 式）
@@ -345,6 +359,15 @@ final class CaptureController {
                 let viewPoint = CGPoint(x: m.x - unionRect.origin.x,
                                         y: unionRect.height - (m.y - unionRect.origin.y))
                 session.hoverWindowViewFrame = SnapLogic.window(under: viewPoint, windows: windowViewFrames)
+                if let smp = colorSampler, smp.width > 0, unionRect.width > 0 {
+                    let sx = CGFloat(smp.width) / unionRect.width
+                    let sy = CGFloat(smp.height) / unionRect.height
+                    let px = min(max(Int(viewPoint.x * sx), 0), smp.width - 1)
+                    let py = min(max(Int(viewPoint.y * sy), 0), smp.height - 1)
+                    let hex = smp.hexAt(px, py)
+                    if hex != session.cursorColorHex { session.cursorColorHex = hex }
+                    session.cursorViewPoint = viewPoint
+                }
             }
             return event
         }
@@ -468,6 +491,7 @@ final class CaptureController {
     private func teardown(restoreFocus: Bool) {
         overlayWindow?.orderOut(nil)
         overlayWindow = nil
+        colorSampler = nil
         ActivationPolicyKeeper.shared.release("overlay")
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
         if let m = globalKeyMonitor { NSEvent.removeMonitor(m); globalKeyMonitor = nil }
@@ -489,7 +513,7 @@ struct CaptureOverlayView: View {
     /// 可吸附窗口帧（视图坐标，左上原点）
     var windowFrames: [CGRect] = []
     @ObservedObject var session: CaptureSessionState
-    var hintText: String = "拖拽框选 · 手柄微调 · ↵/✓ 确认 · ⎋ 取消"
+    var hintText: String = "拖拽框选 · 手柄微调 · ⌥单击取色 · ↵/✓ 确认 · ⎋ 取消"
     let onCancel: () -> Void
     let onConfirm: (CGRect) -> Void
 
@@ -604,6 +628,30 @@ struct CaptureOverlayView: View {
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.top, 18)
                     .allowsHitTesting(false)
+            }
+
+            // 取色气泡：光标旁实时色值（⌥+单击复制 HEX）
+            if dragStart == nil && pendingSelection == nil,
+               let hex = session.cursorColorHex, let pt = session.cursorViewPoint {
+                let rgb = UInt32(hex.dropFirst(), radix: 16) ?? 0
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(Color(hex: rgb))
+                        .frame(width: 10, height: 10)
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
+                    Text(hex)
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white)
+                    Text("⌥单击复制")
+                        .font(.system(size: 8.5))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(.black.opacity(0.75)))
+                .position(x: min(max(pt.x, 70), unionRect.width - 70),
+                          y: max(pt.y - 30, 16))
+                .allowsHitTesting(false)
             }
 
             // 待确认选区：8 手柄微调（规格 A1）+ 选区下方 ✓/✗（规格 A2 落点）

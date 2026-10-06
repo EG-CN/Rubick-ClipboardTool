@@ -818,6 +818,7 @@ struct HistoryPanelView: View {
                     .nonKeyTap {
                         panelState.filter = kind
                         panelState.tagFilter = nil
+                        panelState.multiSelection = []   // 切换筛选清多选：防止删除不可见条目
                     }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)

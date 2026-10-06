@@ -12,7 +12,7 @@ enum RubickTheme {
     static let darkSurfaceHigh = Color(hex: 0x262A30)       // container-high
     static let darkOnSurface = Color(hex: 0xE0E2EA)
     static let darkOnSurfaceVariant = Color(hex: 0x94A3B8)  // Text Muted
-    static let darkOutline = Color(hex: 0x3C4A42)           // outline_variant
+    static let darkOutline = Color(hex: 0x2E343C)           // outline_variant（中性蓝灰）
     /// 暗色荧光强调（Arcane Phosphor，选中/聚焦辉光）
     static let arcaneGlow = Color(hex: 0x34D399)
 
@@ -48,7 +48,7 @@ enum RubickTheme {
     /// 面板底衬（奥术夜幕/黎明：顶部极光渐变 + 基底色，垫在材质后透出）
     static func panelAurora(_ scheme: ColorScheme) -> some View {
         let base = scheme == .dark ? Color(hex: 0x101419) : Color(hex: 0xFBFCFA)
-        let glowTop = scheme == .dark ? Color(hex: 0x0F2A22) : Color(hex: 0xD9EBDB)
+        let glowTop = scheme == .dark ? Color(hex: 0x17362B) : Color(hex: 0xD9EBDB)
         return ZStack {
             base
             LinearGradient(colors: [glowTop.opacity(scheme == .dark ? 0.85 : 0.65),
@@ -159,15 +159,22 @@ struct Keycap: View {
             .frame(minHeight: 20)
             .background(
                 RoundedRectangle(cornerRadius: 5)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(keyFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 5)
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                    .strokeBorder(keyBorder, lineWidth: 1)
             )
             .overlay(alignment: .bottom) {
                 Rectangle().fill(Color.black.opacity(0.4)).frame(height: 1).blur(radius: 0.5)
             }
+    }
+
+    private var keyFill: Color {
+        scheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.05)
+    }
+    private var keyBorder: Color {
+        scheme == .dark ? Color.white.opacity(0.12) : RubickTheme.hairline(scheme)
     }
 }
 

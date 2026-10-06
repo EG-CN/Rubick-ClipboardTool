@@ -29,7 +29,7 @@ enum StitchEngine {
         self.bytesPerRow = w * 4
     }
 
-        /// 位图内存自顶向下：row 0 = 视觉顶行。取色：hexAt(x,y) 读 RGB
+        /// 取色：hexAt(x,y) 读 RGB（行序自顶向下，见 Sampler 说明）
     func hexAt(_ x: Int, _ y: Int) -> String? {
         guard x >= 0, x < width, y >= 0, y < height else { return nil }
         let o = y * bytesPerRow + x * 4
