@@ -86,6 +86,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        if let index = CommandLine.arguments.firstIndex(of: "--diagnose-menu-bar"),
+           CommandLine.arguments.count > index + 1 {
+            let path = CommandLine.arguments[index + 1]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                MenuBarDiagnostics.run(to: path)
+            }
+        }
+
         // 首次启动引导辅助功能权限（模拟粘贴需要）
         if !AXIsProcessTrusted() {
             requestAccessibilityIfNeeded()

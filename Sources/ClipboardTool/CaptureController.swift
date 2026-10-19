@@ -372,11 +372,11 @@ final class CaptureController {
         if !AXIsProcessTrusted() {
             Toast.shared.showImportant("提示：⎋/↵ 快捷键需辅助功能权限；拖拽与单击不受影响")
         }
-        // 呼出加固：临时转 regular 激活——未激活时覆盖层在全屏空间不可见、
-        // 首击被激活消费、⎋/↵ 本地监听不触发（面板同款根因）；teardown 还原
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-        // 成为 key（非激活面板不抢应用焦点）：保证首击即生效、按键走本地监听
+        // Nonactivating keyable panels receive input without creating a Dock icon.
+        ActivationPolicyKeeper.shared.acquire("overlay")
+        window.becomesKeyOnlyIfNeeded = false
+        window.hidesOnDeactivate = false
+        window.orderFrontRegardless()
         window.makeKeyAndOrderFront(nil)
 
         // 取色采样器：合成图一次性解码缓存（悬停 O(1) 取像素；teardown 释放）

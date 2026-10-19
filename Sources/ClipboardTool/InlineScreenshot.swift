@@ -222,7 +222,9 @@ final class InlineScreenshotController {
         // by macOS/Spaces; never stretch the composite into a screen-sized content view.
         for frame in frames {
             let viewport = InlineScreenshotViewport(screenFrame: frame, sceneFrame: union)
-            let panel = InlineScreenshotPanel(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            let panel = InlineScreenshotPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            panel.hidesOnDeactivate = false
+            panel.becomesKeyOnlyIfNeeded = false
             panel.title = "拉比克 · 截图"
             panel.level = demo ? .floating : .screenSaver
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]

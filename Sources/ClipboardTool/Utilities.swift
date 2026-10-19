@@ -46,9 +46,9 @@ func simulatePaste() {
 
 // MARK: - 激活策略协调器
 
-/// 面板/覆盖层谁需要前台谁登记（引用计数），最后一个释放者才还原 accessory。
-/// 修复三个控制器各自无条件翻转 .regular/.accessory 互相拆台
-/// （面板关闭打掉覆盖层的 regular、Dock 还原掉面板的 regular 等）。
+/// Keep a menu-bar-only application throughout every window session.
+/// Keyable nonactivating panels receive keyboard focus without promoting the
+/// application to `.regular`, which would create a Dock icon.
 final class ActivationPolicyKeeper {
     static let shared = ActivationPolicyKeeper()
     private var owners: Set<String> = []
@@ -56,13 +56,16 @@ final class ActivationPolicyKeeper {
 
     func acquire(_ owner: String) {
         owners.insert(owner)
-        if NSApp.activationPolicy() != .regular { NSApp.setActivationPolicy(.regular) }
-        NSApp.activate(ignoringOtherApps: true)
+        keepMenuBarOnly()
     }
 
     func release(_ owner: String) {
         owners.remove(owner)
-        if owners.isEmpty, NSApp.activationPolicy() == .regular {
+        keepMenuBarOnly()
+    }
+
+    private func keepMenuBarOnly() {
+        if NSApp.activationPolicy() != .accessory {
             NSApp.setActivationPolicy(.accessory)
         }
     }

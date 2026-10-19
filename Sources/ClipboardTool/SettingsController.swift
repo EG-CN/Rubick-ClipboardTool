@@ -22,9 +22,12 @@ final class SettingsController {
     func show() {
         if window == nil {
             let host = NSHostingView(rootView: SettingsView().environmentObject(HistoryStore.shared))
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 840, height: 620),
-                             styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            let w = KeyablePanel(contentRect: NSRect(x: 0, y: 0, width: 840, height: 620),
+                             styleMask: [.titled, .closable, .resizable, .nonactivatingPanel],
                              backing: .buffered, defer: false)
+            w.hidesOnDeactivate = false
+            w.becomesKeyOnlyIfNeeded = false
+            w.level = .normal
             w.title = "拉比克设置"
             w.isOpaque = false
             w.backgroundColor = .clear
@@ -45,8 +48,8 @@ final class SettingsController {
             }
         }
         ActivationPolicyKeeper.shared.acquire("settings")
+        window?.orderFrontRegardless()
         window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     func close() {
@@ -274,7 +277,7 @@ struct SettingsView: View {
             trusted = AXIsProcessTrusted()
             screenAllowed = CaptureController.screenRecordingAllowed()
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             trusted = AXIsProcessTrusted()
             screenAllowed = CaptureController.screenRecordingAllowed()
             autoLaunch = SMAppService.mainApp.status == .enabled

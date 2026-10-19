@@ -164,8 +164,8 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
             let host = NSHostingView(rootView: HistoryPanelView()
                 .environmentObject(store)
                 .environmentObject(panelState))
-            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 920, height: 620),
-                            styleMask: [.titled, .resizable, .fullSizeContentView],
+            let p = KeyablePanel(contentRect: NSRect(x: 0, y: 0, width: 920, height: 620),
+                            styleMask: [.titled, .resizable, .fullSizeContentView, .nonactivatingPanel],
                             backing: .buffered, defer: false)
             p.minSize = NSSize(width: 820, height: 540)
             p.titleVisibility = .hidden
@@ -175,6 +175,7 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
             p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             p.isFloatingPanel = true
             p.hidesOnDeactivate = false
+            p.becomesKeyOnlyIfNeeded = false
             p.backgroundColor = .clear
             p.isOpaque = false
             p.hasShadow = true
@@ -193,16 +194,14 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
         } else {
             positionNearStatusItem()
         }
-        // macOS 26/27：accessory App 的 NSApp.activate 不再生效，未激活时面板
-        // 不显示在当前（全屏）空间、点击也不可靠——经协调器转 regular，关闭释放
+        // A keyable nonactivating panel takes keyboard focus without a Dock icon.
         ActivationPolicyKeeper.shared.acquire("panel")
         panelState.searchText = ""
         panelState.filter = .all
         panelState.tagFilter = nil   // 呼出即重置筛选（含标签），上次会话的筛选不残留
         panelState.multiSelection = []   // 多选同样不跨会话残留
         panel?.makeKeyAndOrderFront(nil)
-        // 保持 regular 常驻（面板可见于全屏空间的前提）；粘贴后由
-        // reactivatePanel 重新激活，避免首次点击被激活消费
+        // The panel keeps keyboard focus while the app stays menu-bar-only.
         resetSelection()
         installMonitors()
         NotificationCenter.default.post(name: .panelShown, object: nil)
