@@ -738,7 +738,7 @@ struct HistoryPanelView: View {
 
     private var header: some View {
         HStack(spacing: 7) {
-            ArcaneSparkle(size: 13, glow: true)
+            RubickEmblem(size: 13)
             Text("拉比克")
                 .font(.system(size: 15, weight: .semibold))
             Image(systemName: "line.3.horizontal")
@@ -1030,7 +1030,6 @@ struct HistoryPanelView: View {
         .nonKeyTap(perform: action)
     }
 
-    private func inspectorMetaRowUnused() {}
 
     // MARK: 空态
 
@@ -1271,7 +1270,6 @@ struct HistoryPanelView: View {
             .nonKeyTap(perform: action)
     }
 
-    private func selectedIsCurrent(_ symbol: String) -> Bool { false }
 
     // MARK: 底部状态栏
 

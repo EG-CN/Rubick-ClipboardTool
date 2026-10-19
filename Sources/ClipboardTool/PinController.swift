@@ -252,7 +252,7 @@ struct PinImageView: View {
         )
         .overlay(alignment: .topLeading) {
             // ✦ 徽记：贴图上唯一的品牌符号（奥术纸墨语言）
-            ArcaneSparkle(size: 10)
+            RubickEmblem(size: 10)
                 .padding(4)
                 .allowsHitTesting(false)
                 .opacity(0.9)

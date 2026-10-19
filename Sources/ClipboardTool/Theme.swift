@@ -13,14 +13,10 @@ enum RubickTheme {
     static let darkOnSurface = Color(hex: 0xE0E2EA)
     static let darkOnSurfaceVariant = Color(hex: 0x94A3B8)  // Text Muted
     static let darkOutline = Color(hex: 0x2E343C)           // outline_variant（中性蓝灰）
-    /// 暗色荧光强调（Arcane Phosphor，选中/聚焦辉光）
-    static let arcaneGlow = Color(hex: 0x34D399)
 
     // 强调色（祖母绿三阶：Core/Phosphor/Verdant）
     static let emerald = Color(hex: 0x23845B)       // 浅色（纸面墨绿）
     static let emeraldBright = Color(hex: 0x34D399) // 暗色（Arcane Phosphor）
-    static let emeraldDeep = Color(hex: 0x276746)   // 浅色文字绿
-    static let arcanePurple = Color(hex: 0x8A2BE2)  // 已退役：仅保留定义兼容旧引用
 
     // 浅色（Arcane Paper：纸白）
     static let lightText = Color(hex: 0x23281F)
@@ -116,33 +112,6 @@ extension View {
         modifier(SpellSlotModifier(hovering: hovering, selected: selected, cornerRadius: cornerRadius))
     }
 
-    /// 通用卡片（保留旧 API：去发光后的发丝线卡片，供非列表场景使用）
-    func glowCard(hovering: Bool, selected: Bool = false, cornerRadius: CGFloat = 8) -> some View {
-        modifier(GlowCardModifier(hovering: hovering, selected: selected, cornerRadius: cornerRadius))
-    }
-}
-
-struct GlowCardModifier: ViewModifier {
-    @Environment(\.colorScheme) private var scheme
-    var hovering: Bool
-    var selected: Bool = false
-    var cornerRadius: CGFloat = 8
-
-    func body(content: Content) -> some View {
-        let active = hovering || selected
-        return content
-            .background(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(active
-                          ? RubickTheme.primary(scheme).opacity(0.06)
-                          : RubickTheme.surfaceContainer(scheme))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(active ? RubickTheme.primary(scheme) : RubickTheme.hairline(scheme),
-                                  lineWidth: active ? 1.2 : 1)
-            )
-    }
 }
 
 // MARK: - 机械键帽（Arcane Obsidian 特征件：快捷键真实按键质感）
@@ -175,17 +144,5 @@ struct Keycap: View {
     }
     private var keyBorder: Color {
         scheme == .dark ? Color.white.opacity(0.12) : RubickTheme.hairline(scheme)
-    }
-}
-
-// MARK: - ✦ 徽记（拉比克品牌符号）
-
-struct ArcaneSparkle: View {
-    var size: CGFloat = 12
-    var glow: Bool = false
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        RubickEmblem(size: size)
     }
 }

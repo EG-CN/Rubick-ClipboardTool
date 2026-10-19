@@ -103,7 +103,7 @@ struct ShellDockView: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 10) {
-            ArcaneSparkle(size: 13, glow: true)
+            RubickEmblem(size: 13)
                 .padding(.bottom, 10)
             Rectangle()
                 .fill(RubickTheme.hairline(scheme))
