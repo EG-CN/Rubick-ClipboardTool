@@ -6,7 +6,6 @@ final class ScreenshotController {
     static let shared = ScreenshotController()
 
     var onCaptured: ((NSImage) -> Void)?
-    private var previousChangeCount = NSPasteboard.general.changeCount
 
     private init() {
         // v2.0：自绘截图/标注链路的最终产物统一从这里回调（AppDelegate 已接 onCaptured）
@@ -21,30 +20,20 @@ final class ScreenshotController {
 
     /// 系统框选回退（免屏幕录制权限，无吸附）；完成回调
     func captureSystemInteractive(completion: @escaping (NSImage?) -> Void) {
-        previousChangeCount = NSPasteboard.general.changeCount
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("rubick-capture-" + UUID().uuidString + ".png")
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-        proc.arguments = ["-i", "-c"]   // 交互框选 + 复制到剪贴板（不落盘）
-        proc.terminationHandler = { [weak self] _ in
+        proc.arguments = ["-i", "-o", "-t", "png", file.path]
+        proc.terminationHandler = { _ in
             DispatchQueue.main.async {
-                guard let self = self else {
-                    completion(nil)
-                    return
-                }
-                let pb = NSPasteboard.general
-                // changeCount 未变 = 用户按 ⎋ 取消
-                guard pb.changeCount != self.previousChangeCount else {
-                    completion(nil)
-                    return
-                }
-                if let data = pb.data(forType: .png) ?? pb.data(forType: .tiff),
-                   let img = NSImage(data: data) {
-                    completion(img)
-                } else {
-                    completion(nil)
-                }
+                defer { try? FileManager.default.removeItem(at: file) }
+                completion(NSImage(contentsOf: file))
             }
         }
-        try? proc.run()
+        do { try proc.run() }
+        catch {
+            try? FileManager.default.removeItem(at: file)
+            completion(nil)
+        }
     }
 }

@@ -5,10 +5,8 @@
 set -e
 cd "$(dirname "$0")/.."
 
-if ! security find-identity -v 2>/dev/null | grep -qE "Apple Development|ClipboardTool Dev"; then
-  echo "==> 首次运行：创建固定签名证书「ClipboardTool Dev」（会弹一次密码框）…"
-  ./scripts/setup-signing.sh
-fi
+source scripts/signing-policy.sh
+rubick_require_signing_identity
 
 echo "==> 构建通用版并用固定证书签名…"
 ./scripts/make-app.sh --universal
@@ -17,4 +15,4 @@ echo "==> 安装到 /Applications 并启动…"
 ./scripts/reinstall.command
 
 echo ""
-echo "✅ 完成。此后每次更新只需再双击本脚本，辅助功能/屏幕录制授权不会失效。"
+echo "✅ 完成。此后每次更新只需再双击本脚本，更新前会验证签名身份一致；系统权限变化仍需按系统提示处理。"

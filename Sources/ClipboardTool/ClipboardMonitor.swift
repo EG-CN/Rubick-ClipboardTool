@@ -24,6 +24,12 @@ final class ClipboardMonitor {
     private var pendingSelfWrites = 0
     func suppressNextCapture() { pendingSelfWrites += 1 }
 
+    /// A synchronous write has finished: acknowledge its exact version, not an unknown future change.
+    func acknowledgeCurrentWrite() {
+        lastChangeCount = NSPasteboard.general.changeCount
+        pendingSelfWrites = 0
+    }
+
     private var timer: Timer?
     private var lastChangeCount: Int = NSPasteboard.general.changeCount
 

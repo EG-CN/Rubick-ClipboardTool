@@ -11,6 +11,10 @@ if [ ! -d "$APP_SRC" ]; then
   exit 1
 fi
 
+# Validate against the currently authorized identity before stopping or removing it.
+source scripts/signing-policy.sh
+rubick_verify_update "$APP_SRC"
+
 echo "==> 退出正在运行的拉比克…"
 osascript -e 'tell application "拉比克" to quit' 2>/dev/null || killall ClipboardTool 2>/dev/null || true
 sleep 1
@@ -29,5 +33,5 @@ open "$APP_DST"
 
 echo ""
 echo "✅ 完成！版本：$(defaults read "$APP_DST/Contents/Info" CFBundleShortVersionString 2>/dev/null || plutil -extract CFBundleShortVersionString raw "$APP_DST/Contents/Info.plist")"
-echo "⚠️  首次打开请到 系统设置 → 隐私与安全性 → 辅助功能 重新勾选「拉比克」（重装后自动粘贴授权会失效一次）。"
+echo "如系统首次要求授权，请在隐私与安全性中确认；本脚本不会重置现有权限。"
 echo "（窗口吸附还需要「屏幕录制」权限，首次 ⌘⇧A 时会引导。）"

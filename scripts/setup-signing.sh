@@ -1,37 +1,43 @@
 #!/bin/bash
-# 一次性脚本：生成固定代码签名证书「ClipboardTool Dev」
-# 解决 ad-hoc 签名每次构建指纹变化 → 辅助功能（自动粘贴）授权失效的问题
-# 只需在本机运行一次；之后 make-app.sh 会自动用该身份签名，授权永久有效。
-set -e
+# One-time local signing identity; trust is scoped to code signing.
+set -euo pipefail
 cd "$(dirname "$0")/.."
-
-CERT_DIR=".signing"
-mkdir -p "$CERT_DIR"
-CERT="$CERT_DIR/cbt-dev-cert.pem"
-P12="$CERT_DIR/cbt-dev.p12"
-
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "ClipboardTool Dev"; then
-  echo "==> 已存在「ClipboardTool Dev」签名身份，跳过生成"
-else
-  # 清理同名残留身份（重复生成会导致 codesign 报 multiple matching identities）
-  security delete-identity -c "ClipboardTool Dev" ~/Library/Keychains/login.keychain-db 2>/dev/null || true
-  echo "==> 1/4 生成自签名证书（10 年有效）"
-  openssl req -x509 -newkey rsa:2048 -nodes \
-    -keyout "$CERT_DIR/cbt-key.pem" -out "$CERT" -days 3650 \
-    -subj "/CN=ClipboardTool Dev"
-
-  echo "==> 2/4 打包为 p12 并导入钥匙串（密码 cbtdev，仅本地开发用）"
-  # macOS security import 不认 OpenSSL 3.x 默认的 AES/SHA-256 p12（报 MAC verification failed），
-  # 显式指定老式 SHA1+3DES 算法保证兼容
-  openssl pkcs12 -export -inkey "$CERT_DIR/cbt-key.pem" -in "$CERT" \
-    -out "$P12" -passout pass:cbtdev \
-    -macalg sha1 -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES
-  security import "$P12" -k ~/Library/Keychains/login.keychain-db -P cbtdev -T /usr/bin/codesign
-
-  echo "==> 3/4 设置信任"
-  security add-trusted-cert -d -r trustRoot -k ~/Library/Keychains/login.keychain-db "$CERT"
+umask 077
+CERT_NAME="Rubick Local Signing"
+PIN_FILE=".signing/identity.sha1"
+mkdir -p .signing
+if [ -f "$PIN_FILE" ]; then
+  PIN=$(cat "$PIN_FILE")
+  if security find-identity -v -p codesigning | grep -Fq "$PIN"; then
+    echo "固定签名身份已存在。"
+    exit 0
+  fi
+  echo "已固定的签名身份不可用，停止以避免生成不同证书。" >&2
+  exit 1
 fi
-
-echo "==> 4/4 验证"
-security find-identity -v -p codesigning | grep "ClipboardTool Dev" && \
-  echo "==> 完成！接下来：① ./scripts/make-app.sh 重新打包；② 打开新包；③ 系统设置→隐私与安全性→辅助功能：先选中旧的「剪贴板工具」条目按 − 删除，再按 + 添加新包（或等它弹窗）；④ 重启应用即可自动粘贴。"
+SIGN_DIR=$(mktemp -d /private/tmp/rubick-signing.XXXXXX)
+trap 'rm -rf "$SIGN_DIR"' EXIT
+cat > "$SIGN_DIR/cert.cnf" <<'CONF'
+[req]
+distinguished_name=dn
+x509_extensions=extensions
+prompt=no
+[dn]
+CN=Rubick Local Signing
+[extensions]
+basicConstraints=critical,CA:FALSE
+keyUsage=critical,digitalSignature
+extendedKeyUsage=critical,codeSigning
+subjectKeyIdentifier=hash
+CONF
+/usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -sha256 -config "$SIGN_DIR/cert.cnf" -keyout "$SIGN_DIR/key.pem" -out "$SIGN_DIR/cert.pem" 2> "$SIGN_DIR/generation.log" || { cat "$SIGN_DIR/generation.log" >&2; exit 1; }
+P12_PASSWORD=$(/usr/bin/openssl rand -hex 24)
+export P12_PASSWORD
+/usr/bin/openssl pkcs12 -export -inkey "$SIGN_DIR/key.pem" -in "$SIGN_DIR/cert.pem" -out "$SIGN_DIR/identity.p12" -passout env:P12_PASSWORD -macalg sha1 -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES
+security import "$SIGN_DIR/identity.p12" -k "$HOME/Library/Keychains/login.keychain-db" -P "$P12_PASSWORD" -T /usr/bin/codesign
+unset P12_PASSWORD
+security add-trusted-cert -r trustRoot -p codeSign -k "$HOME/Library/Keychains/login.keychain-db" "$SIGN_DIR/cert.pem"
+PIN=$(/usr/bin/openssl x509 -in "$SIGN_DIR/cert.pem" -fingerprint -sha1 -noout | sed 's/.*=//;s/://g')
+security find-identity -v -p codesigning | grep -F "$PIN"
+printf '%s\n' "$PIN" > "$PIN_FILE"
+echo "固定本机签名已建立并固定指纹。"

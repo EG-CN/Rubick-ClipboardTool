@@ -50,7 +50,13 @@ final class HotkeyManager {
         hotkeys[.pinClipboard] = read(d, "hk.pinClipboard", keyCode: UInt32(kVK_ANSI_P), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧P")
         hotkeys[.dragOCR] = read(d, "hk.dragOCR", keyCode: UInt32(kVK_ANSI_X), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧X")
         hotkeys[.longScreenshot] = read(d, "hk.longShot", keyCode: UInt32(kVK_ANSI_L), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧L")
-        hotkeys[.delayedScreenshot] = read(d, "hk.delayShot", keyCode: UInt32(kVK_ANSI_G), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧G")
+        // 保留文件选择器的「前往文件夹」⌘⇧G，不注册为全局截图键。
+        var delayed = read(d, "hk.delayShot", keyCode: UInt32(kVK_ANSI_G), mods: UInt32(cmdKey | optionKey | shiftKey), display: "⌘⌥⇧G")
+        if delayed.keyCode == UInt32(kVK_ANSI_G), delayed.modifiers == UInt32(cmdKey | shiftKey) {
+            delayed = Hotkey(keyCode: UInt32(kVK_ANSI_G), modifiers: UInt32(cmdKey | optionKey | shiftKey), display: "⌘⌥⇧G")
+            d.set(["keyCode": delayed.keyCode, "mods": delayed.modifiers, "display": delayed.display], forKey: "hk.delayShot")
+        }
+        hotkeys[.delayedScreenshot] = delayed
     }
 
     private func read(_ d: UserDefaults, _ key: String, keyCode: UInt32, mods: UInt32, display: String) -> Hotkey {
@@ -110,7 +116,7 @@ final class HotkeyManager {
         case .longScreenshot:
             def = Hotkey(keyCode: UInt32(kVK_ANSI_L), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧L")
         case .delayedScreenshot:
-            def = Hotkey(keyCode: UInt32(kVK_ANSI_G), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧G")
+            def = Hotkey(keyCode: UInt32(kVK_ANSI_G), modifiers: UInt32(cmdKey | optionKey | shiftKey), display: "⌘⌥⇧G")
         }
         update(action, keyCode: def.keyCode, modifiers: def.modifiers, display: def.display)
     }

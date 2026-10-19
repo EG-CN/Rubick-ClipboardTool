@@ -234,7 +234,8 @@ final class AnnotationController {
         NSColor(red: 0.18, green: 0.80, blue: 0.44, alpha: 1),   // 祖母绿
         NSColor(red: 1.00, green: 0.36, blue: 0.36, alpha: 1),   // 红
         NSColor(red: 1.00, green: 0.82, blue: 0.29, alpha: 1),   // 黄
-        NSColor.white                                             // 白
+        NSColor.white,                                            // 白
+        NSColor.black                                             // 黑
     ]
 
     private init() {}
@@ -509,7 +510,7 @@ final class AnnotationController {
         return out
     }
 
-    private static func draw(_ a: Annotation, imageSize: CGSize, baseCG: CGImage?, ctx: CGContext) {
+    static func draw(_ a: Annotation, imageSize: CGSize, baseCG: CGImage?, ctx: CGContext) {
         let scale = imageSize.width / max(a.displaySize.width, 1)
         let lw = max(a.lineWidth * scale, 1)
         let color = palette[a.colorIndex]

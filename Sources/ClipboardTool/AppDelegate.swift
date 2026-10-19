@@ -4,6 +4,7 @@ import SwiftUI
 // MARK: - 应用代理：菜单栏状态项 + 服务装配
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var instanceChannel: String { Bundle.main.bundleIdentifier == "local.rubick.screenshot-test" ? "rubickScreenshotTest" : "cbt" }
     private var statusItem: NSStatusItem!
     private let store = HistoryStore.shared
     private let monitor = ClipboardMonitor.shared
@@ -55,10 +56,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // 单实例握手：响应其他实例的探测
         DistributedNotificationCenter.default().addObserver(
-            forName: .init("cbt.areYouRunning"), object: nil, queue: .main
+            forName: .init("\(self.instanceChannel).areYouRunning"), object: nil, queue: .main
         ) { _ in
             DistributedNotificationCenter.default().postNotificationName(
-                .init("cbt.imRunning"), object: nil,
+                .init("\(self.instanceChannel).imRunning"), object: nil,
                 userInfo: ["pid": ProcessInfo.processInfo.processIdentifier],
                 deliverImmediately: true)
         }
@@ -83,21 +84,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !AXIsProcessTrusted() {
             requestAccessibilityIfNeeded()
         }
+        if Bundle.main.bundleIdentifier == "local.rubick.screenshot-test",
+           CommandLine.arguments.contains("--diagnose-screenshot-layout") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                CaptureController.shared.captureInteractive()
+            }
+        }
     }
 
     /// 是否已有同应用实例在运行
     private func isDuplicateInstance() -> Bool {
+        // The screenshot test build has its own identity and data, so it can coexist with the daily app.
+        if Bundle.main.bundleIdentifier == "local.rubick.screenshot-test" {
+            return NSWorkspace.shared.runningApplications.contains {
+                $0.processIdentifier != ProcessInfo.processInfo.processIdentifier && $0.bundleIdentifier == Bundle.main.bundleIdentifier
+            }
+        }
         // 1) 分布式通知握手（可靠，不依赖进程枚举）
         let center = DistributedNotificationCenter.default()
         let myPID = ProcessInfo.processInfo.processIdentifier
         var gotReply = false
         var token: NSObjectProtocol?
-        token = center.addObserver(forName: .init("cbt.imRunning"), object: nil, queue: .main) { note in
+        token = center.addObserver(forName: .init("\(self.instanceChannel).imRunning"), object: nil, queue: .main) { note in
             if let pid = note.userInfo?["pid"] as? Int32, pid != myPID {
                 gotReply = true
             }
         }
-        center.postNotificationName(.init("cbt.areYouRunning"), object: nil,
+        center.postNotificationName(.init("\(self.instanceChannel).areYouRunning"), object: nil,
                                     userInfo: ["pid": myPID], deliverImmediately: true)
         let deadline = Date().addingTimeInterval(0.35)
         while Date() < deadline && !gotReply {
@@ -281,6 +294,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.toolTip = "拉比克 · 剪贴板历史"
         }
         let menu = NSMenu()
+        if Bundle.main.bundleIdentifier == "local.rubick.screenshot-test" {
+            let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "测试版"
+            let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+            let versionItem = NSMenuItem(title: "截图测试版 \(version) · \(build)", action: nil, keyEquivalent: "")
+            versionItem.isEnabled = false
+            menu.addItem(versionItem)
+            menu.addItem(.separator())
+            statusItem.button?.toolTip = "拉比克截图测试版 \(version) · \(build)"
+        }
 
         let panelItem = NSMenuItem(title: "打开历史面板", action: #selector(togglePanel), keyEquivalent: "v")
         panelItem.keyEquivalentModifierMask = [.command, .shift]

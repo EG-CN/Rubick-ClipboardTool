@@ -81,7 +81,8 @@ final class HistoryStore: ObservableObject {
             jsonURL = baseDir.appendingPathComponent("history.json")
         } else {
             let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            self.baseDir = support.appendingPathComponent("ClipboardTool", isDirectory: true)
+            let folder = Bundle.main.bundleIdentifier == "local.rubick.screenshot-test" ? "RubickScreenshotTest" : "ClipboardTool"
+            self.baseDir = support.appendingPathComponent(folder, isDirectory: true)
             imagesDir = self.baseDir.appendingPathComponent("images", isDirectory: true)
             jsonURL = self.baseDir.appendingPathComponent("history.json")
         }

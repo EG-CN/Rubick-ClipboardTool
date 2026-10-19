@@ -6,3 +6,7 @@ build/
 *.xcodeproj/
 xcuserdata/
 .signing/
+
+# Local app backups and diagnostic artifacts
+outputs/
+.build-screenshot-test/

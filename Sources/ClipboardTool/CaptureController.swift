@@ -81,6 +81,7 @@ final class CaptureController {
 
     var onCaptured: ((NSImage) -> Void)?
 
+    private var captureRequestID = UUID()
     private var overlayWindow: NSWindow?
     private var colorSampler: StitchEngine.Sampler?
     private var delayTask: Task<Void, Never>?
@@ -114,6 +115,11 @@ final class CaptureController {
     private var pendingPurpose: CapturePurpose = .normal
 
     func captureInteractive() {
+        captureRequestID = UUID()
+        if InlineScreenshotController.shared.isVisible {
+            InlineScreenshotController.shared.close(restoreFocus: true)
+            return
+        }
         pendingPurpose = .normal
         beginCapture()
     }
@@ -124,7 +130,7 @@ final class CaptureController {
         beginCapture()
     }
 
-    /// 延时截图（⌘⇧G）：倒计时给你时间展开菜单/悬浮态，然后进入框选。
+    /// 延时截图（⌘⌥⇧G）：倒计时给你时间展开菜单/悬浮态，然后进入框选。
     /// 倒计时中再按 ⌘⇧G = 取消；其它截图热键会取消本任务（见 beginCapture）
     func captureDelayed() {
         if let t = delayTask {
@@ -162,20 +168,16 @@ final class CaptureController {
     }
 
     private func beginCapture() {
+        captureRequestID = UUID()
+        InlineScreenshotController.shared.close(restoreFocus: true)
         delayTask?.cancel()
         delayTask = nil
-        let allowed = Self.screenRecordingAllowed()
         if mode == "system" {
             systemFallback()
             return
         }
-        if !allowed {
-            // 未授权屏幕录制：每次都弹引导（避免静默回退系统框选，用户误以为功能没生效）
-            PermissionGuide.shared.show { [weak self] granted in
-                if granted { self?.startCustom() } else { self?.systemFallback() }
-            }
-            return
-        }
+        // Preflight may remain false after the user changes permission in Settings.
+        // Let ScreenCaptureKit perform the real access check before showing our guide.
         startCustom()
     }
 
@@ -191,12 +193,15 @@ final class CaptureController {
     // MARK: 自绘流程
 
     private func startCustom() {
+        ScreenshotDiagnostics.begin()
+        let requestID = captureRequestID
         if overlayWindow != nil { teardown(restoreFocus: false) }   // 双触发：先拆旧覆盖层与监听
         // 像素采集/合成必须留在后台（MainActor 整段提升会让 CGDisplayCreateImage
         // 与全屏合成阻塞主线程）；仅 UI 触点（systemFallback/presentOverlay）回主线程
         Task {
             do {
                 let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                guard self.captureRequestID == requestID else { return }
                 let displays = content.displays
                 let screens = NSScreen.screens
                 guard !displays.isEmpty else {
@@ -237,7 +242,15 @@ final class CaptureController {
                     }
                     if cg == nil {
                         let filter = SCContentFilter(display: d, excludingWindows: [])
-                        cg = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: SCStreamConfiguration())
+                        let configuration = SCStreamConfiguration()
+                        // The default stream is 1920 × 1080 regardless of the target
+                        // display. Capture this display at its own pixel dimensions so
+                        // a Retina/portrait display is not stretched into that shape.
+                        configuration.width = max(CGDisplayPixelsWide(d.displayID), 1)
+                        configuration.height = max(CGDisplayPixelsHigh(d.displayID), 1)
+                        configuration.showsCursor = false
+                        cg = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+                        guard self.captureRequestID == requestID else { return }
                     }
                     guard let captured = cg else {
                         await MainActor.run { self.systemFallback() }
@@ -279,25 +292,43 @@ final class CaptureController {
                     }
 
                 guard let composite = ImageCompose.composite(shots, union: unionRect) else {
-                    systemFallback()
+                    await MainActor.run {
+                        guard self.captureRequestID == requestID else { return }
+                        self.systemFallback()
+                    }
                     return
                 }
 
                 let finalShots = shots
                 let finalWindows = windows
                 await MainActor.run {
+                    guard self.captureRequestID == requestID else { return }
+                    ScreenshotDiagnostics.captured(finalShots, union: unionRect, image: composite)
                     self.presentOverlay(composite: composite, unionRect: unionRect,
                                         windows: finalWindows, displays: finalShots)
                 }
             } catch {
                 DispatchQueue.main.async { [weak self] in
-                    self?.systemFallback()
+                    guard let self, self.captureRequestID == requestID else { return }
+                    let captureError = error as NSError
+                    if captureError.domain == SCStreamErrorDomain,
+                       captureError.code == SCStreamError.Code.userDeclined.rawValue {
+                        PermissionGuide.shared.show { [weak self] granted in
+                            if granted { self?.startCustom() } else { self?.systemFallback() }
+                        }
+                    } else {
+                        Toast.shared.showImportant("截图失败：\(captureError.localizedDescription)，请重试")
+                    }
                 }
             }
         }
     }
 
     private func presentOverlay(composite: NSImage, unionRect: CGRect, windows: [(frame: CGRect, title: String)], displays: [ScreenShot]) {
+        if pendingPurpose == .normal {
+            InlineScreenshotController.shared.show(image: composite, union: unionRect, windows: windows.map { $0.frame })
+            return
+        }
         capturedDisplays = displays
         previousApp = NSWorkspace.shared.frontmostApplication
         // 窗口帧 AppKit → 视图坐标（选框视图左上原点），供吸附/悬停/单击整窗
@@ -782,6 +813,7 @@ final class PermissionGuide {
     private init() {}
 
     func show(completion: @escaping (Bool) -> Void) {
+        timer?.invalidate()
         self.completion = completion
         if panel == nil {
             let view = PermissionGuideView(
@@ -819,10 +851,10 @@ final class PermissionGuide {
                 t.invalidate()
                 Toast.shared.show("屏幕录制已授权")
                 self?.finish(true)
-            } else if attempts >= 14 {   // ~8 秒
+            } else if attempts >= 200 {   // 给用户足够时间完成系统设置；不自动启动系统截图
                 t.invalidate()
-                Toast.shared.show("若已开启仍未生效：屏幕录制权限需重启拉比克后生效")
-                self?.finish(false)
+                Toast.shared.show("若已开启权限，请退出并重新打开「拉比克截图测试版」")
+                self?.panel?.makeKeyAndOrderFront(nil)
             }
         }
     }
@@ -849,7 +881,7 @@ struct PermissionGuideView: View {
                 .foregroundStyle(RubickTheme.primary(scheme))
             Text("开启屏幕录制权限")
                 .font(.system(size: 14, weight: .bold))
-            Text("拉比克需要「屏幕录制」权限来实现窗口吸附与自绘截图选框。所有画面仅在本机处理，绝不上传网络。\n（授权后若仍提示未开启，退出并重新打开拉比克即可生效。）")
+            Text("请在系统设置的「屏幕与系统音频录制」中开启当前应用。测试版名称为「拉比克截图测试版」。\n开启后若仍提示未授权，请退出并重新打开当前应用；不会自动切换为系统截图。")
                 .font(.system(size: 11.5))
                 .foregroundStyle(RubickTheme.muted(scheme))
                 .multilineTextAlignment(.center)
