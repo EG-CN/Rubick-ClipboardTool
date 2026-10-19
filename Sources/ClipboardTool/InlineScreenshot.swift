@@ -374,6 +374,16 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
     private var remoteDrawing: Annotation?
     private var toolbar = NSVisualEffectView()
     private var toolButtons: [NSButton] = []
+    private let toolbarScroll = NSScrollView()
+    private var toolbarWidth: NSLayoutConstraint?
+    private var toolbarRowHeight: NSLayoutConstraint?
+    private var toolbarNaturalWidth: CGFloat = 0
+    private let parameterRow = NSStackView()
+    private let colorRow = NSStackView()
+    private var colorButtons: [NSButton] = []
+    private let fontSizes = NSPopUpButton()
+    private let widths = NSPopUpButton()
+    private let toolLabel = NSTextField(labelWithString: "")
     private var undoButton = NSButton()
     private var redoButton = NSButton()
     private var message = "拖拽框选，或单击窗口 · Esc取消"
@@ -394,57 +404,152 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
     override func cursorUpdate(with event: NSEvent) { tool == .select ? NSCursor.arrow.set() : NSCursor.crosshair.set() }
 
     private func setupToolbar() {
-        toolbar.material = .hudWindow; toolbar.blendingMode = .withinWindow; toolbar.state = .active
-        toolbar.wantsLayer = true; toolbar.layer?.cornerRadius = 10; toolbar.layer?.masksToBounds = true
-        let first = NSStackView(); first.orientation = .horizontal; first.spacing = 6; first.alignment = .centerY
+        toolbar.appearance = NSAppearance(named: .darkAqua)
+        toolbar.material = .hudWindow
+        toolbar.blendingMode = .withinWindow
+        toolbar.state = .active
+        toolbar.wantsLayer = true
+        toolbar.layer?.cornerRadius = 12
+        toolbar.layer?.masksToBounds = true
+        toolbar.layer?.borderWidth = 0.5
+        toolbar.layer?.borderColor = NSColor.separatorColor.cgColor
+        let main = NSStackView()
+        main.orientation = .horizontal
+        main.spacing = 2
+        main.alignment = .centerY
+        let symbols = ["cursorarrow", "rectangle", "oval", "arrow.up.right", "pencil.tip", "textformat", "text.bubble", "square.dashed.inset.filled", "highlighter", "1.circle", "plus.magnifyingglass"]
         for t in Tool.allCases {
-            let button = NSButton(title: t.title, target: self, action: #selector(changeTool(_:)))
-            button.tag = t.rawValue; button.bezelStyle = .texturedRounded; button.setButtonType(.toggle)
-            button.font = .systemFont(ofSize: 13); button.controlSize = .large
-            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 32).isActive = true
-            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 52).isActive = true
-            button.toolTip = t == .note ? "连续编号圆点＋说明；Enter换行，⌘Enter结束输入，点击下一处继续" : (t == .text ? "直接输入文字；Enter换行，⌘Enter结束输入" : t.title)
-            if t == .magnifier { button.toolTip = "点击放置2倍放大镜，拖出圆形区域；选中后滚轮调整倍率" }
-            toolButtons.append(button); first.addArrangedSubview(button)
+            let button = iconButton(symbols[t.rawValue], title: t.title, action: #selector(changeTool(_:)))
+            button.tag = t.rawValue
+            button.setButtonType(.toggle)
+            if t == .note { button.toolTip = "编号与说明：Enter换行，点击空白或⌘Enter完成；点击文字继续编辑" }
+            if t == .text { button.toolTip = "文字：Enter换行，点击空白或⌘Enter完成；拖动文字可移动" }
+            if t == .magnifier { button.toolTip = "局部放大：点击放置，拖动调整范围，滚轮调整倍率" }
+            toolButtons.append(button)
+            main.addArrangedSubview(button)
         }
-        let second = NSStackView(); second.orientation = .horizontal; second.spacing = 8; second.alignment = .centerY
+        let divider = NSBox(); divider.boxType = .separator
+        divider.widthAnchor.constraint(equalToConstant: 1).isActive = true
+        divider.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        main.addArrangedSubview(divider)
+        undoButton = iconButton("arrow.uturn.backward", title: "撤销", action: #selector(undoAction))
+        redoButton = iconButton("arrow.uturn.forward", title: "重做", action: #selector(redoAction))
+        main.addArrangedSubview(undoButton)
+        main.addArrangedSubview(redoButton)
+        main.addArrangedSubview(iconButton("viewfinder", title: "重新框选", action: #selector(reselect)))
+        main.addArrangedSubview(iconButton("pin", title: "钉图", action: #selector(pinAction)))
+        main.addArrangedSubview(iconButton("square.and.arrow.down", title: "保存", action: #selector(saveAction)))
+        let copy = NSButton(title: "复制", target: self, action: #selector(copyAction))
+        copy.bezelStyle = .rounded
+        copy.bezelColor = NSColor(srgbRed: 0.14, green: 0.52, blue: 0.36, alpha: 1)
+        copy.contentTintColor = .white
+        copy.font = .systemFont(ofSize: 13, weight: .semibold)
+        copy.widthAnchor.constraint(equalToConstant: 64).isActive = true
+        copy.heightAnchor.constraint(equalToConstant: 40).isActive = true
+        copy.toolTip = "复制截图（选择工具下按Enter）"
+        main.addArrangedSubview(copy)
+        main.addArrangedSubview(iconButton("xmark", title: "关闭截图", action: #selector(cancelAction)))
+
+        parameterRow.orientation = .horizontal
+        parameterRow.spacing = 10
+        parameterRow.alignment = .centerY
+        toolLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        toolLabel.textColor = .secondaryLabelColor
+        parameterRow.addArrangedSubview(toolLabel)
+        colorRow.orientation = .horizontal
+        colorRow.spacing = 2
         for (i, color) in AnnotationController.palette.enumerated() {
-            let b = NSButton(title: "●", target: self, action: #selector(changeColor(_:))); b.tag = i
-            b.attributedTitle = NSAttributedString(string:"●",attributes:[.foregroundColor:color,.font:NSFont.systemFont(ofSize:22)])
-            b.contentTintColor = color; b.bezelStyle = .texturedRounded; b.toolTip = ["绿色", "红色", "黄色", "白色", "黑色"][i]
-            b.controlSize = .large
-            NSLayoutConstraint.activate([b.widthAnchor.constraint(greaterThanOrEqualToConstant: 36), b.heightAnchor.constraint(greaterThanOrEqualToConstant: 32)])
-            second.addArrangedSubview(b)
+            let button = NSButton(title: "●", target: self, action: #selector(changeColor(_:)))
+            button.tag = i
+            button.isBordered = false
+            button.attributedTitle = NSAttributedString(string: "●", attributes: [.foregroundColor: color, .font: NSFont.systemFont(ofSize: 23)])
+            button.toolTip = ["绿色", "红色", "黄色", "白色", "黑色"][i]
+            button.setAccessibilityLabel(button.toolTip)
+            button.widthAnchor.constraint(equalToConstant: 32).isActive = true
+            button.heightAnchor.constraint(equalToConstant: 36).isActive = true
+            button.wantsLayer = true
+            button.layer?.cornerRadius = 7
+            colorButtons.append(button)
+            colorRow.addArrangedSubview(button)
         }
-        let fontSizes = NSPopUpButton(); fontSizes.addItems(withTitles:["14号", "18号", "24号", "32号"]); fontSizes.selectItem(at:1)
-        fontSizes.target=self; fontSizes.action = #selector(changeFontSize(_:)); fontSizes.toolTip="文字大小"
-        fontSizes.font = .systemFont(ofSize: 13); fontSizes.controlSize = .large
-        fontSizes.heightAnchor.constraint(greaterThanOrEqualToConstant: 32).isActive = true
-        second.addArrangedSubview(fontSizes)
-        let widths = NSPopUpButton(); widths.addItems(withTitles: ["细", "中", "粗"]); widths.selectItem(at: 1)
-        widths.target = self; widths.action = #selector(changeWidth(_:)); widths.toolTip = "线条粗细"
-        widths.font = .systemFont(ofSize: 13); widths.controlSize = .large
-        widths.heightAnchor.constraint(greaterThanOrEqualToConstant: 32).isActive = true
-        second.addArrangedSubview(widths)
-        let third = NSStackView(); third.orientation = .horizontal; third.spacing = 8; third.alignment = .centerY
-        undoButton = makeButton("撤销", action: #selector(undoAction)); third.addArrangedSubview(undoButton)
-        redoButton = makeButton("重做", action: #selector(redoAction)); third.addArrangedSubview(redoButton)
-        third.addArrangedSubview(makeButton("重选", action: #selector(reselect)))
-        third.addArrangedSubview(makeButton("钉图", action: #selector(pinAction)))
-        third.addArrangedSubview(makeButton("保存", action: #selector(saveAction)))
-        let copy = makeButton("复制 ↵", action: #selector(copyAction)); copy.contentTintColor = .systemGreen; third.addArrangedSubview(copy)
-        third.addArrangedSubview(makeButton("关闭", action: #selector(cancelAction)))
-        let stack = NSStackView(views: [first, second, third]); stack.orientation = .vertical; stack.spacing = 8; stack.alignment = .leading
-        stack.translatesAutoresizingMaskIntoConstraints = false; toolbar.addSubview(stack)
-        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: toolbar.leadingAnchor, constant: 10), stack.trailingAnchor.constraint(equalTo: toolbar.trailingAnchor, constant: -10), stack.topAnchor.constraint(equalTo: toolbar.topAnchor, constant: 10), stack.bottomAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: -10)])
-        addSubview(toolbar); toolbar.isHidden = true
+        parameterRow.addArrangedSubview(colorRow)
+        fontSizes.addItems(withTitles: ["14号", "18号", "24号", "32号"])
+        fontSizes.selectItem(at: 1)
+        fontSizes.target = self; fontSizes.action = #selector(changeFontSize(_:))
+        fontSizes.toolTip = "文字大小"
+        parameterRow.addArrangedSubview(fontSizes)
+        widths.addItems(withTitles: ["细", "中", "粗"])
+        widths.selectItem(at: 1)
+        widths.target = self; widths.action = #selector(changeWidth(_:))
+        widths.toolTip = "线条粗细"
+        parameterRow.addArrangedSubview(widths)
+        toolbarNaturalWidth = main.fittingSize.width
+        main.frame = CGRect(x: 0, y: 0, width: toolbarNaturalWidth, height: 42)
+        toolbarScroll.documentView = main
+        toolbarScroll.drawsBackground = false
+        toolbarScroll.hasHorizontalScroller = true
+        toolbarScroll.autohidesScrollers = true
+        toolbarWidth = toolbarScroll.widthAnchor.constraint(equalToConstant: toolbarNaturalWidth)
+        toolbarWidth?.isActive = true
+        toolbarRowHeight = toolbarScroll.heightAnchor.constraint(equalToConstant: 44)
+        toolbarRowHeight?.isActive = true
+        let stack = NSStackView(views: [toolbarScroll, parameterRow])
+        stack.orientation = .vertical
+        stack.spacing = 4
+        stack.alignment = .leading
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        toolbar.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: toolbar.leadingAnchor, constant: 8),
+            stack.trailingAnchor.constraint(equalTo: toolbar.trailingAnchor, constant: -8),
+            stack.topAnchor.constraint(equalTo: toolbar.topAnchor, constant: 6),
+            stack.bottomAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: -6)
+        ])
+        addSubview(toolbar)
+        toolbar.isHidden = true
     }
-    private func makeButton(_ title: String, action: Selector) -> NSButton {
-        let b = NSButton(title: title, target: self, action: action)
-        b.bezelStyle = .texturedRounded; b.font = .systemFont(ofSize: 13); b.controlSize = .large
-        NSLayoutConstraint.activate([b.heightAnchor.constraint(greaterThanOrEqualToConstant: 32), b.widthAnchor.constraint(greaterThanOrEqualToConstant: 56)])
-        return b
+
+    private func iconButton(_ symbol: String, title: String, action: Selector) -> NSButton {
+        let button = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: title) ?? NSImage(), target: self, action: action)
+        button.isBordered = false
+        button.imageScaling = .scaleProportionallyDown
+        button.toolTip = title
+        button.setAccessibilityLabel(title)
+        button.wantsLayer = true
+        button.layer?.cornerRadius = 7
+        button.widthAnchor.constraint(equalToConstant: 40).isActive = true
+        button.heightAnchor.constraint(equalToConstant: 40).isActive = true
+        return button
     }
+
+    private func updateToolbarStyle() {
+        let green = NSColor(srgbRed: 0.14, green: 0.52, blue: 0.36, alpha: 1)
+        for button in toolButtons {
+            let active = button.tag == tool.rawValue
+            button.state = active ? .on : .off
+            button.contentTintColor = active ? green : .white
+            button.layer?.backgroundColor = active ? green.withAlphaComponent(0.18).cgColor : NSColor.clear.cgColor
+        }
+        var contextTool = tool
+        if let id = editingID ?? selectedID,
+           let mark = document.state.marks.first(where: { $0.id == id }),
+           case .note(let note) = mark {
+            contextTool = note.number == nil ? .text : .note
+        }
+        let textTool = contextTool == .text || contextTool == .note || contextTool == .step
+        parameterRow.isHidden = contextTool == .select || contextTool == .magnifier
+        toolLabel.stringValue = contextTool.title
+        fontSizes.isHidden = !textTool
+        widths.isHidden = textTool || contextTool == .mosaic
+        colorRow.isHidden = contextTool == .mosaic
+        if let index = [CGFloat(14), 18, 24, 32].firstIndex(of: noteFontSize) { fontSizes.selectItem(at: index) }
+        if let index = [CGFloat(2), 4, 8].firstIndex(of: lineWidth) { widths.selectItem(at: index) }
+        for button in colorButtons {
+            button.layer?.borderWidth = button.tag == colorIndex ? 1.5 : 0
+            button.layer?.borderColor = green.cgColor
+        }
+    }
+
     @objc private func changeTool(_ sender: NSButton) {
         onWillInteract?()
         commitEditing(); tool = Tool(rawValue: sender.tag) ?? .select; selectedID = nil; refresh()
@@ -463,7 +568,7 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         } else { document.checkpoint(before) }
         refresh()
     }
-    @objc private func changeWidth(_ sender: NSPopUpButton) { onWillInteract?(); lineWidth = [CGFloat(2), 4, 8][sender.indexOfSelectedItem] }
+    @objc private func changeWidth(_ sender: NSPopUpButton) { onWillInteract?(); lineWidth = [CGFloat(2), 4, 8][sender.indexOfSelectedItem]; refresh() }
     @objc private func undoAction() { onWillInteract?(); commitEditing(); document.undo(); selectedID = nil; refresh() }
     @objc private func redoAction() { onWillInteract?(); commitEditing(); document.redo(); selectedID = nil; refresh() }
     @objc private func reselect() {
@@ -492,17 +597,22 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
     func refresh(notify: Bool = true) {
         defer { if notify { onSceneChange?() } }
         needsDisplay = true
-        toolButtons.forEach { $0.state = $0.tag == tool.rawValue ? .on : .off }
+        updateToolbarStyle()
         undoButton.isEnabled = !document.undoStack.isEmpty; redoButton.isEnabled = !document.redoStack.isEmpty
         guard let s = document.state.selection else { toolbar.isHidden = true; return }
         toolbar.isHidden = false
-        let fit = toolbar.fittingSize, safe = safeFrame().insetBy(dx: 8, dy: 8)
+        let safe = safeFrame().insetBy(dx: 8, dy: 8)
+        let available = max(200, min(toolbarNaturalWidth, safe.width - 16))
+        toolbarWidth?.constant = available
+        toolbarRowHeight?.constant = available < toolbarNaturalWidth ? 56 : 44
+        toolbar.layoutSubtreeIfNeeded()
+        let fit = toolbar.fittingSize
         let x = min(max(s.maxX - fit.width, safe.minX), max(safe.minX, safe.maxX - fit.width))
         var y = s.minY - fit.height - 10
         if y < safe.minY { y = s.maxY + 10 }
         y = min(max(y, safe.minY), max(safe.minY, safe.maxY - fit.height))
         toolbar.setFrameOrigin(CGPoint(x: x, y: y)); toolbar.setFrameSize(fit)
-        message = (tool == .note || tool == .text) ? "Enter换行 · ⌘Enter结束输入 · 点击下一处继续" : "选择态Enter复制 · ⌘S保存 · Esc逐层返回"
+        message = (tool == .note || tool == .text) ? "Enter换行 · 点击空白完成 · 点击文字继续编辑" : "选择态Enter复制 · ⌘S保存 · Esc逐层返回"
         if tool == .magnifier { message = "点击放置2倍放大镜 · 拖出圆形区域 · 选中后滚轮调整倍率" }
     }
     private func normalized(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x / bounds.width, y: 1 - p.y / bounds.height) }

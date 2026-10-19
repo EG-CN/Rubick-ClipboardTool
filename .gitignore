@@ -10,3 +10,5 @@ xcuserdata/
 # Local app backups and diagnostic artifacts
 outputs/
 .build-screenshot-test/
+
+.build-brand/

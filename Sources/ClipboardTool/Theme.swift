@@ -17,7 +17,7 @@ enum RubickTheme {
     static let arcaneGlow = Color(hex: 0x34D399)
 
     // 强调色（祖母绿三阶：Core/Phosphor/Verdant）
-    static let emerald = Color(hex: 0x2F7D53)       // 浅色（纸面墨绿）
+    static let emerald = Color(hex: 0x23845B)       // 浅色（纸面墨绿）
     static let emeraldBright = Color(hex: 0x34D399) // 暗色（Arcane Phosphor）
     static let emeraldDeep = Color(hex: 0x276746)   // 浅色文字绿
     static let arcanePurple = Color(hex: 0x8A2BE2)  // 已退役：仅保留定义兼容旧引用
@@ -186,9 +186,6 @@ struct ArcaneSparkle: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        Text("✦")
-            .font(.system(size: size))
-            .foregroundStyle(RubickTheme.primary(scheme))
-            .shadow(color: glow ? RubickTheme.primary(scheme).opacity(0.6) : .clear, radius: glow ? 3 : 0)
+        RubickEmblem(size: size)
     }
 }

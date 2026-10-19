@@ -164,9 +164,10 @@ final class HistoryPanelController: NSObject, NSWindowDelegate {
             let host = NSHostingView(rootView: HistoryPanelView()
                 .environmentObject(store)
                 .environmentObject(panelState))
-            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 760, height: 520),
-                            styleMask: [.titled, .fullSizeContentView],
+            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 920, height: 620),
+                            styleMask: [.titled, .resizable, .fullSizeContentView],
                             backing: .buffered, defer: false)
+            p.minSize = NSSize(width: 820, height: 540)
             p.titleVisibility = .hidden
             p.titlebarAppearsTransparent = true
             p.isMovableByWindowBackground = false
@@ -698,16 +699,16 @@ struct HistoryPanelView: View {
                         list
                     }
                 }
-                .frame(width: 340)
+                .frame(width: 370)
                 Divider()
                     .overlay(RubickTheme.hairline(scheme).opacity(0.6))
                 inspector
             }
             footer
         }
-        .frame(width: 760, height: 520)
+        .frame(minWidth: 820, idealWidth: 920, maxWidth: .infinity, minHeight: 540, idealHeight: 620, maxHeight: .infinity)
         .background(.ultraThinMaterial)
-        .background(RubickTheme.panelAurora(scheme))
+        .background(SettingsBackdrop())
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
@@ -727,6 +728,9 @@ struct HistoryPanelView: View {
         .onChange(of: panelState.filter) { _ in
             HistoryPanelController.shared.resetSelection()
         }
+        .onChange(of: panelState.tagFilter) { _ in
+            HistoryPanelController.shared.resetSelection()
+        }
     }
 
     // MARK: 头部
@@ -737,7 +741,7 @@ struct HistoryPanelView: View {
         HStack(spacing: 7) {
             ArcaneSparkle(size: 13, glow: true)
             Text("拉比克")
-                .font(.system(size: 13.5, weight: .semibold, design: .serif))
+                .font(.system(size: 15, weight: .semibold))
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 9))
                 .foregroundStyle(RubickTheme.muted(scheme).opacity(0.5))
@@ -748,34 +752,19 @@ struct HistoryPanelView: View {
                 .font(.system(size: 10.5))
                 .foregroundStyle(RubickTheme.muted(scheme))
             Spacer()
-            Image(systemName: "character.bubble")
-                .font(.system(size: 11))
-                .foregroundStyle(RubickTheme.primary(scheme))
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
-                .nonKeyTap { HistoryPanelController.shared.translateSelected() }
-                .help("翻译选中条目")
-            Image(systemName: "text.viewfinder")
-                .font(.system(size: 11))
-                .foregroundStyle(RubickTheme.primary(scheme))
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
-                .nonKeyTap { HistoryPanelController.shared.ocrSelected() }
-                .help("识别选中图片文字")
-            Image(systemName: "gearshape")
-                .font(.system(size: 11))
-                .foregroundStyle(RubickTheme.muted(scheme))
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
-                .nonKeyTap { SettingsController.shared.show() }
-                .help("设置")
-            Image(systemName: "trash")
-                .font(.system(size: 11))
-                .foregroundStyle(RubickTheme.muted(scheme))
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
-                .nonKeyTap { confirmClearHistory() }
-                .help("清空历史")
+            Menu {
+                Button("翻译选中条目") { HistoryPanelController.shared.translateSelected() }
+                Button("识别图片文字") { HistoryPanelController.shared.ocrSelected() }
+                Divider()
+                Button("设置…") { SettingsController.shared.show() }
+                Divider()
+                Button("清空历史…", role: .destructive) { confirmClearHistory() }
+            } label: {
+                Image(systemName: "ellipsis").frame(width: 32, height: 32)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("更多操作")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -801,17 +790,17 @@ struct HistoryPanelView: View {
 
     private var searchField: some View {
         HStack(spacing: 6) {
-            ArcaneSparkle(size: 10)
-            TextField("搜索法术…", text: $panelState.searchText)
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("搜索剪贴板…", text: $panelState.searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12))
+                .font(.system(size: 14))
                 .focused($searchFocused)
                 .onChange(of: panelState.searchFocusRequest) { _ in
                     searchFocused = true
                 }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 10)
         .background(RoundedRectangle(cornerRadius: 8).fill(RubickTheme.surfaceHigh(scheme).opacity(0.7)))
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(RubickTheme.hairline(scheme), lineWidth: 0.5))
         .padding(.horizontal, 14)
@@ -821,18 +810,19 @@ struct HistoryPanelView: View {
     // MARK: 筛选
 
     private var filterChips: some View {
-        HStack(spacing: 8) {
+        ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 6) {
             ForEach(PanelState.FilterKind.allCases, id: \.rawValue) { kind in
                 let active = panelState.filter == kind && panelState.tagFilter == nil
                 Text(kind.label)
-                    .font(.system(size: 11))
+                    .font(.system(size: 12))
                     .nonKeyTap {
                         panelState.filter = kind
                         panelState.tagFilter = nil
                         panelState.multiSelection = []   // 切换筛选清多选：防止删除不可见条目
                     }
                 .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .padding(.vertical, 8)
                 .background(Capsule().fill(active
                                           ? RubickTheme.primary(scheme).opacity(0.07)
                                           : Color.clear))
@@ -848,15 +838,15 @@ struct HistoryPanelView: View {
                     Circle().fill(PanelState.tagColor(t)).frame(width: 6, height: 6)
                     Text(t)
                 }
-                .font(.system(size: 11))
+                .font(.system(size: 12))
                 .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .padding(.vertical, 8)
                 .background(Capsule().fill(PanelState.tagColor(t).opacity(active ? 0.14 : 0.05)))
                 .overlay(Capsule().strokeBorder(PanelState.tagColor(t).opacity(active ? 0.9 : 0.35), lineWidth: 1))
                 .foregroundStyle(PanelState.tagColor(t))
                 .nonKeyTap { panelState.tagFilter = active ? nil : t }
             }
-            Spacer()
+        }
         }
         .padding(.horizontal, 14)
         .padding(.bottom, 8)
@@ -917,6 +907,13 @@ struct HistoryPanelView: View {
 
     // MARK: 检查器（Arcane Obsidian 右栏：选中条目详情）
 
+    private static func appName(_ identifier: String) -> String {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: identifier) else {
+            return identifier.split(separator: ".").last.map(String.init) ?? identifier
+        }
+        return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+    }
+
     private var selectedItem: ClipboardItem? {
         items.indices.contains(selected) ? items[selected] : nil
     }
@@ -936,7 +933,8 @@ struct HistoryPanelView: View {
                     switch item.kind {
                     case .text:
                         Text(item.text ?? "")
-                            .font(.system(size: 12, design: (item.text ?? "").contains("\n") ? .monospaced : .default))
+                            .font(.system(size: 14))
+                            .textSelection(.enabled)
                             .foregroundStyle(RubickTheme.onSurface(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -971,7 +969,7 @@ struct HistoryPanelView: View {
                                 if let img = Self.appIcon(bid) {
                                     Image(nsImage: img).resizable().frame(width: 14, height: 14)
                                 }
-                                Text("来源：\(bid)").font(.system(size: 10.5))
+                                Text("来源：\(Self.appName(bid))").font(.system(size: 10.5))
                             }
                             .foregroundStyle(RubickTheme.muted(scheme))
                         }
@@ -981,13 +979,8 @@ struct HistoryPanelView: View {
                         if let t = item.text, !t.isEmpty {
                             inspectorMeta("字数", "\(t.count)")
                         }
-                        if let hash = item.contentHash {
-                            inspectorMeta("指纹", String(hash.prefix(12)) + "…")
-                        }
                     }
                     HStack(spacing: 10) {
-                        inspectorAction("doc.on.doc", "复制") { HistoryPanelController.shared.activate(item, copyOnly: true) }
-                        inspectorAction("arrow.down.circle", "粘贴") { HistoryPanelController.shared.activate(item, copyOnly: false) }
                         if item.kind == .image {
                             inspectorAction("pin.fill", "钉图") { HistoryPanelController.shared.pin(item) }
                             inspectorAction("text.viewfinder", "取字") { HistoryPanelController.shared.ocr(item) }
@@ -1048,7 +1041,7 @@ struct HistoryPanelView: View {
             Image(systemName: "book.closed")
                 .font(.system(size: 26))
                 .foregroundStyle(RubickTheme.muted(scheme).opacity(0.6))
-            Text(items.isEmpty && !store.items.isEmpty ? "没有匹配的条目" : "魔典空空如也 — 复制文字或截图试试")
+            Text(items.isEmpty && !store.items.isEmpty ? "没有匹配的条目" : "复制文字、图片或文件后，会显示在这里")
                 .font(.system(size: 12))
                 .foregroundStyle(RubickTheme.muted(scheme))
             Spacer()
@@ -1128,7 +1121,7 @@ struct HistoryPanelView: View {
                 }
                 if item.kind == .text {
                     Text((item.text ?? "").prefix(4000))
-                        .font(.system(size: 11.5, design: (item.text ?? "").contains("\n") ? .monospaced : .default))
+                        .font(.system(size: 13))
                         .foregroundStyle(RubickTheme.onSurface(scheme))
                         .lineLimit(2)
                         .truncationMode(.tail)
@@ -1178,7 +1171,10 @@ struct HistoryPanelView: View {
                 } else if mods.contains(.option) {
                     HistoryPanelController.shared.activate(at: index, copyOnly: true)
                 } else {
-                    HistoryPanelController.shared.activate(at: index)
+                    HistoryPanelController.shared.setSelected(index)
+                    if (NSApp.currentEvent?.clickCount ?? 1) >= 2 {
+                        HistoryPanelController.shared.activate(at: index)
+                    }
                 }
             }
             .contextMenu {
@@ -1233,7 +1229,6 @@ struct HistoryPanelView: View {
         .onHover { hovering in
             if hovering {
                 hoveringIds.insert(item.id)
-                HistoryPanelController.shared.setSelected(index)
             } else {
                 hoveringIds.remove(item.id)
             }
@@ -1282,27 +1277,24 @@ struct HistoryPanelView: View {
     // MARK: 底部状态栏
 
     private var footer: some View {
-        VStack(spacing: 4) {
-            Text(panelKeys.hintText() + " · 输入即筛选 · ⌥点=仅复制")
-                .font(.system(size: 9.5))
-                .foregroundStyle(RubickTheme.muted(scheme).opacity(0.8))
+        HStack(spacing: 10) {
+            Text("单击预览 · 双击或回车粘贴")
+                .font(.system(size: 12)).foregroundStyle(.secondary)
                 .lineLimit(1)
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(RubickTheme.emerald)
-                    .frame(width: 6, height: 6)
-                    .shadow(color: RubickTheme.emerald.opacity(0.8), radius: 2)
-                Text("运行中")
-                    .font(.system(size: 10))
-                    .foregroundStyle(RubickTheme.muted(scheme))
-                Spacer()
-                Text("\(store.items.count) 条")
-                    .font(.system(size: 10))
-                    .foregroundStyle(RubickTheme.muted(scheme))
+            Spacer()
+            if let item = selectedItem {
+                Button("复制") { HistoryPanelController.shared.activate(item, copyOnly: true) }
+                    .buttonStyle(.bordered).controlSize(.large)
+                Button { HistoryPanelController.shared.activate(item, copyOnly: false) } label: {
+                    Text("粘贴 ↵").font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white).padding(.horizontal, 18).frame(height: 36)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(RubickTheme.primary(scheme)))
+                }.buttonStyle(.plain)
             }
-            .padding(.horizontal, 14)
         }
-        .padding(.vertical, 7)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
+        .background(Color.primary.opacity(0.025))
     }
 }

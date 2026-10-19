@@ -22,10 +22,13 @@ final class SettingsController {
     func show() {
         if window == nil {
             let host = NSHostingView(rootView: SettingsView().environmentObject(HistoryStore.shared))
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 680, height: 600),
-                             styleMask: [.titled, .closable, .miniaturizable],
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 840, height: 620),
+                             styleMask: [.titled, .closable, .miniaturizable, .resizable],
                              backing: .buffered, defer: false)
-            w.title = "设置"
+            w.title = "拉比克设置"
+            w.isOpaque = false
+            w.backgroundColor = .clear
+            w.minSize = NSSize(width: 800, height: 580)
             w.titlebarAppearsTransparent = true
             w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             w.contentView = host
@@ -38,8 +41,10 @@ final class SettingsController {
                                                    queue: .main) { [weak self] _ in
                 guard let self = self, self.window === w else { return }
                 HotkeyRecorder.shared.stop(notify: false)
+                ActivationPolicyKeeper.shared.release("settings")
             }
         }
+        ActivationPolicyKeeper.shared.acquire("settings")
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -47,6 +52,7 @@ final class SettingsController {
     func close() {
         HotkeyRecorder.shared.stop(notify: false)   // orderOut 不发 willCloseNotification，录制态在这里兜底清理
         window?.orderOut(nil)
+        ActivationPolicyKeeper.shared.release("settings")
     }
 }
 
@@ -210,7 +216,7 @@ struct SettingsView: View {
     @ObservedObject var recorder = HotkeyRecorder.shared
     @ObservedObject var panelKeys = PanelKeyConfig.shared
     @Environment(\.colorScheme) private var scheme
-    @State private var pane: Pane = .general
+    @State private var pane: Pane = .overview
     @State private var autoLaunch = false
     @State private var ignorePassword = ClipboardMonitor.shared.ignorePasswordManagers
     @State private var pasteAuto = UserDefaults.standard.object(forKey: "pasteAuto") as? Bool ?? true
@@ -218,6 +224,7 @@ struct SettingsView: View {
     @State private var keepOpen = UserDefaults.standard.object(forKey: "keepPanelOpen") as? Bool ?? true
     @State private var limit: Int = HistoryStore.shared.limit
     @State private var trusted = AXIsProcessTrusted()
+    @State private var screenAllowed = CaptureController.screenRecordingAllowed()
     @State private var translateEngine = UserDefaults.standard.string(forKey: "translate.engine") ?? "apple"
     @State private var translateDirection = UserDefaults.standard.string(forKey: "translate.direction") ?? "auto"
     @State private var llmBaseURL = UserDefaults.standard.string(forKey: "llm.baseURL") ?? ""
@@ -234,10 +241,12 @@ struct SettingsView: View {
     @State private var llmTesting = false
 
     enum Pane: String, CaseIterable {
-        case general = "通用", hotkeys = "快捷键", history = "历史", smart = "智能识别", about = "关于"
+        case overview = "概览", general = "通用", history = "剪贴板", capture = "截图与钉图", hotkeys = "快捷键", smart = "识别与翻译", about = "关于"
 
         var icon: String {
             switch self {
+            case .overview: return "square.grid.2x2"
+            case .capture: return "viewfinder"
             case .general: return "gearshape"
             case .hotkeys: return "keyboard"
             case .history: return "clock.arrow.circlepath"
@@ -247,60 +256,46 @@ struct SettingsView: View {
         }
     }
 
+    init(initialPane: Pane = .overview) {
+        _pane = State(initialValue: initialPane)
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             sidebar
             Divider().opacity(0.5)
             content
         }
-        .frame(width: 680, height: 600)
-        .background(.ultraThinMaterial)
-        .background(RubickTheme.darkBackground.opacity(scheme == .dark ? 0.5 : 0))
+        .frame(minWidth: 800, idealWidth: 840, maxWidth: .infinity, minHeight: 550, idealHeight: 590, maxHeight: .infinity)
+        .background(SettingsBackdrop())
+        .tint(RubickTheme.primary(scheme))
         .onAppear {
             autoLaunch = SMAppService.mainApp.status == .enabled
             trusted = AXIsProcessTrusted()
+            screenAllowed = CaptureController.screenRecordingAllowed()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            trusted = AXIsProcessTrusted()
+            screenAllowed = CaptureController.screenRecordingAllowed()
+            autoLaunch = SMAppService.mainApp.status == .enabled
         }
     }
 
     // MARK: 侧边栏
 
-    @ViewBuilder
     private func brandEmblem(_ size: CGFloat) -> some View {
-        if let icon = NSImage(named: "AppIcon") {
-            Image(nsImage: icon)
-                .resizable()
-                .interpolation(.high)
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: size * 0.26))
-                .overlay(RoundedRectangle(cornerRadius: size * 0.26)
-                    .strokeBorder(RubickTheme.primary(scheme).opacity(0.35), lineWidth: 1))
-        } else {
-            Image(systemName: "sparkles")
-                .font(.system(size: size * 0.45))
-                .foregroundStyle(RubickTheme.primary(scheme))
-                .frame(width: size, height: size)
-                .background(RoundedRectangle(cornerRadius: size * 0.26).fill(RubickTheme.primary(scheme).opacity(0.12)))
-                .overlay(RoundedRectangle(cornerRadius: size * 0.26).strokeBorder(RubickTheme.primary(scheme).opacity(0.35), lineWidth: 1))
-        }
+        RubickEmblem(size: size)
     }
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    brandEmblem(34)
-                    Text("拉比克")
-                        .font(.system(size: 17, weight: .bold))
-                }
-                Text("大魔导师版")
-                    .font(.system(size: 10, weight: .medium))
-                    .tracking(1.5)
-                    .foregroundStyle(RubickTheme.primary(scheme).opacity(0.8))
-                    .textCase(.uppercase)
+            HStack(spacing: 10) {
+                brandEmblem(28)
+                Text("拉比克").font(.system(size: 16, weight: .semibold))
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 20)
-            .padding(.bottom, 18)
+            .padding(.horizontal, 20)
+            .padding(.top, 22)
+            .padding(.bottom, 24)
 
             VStack(spacing: 2) {
                 ForEach(Pane.allCases, id: \.self) { p in
@@ -312,11 +307,11 @@ struct SettingsView: View {
                                 .font(.system(size: 12))
                                 .frame(width: 18)
                             Text(p.rawValue)
-                                .font(.system(size: 12.5))
+                                .font(.system(size: 14))
                             Spacer()
                         }
                         .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
+                        .padding(.vertical, 11)
                         .background(RoundedRectangle(cornerRadius: 8).fill(pane == p
                                                                            ? RubickTheme.primary(scheme).opacity(0.12)
                                                                            : Color.clear))
@@ -337,26 +332,8 @@ struct SettingsView: View {
 
             Spacer()
 
-            Button {
-                confirmClearHistory()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 11))
-                    Text("清除奥术缓存")
-                        .font(.system(size: 11, weight: .medium))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 7)
-                .background(RoundedRectangle(cornerRadius: 8).fill(RubickTheme.surfaceHigh(scheme)))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.red.opacity(0.25), lineWidth: 0.5))
-                .foregroundStyle(RubickTheme.muted(scheme))
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
         }
-        .frame(width: 200)
+        .frame(width: 180)
     }
 
     // MARK: 内容区
@@ -364,6 +341,8 @@ struct SettingsView: View {
     @ViewBuilder
     private var content: some View {
         switch pane {
+        case .overview: overviewPane
+        case .capture: capturePane
         case .general: generalPane
         case .hotkeys: hotkeysPane
         case .history: historyPane
@@ -374,8 +353,8 @@ struct SettingsView: View {
 
     private func paneHeader(_ title: String, subtitle: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.system(size: 16, weight: .semibold))
-            Text(subtitle).font(.system(size: 11)).foregroundStyle(RubickTheme.muted(scheme))
+            Text(title).font(.system(size: 21, weight: .semibold))
+            Text(subtitle).font(.system(size: 13)).foregroundStyle(RubickTheme.muted(scheme))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.bottom, 4)
@@ -384,38 +363,103 @@ struct SettingsView: View {
     private func settingCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         content()
             .padding(14)
-            .glowCard(hovering: false, cornerRadius: 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.025)))
             .padding(.horizontal, 2)
     }
 
-    private var toggleStyle: some ToggleStyle { .switch }
+    private var toggleStyle: some ToggleStyle { SettingsRowToggleStyle() }
+
+    private var overviewPane: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                HStack(spacing: 12) {
+                    Text("概览").font(.system(size: 21, weight: .semibold))
+                    Circle().fill(RubickTheme.primary(scheme)).frame(width: 6, height: 6)
+                    Text("正在运行").font(.system(size: 12)).foregroundStyle(.secondary)
+                    Spacer()
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    overviewHeading("常用操作")
+                    overviewAction("剪贴板历史", action: .togglePanel) {
+                        SettingsController.shared.close()
+                        HistoryPanelController.shared.show(fromHotkey: true)
+                    }
+                    Divider().opacity(0.35)
+                    overviewAction("区域截图", action: .screenshot) {
+                        SettingsController.shared.close()
+                        CaptureController.shared.captureInteractive()
+                    }
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    overviewHeading("系统权限")
+                    permissionRow("屏幕录制", allowed: screenAllowed, privacy: "Privacy_ScreenCapture")
+                    Divider().opacity(0.35)
+                    permissionRow("辅助功能", allowed: trusted, privacy: "Privacy_Accessibility")
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    overviewHeading("启动")
+                    HStack {
+                        Text("开机自动启动")
+                        Spacer()
+                        Toggle("开机自动启动", isOn: $autoLaunch).labelsHidden().toggleStyle(.switch)
+                    }
+                        .padding(.vertical, 12)
+                        .onChange(of: autoLaunch) { enabled in
+                            do {
+                                if enabled { try SMAppService.mainApp.register() }
+                                else { try SMAppService.mainApp.unregister() }
+                            } catch {
+                                autoLaunch = SMAppService.mainApp.status == .enabled
+                                Toast.shared.show("无法更改开机启动：" + error.localizedDescription)
+                            }
+                        }
+                }
+            }
+            .font(.system(size: 14))
+            .padding(32)
+        }
+    }
+
+    private func overviewHeading(_ text: String) -> some View {
+        Text(text).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+            .padding(.bottom, 10)
+    }
+
+    private func overviewAction(_ title: String, action: HotkeyManager.Action,
+                                perform: @escaping () -> Void) -> some View {
+        Button(action: perform) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(HotkeyManager.shared.hotkeys[action]?.display ?? "")
+                    .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+                Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(.tertiary)
+            }.frame(minHeight: 46).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+    }
+
+    private func permissionRow(_ title: String, allowed: Bool, privacy: String) -> some View {
+        HStack(spacing: 10) {
+            Text(title)
+            Spacer()
+            Text(allowed ? "已开启" : "待确认")
+                .font(.system(size: 12))
+                .foregroundStyle(allowed ? RubickTheme.primary(scheme) : .secondary)
+            Button("管理") {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?" + privacy) {
+                    NSWorkspace.shared.open(url)
+                }
+            }.buttonStyle(.link).font(.system(size: 12))
+        }.frame(minHeight: 46)
+    }
 
     // MARK: 通用
 
     private var generalPane: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                paneHeader("通用设置", subtitle: "管理核心行为与环境魔法。")
-                settingCard {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Picker("面板形态", selection: $panelForm) {
-                            Text("完整面板").tag("panel")
-                            Text("底部弹壳 Dock").tag("dock")
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 240)
-                        .onChange(of: panelForm) { newValue in
-                            UserDefaults.standard.set(newValue, forKey: "panel.form")
-                        }
-                        Toggle("记住面板呼出位置", isOn: $rememberPosition)
-                            .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
-                            .onChange(of: rememberPosition) { v in
-                                UserDefaults.standard.set(v, forKey: "panel.rememberPosition")
-                            }
-                        Text("⌘⇧V 的呼出形态：完整历史面板，或贴屏幕底部的标签页弹壳（单击卡片直接粘贴）。")
-                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
-                    }
-                }
+            VStack(alignment: .leading, spacing: 16) {
+                paneHeader("通用", subtitle: "启动与外观")
                 settingCard {
                     VStack(alignment: .leading, spacing: 4) {
                         Toggle("开机自启动", isOn: $autoLaunch)
@@ -429,103 +473,12 @@ struct SettingsView: View {
                                 }
                             }
                         Text("登录后自动在后台运行，随时呼出。")
-                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
-                    }
-                }
-                settingCard {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Toggle("点选条目后自动粘贴", isOn: $pasteAuto)
-                            .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
-                            .onChange(of: pasteAuto) { newValue in
-                                UserDefaults.standard.set(newValue, forKey: "pasteAuto")
-                            }
-                        Text("关闭后点选仅复制，需手动 ⌘V。")
-                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
-                    }
-                }
-                settingCard {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Toggle("粘贴后保持面板打开", isOn: $keepOpen)
-                            .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
-                            .onChange(of: keepOpen) { newValue in
-                                UserDefaults.standard.set(newValue, forKey: "keepPanelOpen")
-                            }
-                        Text("开启后可连续粘贴多条，按 ⎋ 关闭；按住 ⌥ 点击条目可仅复制。")
-                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
-                    }
-                }
-                settingCard {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Toggle("忽略密码管理器内容", isOn: $ignorePassword)
-                            .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
-                            .onChange(of: ignorePassword) { newValue in
-                                ClipboardMonitor.shared.ignorePasswordManagers = newValue
-                            }
-                        Text("识别 1Password 等复制内容的隐私标记，不入历史。")
-                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
-                    }
-                }
-                settingCard {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("辅助功能权限（自动粘贴）")
-                                    .font(.system(size: 12.5))
-                                Text(trusted ? "已授权，点选条目将直接粘贴到输入框" : "未授权，点选仅复制，需手动 ⌘V")
-                                    .font(.system(size: 10.5))
-                                    .foregroundStyle(RubickTheme.muted(scheme))
-                            }
-                            Spacer()
-                            if trusted {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(RubickTheme.emerald)
-                            } else {
-                                Button("打开系统设置") {
-                                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                                        NSWorkspace.shared.open(url)
-                                    }
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                                .tint(RubickTheme.emerald)
-                            }
-                        }
-                        Text("授权后需重启应用，自动粘贴才会生效。")
-                            .font(.system(size: 10)).foregroundStyle(RubickTheme.muted(scheme).opacity(0.7))
-                    }
-                }
-                settingCard {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("屏幕录制权限（自绘截图 + 窗口吸附）")
-                                    .font(.system(size: 12.5))
-                                Text(CaptureController.screenRecordingAllowed()
-                                     ? "已授权，截图使用自绘选框并支持窗口吸附"
-                                     : "未授权，截图自动回退系统框选（无吸附）；重新授权后打开设置页刷新")
-                                    .font(.system(size: 10.5))
-                                    .foregroundStyle(RubickTheme.muted(scheme))
-                            }
-                            Spacer()
-                            if CaptureController.screenRecordingAllowed() {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(RubickTheme.emerald)
-                            } else {
-                                Button("打开系统设置") {
-                                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-                                        NSWorkspace.shared.open(url)
-                                    }
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                                .tint(RubickTheme.emerald)
-                            }
-                        }
+                            .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                     }
                 }
                 settingCard {
                     HStack {
-                        Text("外观").font(.system(size: 12.5))
+                        Text("外观").font(.system(size: 14))
                         Spacer()
                         Picker("", selection: themeBinding) {
                             Text("跟随系统").tag("system")
@@ -537,7 +490,7 @@ struct SettingsView: View {
                     }
                 }
             }
-            .padding(16)
+            .padding(28)
         }
     }
 
@@ -613,7 +566,7 @@ struct SettingsView: View {
                     .tint(RubickTheme.emerald)
                 }
             }
-            .padding(16)
+            .padding(28)
         }
     }
 
@@ -640,7 +593,7 @@ struct SettingsView: View {
         let isRec = recorder.target == .global(action)
         return HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(actionLabel(action)).font(.system(size: 12.5))
+                Text(actionLabel(action)).font(.system(size: 14))
                 Text("全局").font(.system(size: 10)).foregroundStyle(RubickTheme.muted(scheme))
             }
             Spacer()
@@ -664,7 +617,7 @@ struct SettingsView: View {
         let isRec = recorder.target == .panel(action)
         return HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(PanelKeyConfig.shared.label(action)).font(.system(size: 12.5))
+                Text(PanelKeyConfig.shared.label(action)).font(.system(size: 14))
                 Text("面板内").font(.system(size: 10)).foregroundStyle(RubickTheme.muted(scheme))
             }
             Spacer()
@@ -688,7 +641,7 @@ struct SettingsView: View {
         let isRec = recorder.target == .annotate(action)
         return HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(AnnotateKeyConfig.shared.label(action)).font(.system(size: 12.5))
+                Text(AnnotateKeyConfig.shared.label(action)).font(.system(size: 14))
                 Text("标注内").font(.system(size: 10)).foregroundStyle(RubickTheme.muted(scheme))
             }
             Spacer()
@@ -712,13 +665,68 @@ struct SettingsView: View {
     private var historyPane: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                paneHeader("历史", subtitle: "奥术历史中保留的条目数。")
+                paneHeader("剪贴板", subtitle: "面板、粘贴与历史记录")
+                settingCard {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("面板形态").font(.system(size: 14))
+                        Picker("面板形态", selection: $panelForm) {
+                            Text("完整面板").tag("panel")
+                            Text("底部弹壳 Dock").tag("dock")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .frame(width: 320)
+                        .onChange(of: panelForm) { newValue in
+                            UserDefaults.standard.set(newValue, forKey: "panel.form")
+                        }
+                        Toggle("记住面板呼出位置", isOn: $rememberPosition)
+                            .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
+                            .onChange(of: rememberPosition) { v in
+                                UserDefaults.standard.set(v, forKey: "panel.rememberPosition")
+                            }
+                        Text("⌘⇧V 的呼出形态：完整历史面板，或贴屏幕底部的标签页弹壳（单击卡片直接粘贴）。")
+                            .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
+                    }
+                }
+                settingCard {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle("双击条目后自动粘贴", isOn: $pasteAuto)
+                            .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
+                            .onChange(of: pasteAuto) { newValue in
+                                UserDefaults.standard.set(newValue, forKey: "pasteAuto")
+                            }
+                        Text("关闭后双击仅复制，需手动 ⌘V。")
+                            .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
+                    }
+                }
+                settingCard {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle("粘贴后保持面板打开", isOn: $keepOpen)
+                            .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
+                            .onChange(of: keepOpen) { newValue in
+                                UserDefaults.standard.set(newValue, forKey: "keepPanelOpen")
+                            }
+                        Text("开启后可连续粘贴多条，按 ⎋ 关闭；按住 ⌥ 点击条目可仅复制。")
+                            .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
+                    }
+                }
+                settingCard {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle("忽略密码管理器内容", isOn: $ignorePassword)
+                            .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
+                            .onChange(of: ignorePassword) { newValue in
+                                ClipboardMonitor.shared.ignorePasswordManagers = newValue
+                            }
+                        Text("识别 1Password 等复制内容的隐私标记，不入历史。")
+                            .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
+                    }
+                }
                 settingCard {
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("法术容量").font(.system(size: 12.5))
+                            Text("保留记录数").font(.system(size: 14))
                             Text("超出后按时间淘汰最旧条目。")
-                                .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
+                                .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                         }
                         Spacer()
                         Picker("", selection: $limit) {
@@ -748,7 +756,7 @@ struct SettingsView: View {
                     }
                 }
             }
-            .padding(16)
+            .padding(28)
         }
     }
 
@@ -757,11 +765,11 @@ struct SettingsView: View {
     private var smartPane: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                paneHeader("智能识别", subtitle: "翻译与 OCR 均本地优先；大模型为可选增强。")
+                paneHeader("识别与翻译", subtitle: "翻译与 OCR 均本地优先；大模型为可选增强。")
                 settingCard {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("翻译引擎").font(.system(size: 12.5))
+                            Text("翻译引擎").font(.system(size: 14))
                             Spacer()
                             Picker("", selection: $translateEngine) {
                                 Text("Apple 离线").tag("apple")
@@ -774,7 +782,7 @@ struct SettingsView: View {
                             }
                         }
                         HStack {
-                            Text("翻译方向").font(.system(size: 12.5))
+                            Text("翻译方向").font(.system(size: 14))
                             Spacer()
                             Picker("", selection: $translateDirection) {
                                 Text(TranslateDirection.auto.label).tag(TranslateDirection.auto.rawValue)
@@ -788,7 +796,7 @@ struct SettingsView: View {
                             }
                         }
                         Text("Apple 离线翻译完全免费、不上传；大模型翻译质量更高，需自行配置接口。")
-                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
+                            .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                     }
                 }
                 settingCard {
@@ -824,7 +832,7 @@ struct SettingsView: View {
                 settingCard {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("OCR 识别语言").font(.system(size: 12.5))
+                            Text("OCR 识别语言").font(.system(size: 14))
                             Spacer()
                             Picker("", selection: $ocrLang) {
                                 ForEach(OCRLanguage.allCases, id: \.rawValue) { l in
@@ -838,18 +846,27 @@ struct SettingsView: View {
                             }
                         }
                         Text("OCR 由系统 Vision 引擎在本机完成，离线、免费、无次数限制。")
-                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
+                            .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                     }
                 }
+            }
+            .padding(28)
+        }
+    }
+
+    private var capturePane: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                paneHeader("截图与钉图", subtitle: "框选、标注与悬浮贴图")
                 settingCard {
                     VStack(alignment: .leading, spacing: 8) {
                         Toggle("窗口吸附", isOn: $snapOn)
                             .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
                             .onChange(of: snapOn) { v in UserDefaults.standard.set(v, forKey: "capture.snap") }
-                        Text("实验性功能，默认关闭。开启后：悬停窗口高亮、单击直截整窗、选框边缘自动吸附窗口边界。")
-                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
+                        Text("悬停识别窗口，单击选中窗口范围，也可拖动框选。")
+                            .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                         HStack {
-                            Text("吸附阈值").font(.system(size: 12.5))
+                            Text("吸附阈值").font(.system(size: 14))
                             Spacer()
                             Slider(value: $snapThreshold, in: 2...16, step: 1)
                                 .frame(width: 180)
@@ -862,7 +879,7 @@ struct SettingsView: View {
                                 .frame(width: 40)
                         }
                         HStack {
-                            Text("截图模式").font(.system(size: 12.5))
+                            Text("截图模式").font(.system(size: 14))
                             Spacer()
                             Picker("", selection: $captureMode) {
                                 Text("自动").tag("auto")
@@ -875,10 +892,10 @@ struct SettingsView: View {
                                 UserDefaults.standard.set(v, forKey: "capture.mode")
                             }
                         }
-                        Text("自动：已授权屏幕录制 → 自绘（含吸附），否则回退系统框选；标注编辑器两种模式都可用。")
-                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
+                        Text("自动与自绘模式使用拉比克原地标注；系统框选仅在主动选择时启用。")
+                            .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                         HStack {
-                            Text("延时截图").font(.system(size: 12.5))
+                            Text("延时截图").font(.system(size: 14))
                             Spacer()
                             Picker("", selection: $delaySeconds) {
                                 Text("1 秒").tag(1)
@@ -896,7 +913,7 @@ struct SettingsView: View {
                             .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
                             .onChange(of: longShot) { v in UserDefaults.standard.set(v, forKey: "capture.longShot") }
                         HStack {
-                            Text("贴图默认大小").font(.system(size: 12.5))
+                            Text("贴图默认大小").font(.system(size: 14))
                             Spacer()
                             Slider(value: $pinScale, in: 0.25...2.0, step: 0.05)
                                 .frame(width: 180)
@@ -909,11 +926,11 @@ struct SettingsView: View {
                                 .frame(width: 40)
                         }
                         Text("钉图按截图原始尺寸的这个比例显示（默认 70%），钉住后可滚轮/捏合继续缩放。")
-                            .font(.system(size: 10.5)).foregroundStyle(RubickTheme.muted(scheme))
+                            .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                     }
                 }
             }
-            .padding(16)
+            .padding(28)
         }
     }
 
@@ -946,15 +963,15 @@ struct SettingsView: View {
             brandEmblem(72)
                 .padding(.top, 40)
             Text("拉比克").font(.system(size: 17, weight: .bold))
-            Text("RubickBoard · 大魔导师版")
+            Text("Rubick · 剪贴板与截图")
                 .font(.system(size: 10.5, weight: .medium))
                 .tracking(1.2)
                 .textCase(.uppercase)
                 .foregroundStyle(RubickTheme.primary(scheme).opacity(0.85))
-            Text("版本 1.1.1")
+            Text("版本 " + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发版"))
                 .font(.system(size: 11))
                 .foregroundStyle(RubickTheme.muted(scheme))
-            Text("菜单栏常驻的剪贴板历史与截图钉图工具。\n偷取（复制）、施展（粘贴）、铭刻（钉图），尽在魔典之中。\nSwift + SwiftUI 原生开发，数据仅保存在本机。")
+            Text("菜单栏常驻的剪贴板历史与截图钉图工具。\n剪贴板历史保存在本机。")
                 .font(.system(size: 11.5))
                 .foregroundStyle(RubickTheme.muted(scheme))
                 .multilineTextAlignment(.center)
@@ -963,5 +980,15 @@ struct SettingsView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+private struct SettingsRowToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 16) {
+            configuration.label
+            Spacer()
+            Toggle("", isOn: configuration.$isOn).labelsHidden().toggleStyle(.switch)
+        }.frame(minHeight: 32)
     }
 }

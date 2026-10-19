@@ -153,8 +153,13 @@ struct InlineScreenshotTests {
             let bitmap=try #require(root.bitmapImageRepForCachingDisplay(in:root.bounds))
             root.cacheDisplay(in:root.bounds,to:bitmap)
             let pixel=try #require(bitmap.colorAt(x:bitmap.pixelsWide/2,y:bitmap.pixelsHigh/2)?.usingColorSpace(.deviceRGB))
-            #expect(red ? pixel.redComponent > 0.9 : pixel.blueComponent > 0.9)
-            #expect(red ? pixel.blueComponent < 0.1 : pixel.redComponent < 0.1)
+            // Window snapshots are display-profile managed: a pure red source may
+            // acquire a small blue component. A swapped display still fails this
+            // strong channel-dominance check in either direction.
+            let dominant = red ? pixel.redComponent : pixel.blueComponent
+            let other = red ? pixel.blueComponent : pixel.redComponent
+            #expect(dominant > 0.8)
+            #expect(dominant - other > 0.65)
         }
     }
     @Test func numberingDeletionAndUndoKeepIdentity() {

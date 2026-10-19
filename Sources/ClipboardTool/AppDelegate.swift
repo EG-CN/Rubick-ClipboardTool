@@ -80,6 +80,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.handleHotkey(action)
         }
 
+        if CommandLine.arguments.contains("--show-settings") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                SettingsController.shared.show()
+            }
+        }
+
         // 首次启动引导辅助功能权限（模拟粘贴需要）
         if !AXIsProcessTrusted() {
             requestAccessibilityIfNeeded()
@@ -284,13 +290,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
-            if let glyph = NSImage(named: "menuGlyph") {
-                glyph.isTemplate = true
-                glyph.size = NSSize(width: 17, height: 17)
-                button.image = glyph
-            } else {
-                button.image = NSImage(systemSymbolName: "clipboard", accessibilityDescription: "拉比克")
-            }
+            button.image = RubickBrand.image(size: 18)
             button.toolTip = "拉比克 · 剪贴板历史"
         }
         let menu = NSMenu()
