@@ -20,7 +20,7 @@ cp Resources/Info.plist "$RUBICK_TEST_APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleName 拉比克' "$RUBICK_TEST_APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName 拉比克' "$RUBICK_TEST_APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleExecutable RubickScreenshotTest' "$RUBICK_TEST_APP/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 2.0.0-test6' "$RUBICK_TEST_APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 2.0.0-test7' "$RUBICK_TEST_APP/Contents/Info.plist"
 RUBICK_BUILD_STAMP=$(date +%Y%m%d%H%M%S)
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $RUBICK_BUILD_STAMP" "$RUBICK_TEST_APP/Contents/Info.plist"
 if [ -f Resources/AppIcon.icns ]; then cp Resources/AppIcon.icns "$RUBICK_TEST_APP/Contents/Resources/"; fi

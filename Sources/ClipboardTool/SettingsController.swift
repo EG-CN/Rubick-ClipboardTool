@@ -673,32 +673,35 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("面板形态").font(.system(size: 14))
                         Picker("面板形态", selection: $panelForm) {
-                            Text("完整面板").tag("panel")
-                            Text("底部弹壳 Dock").tag("dock")
+                            Text("原生").tag("panel")
+                            Text("Dock").tag("dock")
+                            Text("衣架").tag("clothesline")
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
                         .frame(width: 320)
                         .onChange(of: panelForm) { newValue in
                             UserDefaults.standard.set(newValue, forKey: "panel.form")
+                            ClipboardPresentation.apply()
                         }
                         Toggle("记住面板呼出位置", isOn: $rememberPosition)
+                            .disabled(panelForm != "panel")
                             .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
                             .onChange(of: rememberPosition) { v in
                                 UserDefaults.standard.set(v, forKey: "panel.rememberPosition")
                             }
-                        Text("⌘⇧V 的呼出形态：完整历史面板，或贴屏幕底部的标签页弹壳（单击卡片直接粘贴）。")
+                        Text("原生：双栏历史；Dock：底部卡片；衣架：图文自动上绳，单击粘贴、拖入使用。⌘⇧V 展开或收起。")
                             .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                     }
                 }
                 settingCard {
                     VStack(alignment: .leading, spacing: 4) {
-                        Toggle("双击条目后自动粘贴", isOn: $pasteAuto)
+                        Toggle(panelForm == "panel" ? "双击条目后自动粘贴" : "单击卡片后自动粘贴", isOn: $pasteAuto)
                             .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
                             .onChange(of: pasteAuto) { newValue in
                                 UserDefaults.standard.set(newValue, forKey: "pasteAuto")
                             }
-                        Text("关闭后双击仅复制，需手动 ⌘V。")
+                        Text("关闭后取用条目仅复制，需手动 ⌘V。")
                             .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                     }
                 }

@@ -281,6 +281,7 @@ final class InlineScreenshotController {
         ActivationPolicyKeeper.shared.release("inlineScreenshot")
         if restoreFocus, let app = previousApp, !app.isTerminated { NSApp.yieldActivation(to: app); app.activate() }
         previousApp = nil
+        if restoreFocus { ClotheslineController.shared.resumeAfterCapture() }
     }
     private func output(_ action: InlineScreenshotCanvas.Output) {
         guard let canvas = activeCanvas, let panel = canvas.window else { return }

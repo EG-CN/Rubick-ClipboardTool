@@ -76,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusItem()
         panelController.statusButton = statusItem.button   // 面板锚定菜单栏图标
         wireServices()
+        ClotheslineController.shared.start()
         hotkeys.onAction = { [weak self] action in
             self?.handleHotkey(action)
         }
@@ -241,14 +242,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleHotkey(_ action: HotkeyManager.Action) {
         switch action {
         case .togglePanel:
-            // 面板形态：完整面板(默认) / 底部弹壳 Dock（设置→通用）
-            if UserDefaults.standard.string(forKey: "panel.form") == "dock" {
-                panelController.close()
-                ShellDockController.shared.toggle()
-            } else {
-                ShellDockController.shared.hide()
-                panelController.toggle(fromHotkey: true)   // 快捷键呼出：面板跟随鼠标弹出
-            }
+            ClipboardPresentation.toggle(fromHotkey: true)
         case .screenshot:
             hideOverlaysForCapture()
             screenshotController.captureInteractive()
@@ -356,13 +350,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: 菜单动作
 
     @objc private func togglePanel() {
-        if UserDefaults.standard.string(forKey: "panel.form") == "dock" {
-            panelController.close()
-            ShellDockController.shared.toggle()
-        } else {
-            ShellDockController.shared.hide()
-            panelController.toggle()
-        }
+        ClipboardPresentation.toggle()
     }
 
     @objc private func captureScreenshot() {

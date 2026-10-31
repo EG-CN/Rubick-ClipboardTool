@@ -172,6 +172,7 @@ final class CaptureController {
         InlineScreenshotController.shared.close(restoreFocus: true)
         delayTask?.cancel()
         delayTask = nil
+        ClotheslineController.shared.suspendForCapture()
         if mode == "system" {
             systemFallback()
             return
@@ -183,8 +184,10 @@ final class CaptureController {
 
     /// 系统框选回退（无吸附），截图后仍进标注编辑器（12.6.4）
     private func systemFallback() {
+        ClotheslineController.shared.suspendForCapture()
         Toast.shared.show("系统框选模式（未授权屏幕录制，无窗口吸附）")
         ScreenshotController.shared.captureSystemInteractive { [weak self] img in
+            ClotheslineController.shared.resumeAfterCapture()
             guard let self = self, let img = img else { return }
             self.handleCapturedImage(img)
         }
@@ -193,6 +196,7 @@ final class CaptureController {
     // MARK: 自绘流程
 
     private func startCustom() {
+        ClotheslineController.shared.suspendForCapture()
         ScreenshotDiagnostics.begin()
         let requestID = captureRequestID
         if overlayWindow != nil { teardown(restoreFocus: false) }   // 双触发：先拆旧覆盖层与监听
@@ -310,6 +314,7 @@ final class CaptureController {
             } catch {
                 DispatchQueue.main.async { [weak self] in
                     guard let self, self.captureRequestID == requestID else { return }
+                    ClotheslineController.shared.resumeAfterCapture()
                     let captureError = error as NSError
                     if captureError.domain == SCStreamErrorDomain,
                        captureError.code == SCStreamError.Code.userDeclined.rawValue {
@@ -450,6 +455,7 @@ final class CaptureController {
 
     /// 截图产物分发：普通截图 → 标注编辑器（选区原地弹出）；划图翻译 → OCR+翻译；划图取字 → OCR+复制
     private func handleCapturedImage(_ image: NSImage, at rect: CGRect? = nil) {
+        ClotheslineController.shared.resumeAfterCapture()
         let purpose = pendingPurpose
         pendingPurpose = .normal
         switch purpose {
@@ -528,6 +534,7 @@ final class CaptureController {
         if let m = globalKeyMonitor { NSEvent.removeMonitor(m); globalKeyMonitor = nil }
         if let m = hoverMonitor { NSEvent.removeMonitor(m); hoverMonitor = nil }
         capturedDisplays = []
+        if restoreFocus { ClotheslineController.shared.resumeAfterCapture() }
         if restoreFocus, let prev = previousApp, !prev.isTerminated,
            prev.processIdentifier != ProcessInfo.processInfo.processIdentifier {
             prev.activate(options: [.activateIgnoringOtherApps])

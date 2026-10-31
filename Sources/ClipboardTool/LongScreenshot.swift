@@ -93,6 +93,7 @@ final class LongScreenshot {
     /// rect：AppKit 全局坐标的框选区域
     func start(rect: CGRect) {
         guard !running else { return }
+        defer { if !running { ClotheslineController.shared.resumeAfterCapture() } }
         guard enabled else {
             Toast.shared.showImportant("长截图（实验性）未开启：设置 → 截图")
             return
@@ -136,6 +137,7 @@ final class LongScreenshot {
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.running = false
+                ClotheslineController.shared.resumeAfterCapture()
                 if let m = self.escMonitor { NSEvent.removeMonitor(m); self.escMonitor = nil }
                 switch result {
                 case .success(let image):
