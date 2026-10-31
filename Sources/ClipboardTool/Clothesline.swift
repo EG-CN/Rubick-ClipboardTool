@@ -21,9 +21,9 @@ enum ClipboardPresentation: String, CaseIterable {
 
 struct ClotheslineLayout {
     static func frame(screen: CGRect, visible: CGRect, expanded: Bool) -> CGRect {
-        let width = min(980, max(120, visible.width - 32))
+        let width: CGFloat = expanded ? min(980, max(120, visible.width - 32)) : 72
         let height: CGFloat = expanded ? min(224, visible.height) : 34
-        return CGRect(x: visible.midX - width / 2, y: min(visible.maxY, screen.maxY) - height - 3, width: width, height: height)
+        return CGRect(x: visible.maxX - width - 16, y: min(visible.maxY, screen.maxY) - height - 3, width: width, height: height)
     }
     static func items(_ items: [ClipboardItem]) -> [ClipboardItem] { items.filter { $0.kind == .text || $0.kind == .image } }
     static func capacity(width: CGFloat) -> Int { max(1, Int((width - 32) / 158)) }
@@ -105,6 +105,7 @@ final class ClotheslineController {
         view.expanded = expanded
         let frame = ClotheslineLayout.frame(screen: entry.screen.frame, visible: entry.screen.visibleFrame, expanded: expanded)
         entry.panel.setFrame(frame, display: true)
+        entry.panel.ignoresMouseEvents = false
         view.frame = CGRect(origin: .zero, size: frame.size); view.needsDisplay = true
     }
     private func tick() {
@@ -117,7 +118,7 @@ final class ClotheslineController {
             if inside {
                 view.leftAt = nil
                 if view.enteredAt == nil { view.enteredAt = now }
-                if !view.expanded, !view.hoverBlocked, now.timeIntervalSince(view.enteredAt!) > 0.25 { setExpanded(true, view: view) }
+                // The corner tab opens explicitly on click, avoiding accidental expansion.
             } else {
                 view.enteredAt = nil; view.hoverBlocked = false
                 if view.leftAt == nil { view.leftAt = now }
@@ -226,15 +227,19 @@ final class ClotheslineView: NSView, NSDraggingSource {
         label(text, in: rect.insetBy(dx: 9, dy: 7), color: green)
     }
     override func draw(_ dirtyRect: NSRect) {
+        if !expanded {
+            let tab = bounds.insetBy(dx: 1, dy: 1)
+            NSColor.windowBackgroundColor.withAlphaComponent(0.92).setFill()
+            NSBezierPath(roundedRect: tab, xRadius: 12, yRadius: 12).fill()
+            green.setFill()
+            NSBezierPath(roundedRect: CGRect(x: 12, y: 6, width: 10, height: 22), xRadius: 3, yRadius: 3).fill()
+            NSColor.white.withAlphaComponent(0.6).setStroke()
+            let seam = NSBezierPath(); seam.move(to: CGPoint(x: 17, y: 9)); seam.line(to: CGPoint(x: 17, y: 24)); seam.stroke()
+            label(items.count > 99 ? "99+" : "\(items.count)", in: CGRect(x: 30, y: 10, width: 37, height: 19), color: green, bold: true)
+            return
+        }
         let rope = NSBezierPath(); rope.move(to: CGPoint(x: 6, y: 10)); rope.curve(to: CGPoint(x: bounds.width - 6, y: 10), controlPoint1: CGPoint(x: bounds.width * 0.35, y: 26), controlPoint2: CGPoint(x: bounds.width * 0.65, y: 26)); rope.lineWidth = 1.5
         green.withAlphaComponent(0.8).setStroke(); rope.stroke()
-        if !expanded {
-            for i in 0..<min(items.count, capacity) {
-                NSColor.windowBackgroundColor.withAlphaComponent(0.9).setFill(); NSBezierPath(roundedRect: CGRect(x: 32 + CGFloat(i) * 86, y: 20, width: 56, height: 7), xRadius: 2, yRadius: 2).fill()
-                green.setFill(); NSBezierPath(roundedRect: CGRect(x: 57 + CGFloat(i) * 86, y: 14, width: 5, height: 13), xRadius: 2, yRadius: 2).fill()
-            }
-            pill("展开 · \(items.count)", toggleRect); return
-        }
         for (i, item) in shown.enumerated() {
             let rect = cardRect(i)
             NSGraphicsContext.saveGraphicsState()

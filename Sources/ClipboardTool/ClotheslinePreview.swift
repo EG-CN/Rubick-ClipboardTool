@@ -11,7 +11,7 @@ enum ClotheslinePreview {
         RunLoop.main.run(until: Date().addingTimeInterval(0.8))
         store.addText("好的，收到。\n我看完后回复你。")
         for expanded in [false, true] {
-            let rect = CGRect(x: 0, y: 0, width: 980, height: expanded ? 224 : 34)
+            let rect = CGRect(x: 0, y: 0, width: expanded ? 980 : 72, height: expanded ? 224 : 34)
             let panel = ClotheslinePanel(contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             panel.isReleasedWhenClosed = false; panel.isOpaque = false; panel.backgroundColor = .clear
             let view = ClotheslineView(frame: rect, store: store); view.expanded = expanded

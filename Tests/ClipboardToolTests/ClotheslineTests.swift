@@ -20,7 +20,8 @@ struct ClotheslineTests {
                 let frame = ClotheslineLayout.frame(screen: screen, visible: visible, expanded: expanded)
                 #expect(visible.contains(frame))
                 #expect(frame.maxY < visible.maxY)
-                #expect(frame.midX == visible.midX)
+                #expect(frame.maxX == visible.maxX - 16)
+                if !expanded { #expect(frame.width == 72) }
             }
         }
     }
