@@ -112,6 +112,14 @@ struct ClotheslineTests {
         #expect(long.height <= 274)
         #expect(ClotheslineLayout.cardSize(image: CGSize(width: 0, height: 0), text: nil).height.isFinite)
     }
+    @Test func dragCatcherArmsOnlyForNewFileDragSessions() {
+        let fileTypes = [NSPasteboard.PasteboardType.fileURL]
+        #expect(ClotheslineLayout.shouldArmDragCatcher(changeCount: 7, lastArmed: -1, types: fileTypes))
+        #expect(!ClotheslineLayout.shouldArmDragCatcher(changeCount: 7, lastArmed: 7, types: fileTypes))
+        #expect(!ClotheslineLayout.shouldArmDragCatcher(changeCount: 8, lastArmed: 7, types: [NSPasteboard.PasteboardType.string]))
+        #expect(!ClotheslineLayout.shouldArmDragCatcher(changeCount: 8, lastArmed: 7, types: nil))
+        #expect(ClotheslineLayout.shouldArmDragCatcher(changeCount: 8, lastArmed: 7, types: [.fileURL, .string]))
+    }
     @Test func noPasteIntoButtonOrUnknownFocus() {
         #expect(!ClotheslineLayout.isEditable(role: "AXButton", valueSettable: false, explicitlyEditable: false))
         #expect(!ClotheslineLayout.isEditable(role: nil, valueSettable: false, explicitlyEditable: false))
