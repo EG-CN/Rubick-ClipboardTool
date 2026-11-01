@@ -112,13 +112,18 @@ struct ClotheslineTests {
         #expect(long.height <= 274)
         #expect(ClotheslineLayout.cardSize(image: CGSize(width: 0, height: 0), text: nil).height.isFinite)
     }
-    @Test func dragCatcherArmsOnlyForNewFileDragSessions() {
-        let fileTypes = [NSPasteboard.PasteboardType.fileURL]
-        #expect(ClotheslineLayout.shouldArmDragCatcher(changeCount: 7, lastArmed: -1, types: fileTypes))
-        #expect(!ClotheslineLayout.shouldArmDragCatcher(changeCount: 7, lastArmed: 7, types: fileTypes))
-        #expect(!ClotheslineLayout.shouldArmDragCatcher(changeCount: 8, lastArmed: 7, types: [NSPasteboard.PasteboardType.string]))
-        #expect(!ClotheslineLayout.shouldArmDragCatcher(changeCount: 8, lastArmed: 7, types: nil))
-        #expect(ClotheslineLayout.shouldArmDragCatcher(changeCount: 8, lastArmed: 7, types: [.fileURL, .string]))
+    @Test func dragCatcherSitsBelowCutoutAndInsideVisibleArea() {
+        let screen = CGRect(x: 0, y: 0, width: 1512, height: 982)
+        let visible = CGRect(x: screen.minX, y: screen.minY + 40, width: screen.width, height: screen.height - 78)
+        let notchless = ClotheslineLayout.catcherFrame(screen: screen, visible: visible, cutout: nil)
+        #expect(visible.contains(notchless))
+        #expect(notchless.midX == screen.midX)
+        let cutout = CGRect(x: screen.midX - 90, y: screen.maxY - 38, width: 180, height: 38)
+        let notched = ClotheslineLayout.catcherFrame(screen: screen, visible: visible, cutout: cutout)
+        #expect(visible.contains(notched))
+        #expect(notched.maxY <= cutout.minY)
+        #expect(notched.midX == cutout.midX)
+        #expect(notched.width == 220)
     }
     @Test func noPasteIntoButtonOrUnknownFocus() {
         #expect(!ClotheslineLayout.isEditable(role: "AXButton", valueSettable: false, explicitlyEditable: false))

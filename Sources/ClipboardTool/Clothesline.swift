@@ -71,8 +71,13 @@ struct ClotheslineLayout {
         }
         return frames
     }
-    static func shouldArmDragCatcher(changeCount: Int, lastArmed: Int, types: [NSPasteboard.PasteboardType]?) -> Bool {
-        changeCount != lastArmed && types?.contains(.fileURL) == true
+    /// 接取区位置：刘海正下方（无刘海屏为顶部居中），与旧入口同址，避开系统屏幕边缘手势。
+    static func catcherFrame(screen: CGRect, visible: CGRect, cutout: CGRect?) -> CGRect {
+        let width: CGFloat = 220, height: CGFloat = 30
+        let top = min(visible.maxY, cutout?.minY ?? screen.maxY)
+        let center = cutout?.midX ?? screen.midX
+        let x = min(max(center - width / 2, visible.minX), visible.maxX - width)
+        return CGRect(x: x, y: top - height - 2, width: width, height: height)
     }
     static func items(_ items: [ClipboardItem]) -> [ClipboardItem] { items }
     static func isEditable(role: String?, valueSettable: Bool, explicitlyEditable: Bool) -> Bool {
@@ -85,8 +90,8 @@ final class ClotheslinePanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// 隐形拖拽接取条：只在检测到文件拖拽会话时短暂布防，接收"往屏幕上缘拖文件"的手势。
-/// 平时不存在，不吞任何点击；文件靠近上缘即通知控制器垂绳，绳面接管后续拖拽。
+/// 隐形拖拽接取区：常驻在刘海正下方（无刘海屏为顶部居中），接收"把文件拖到刘海位置"的手势。
+/// hitTest 返回 nil 让所有点击穿透到下层窗口；拖拽会话由拖拽管理器按窗口帧路由，不受 hitTest 影响。
 final class ClotheslineDragCatcher: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
@@ -94,6 +99,7 @@ final class ClotheslineDragCatcher: NSPanel {
 
 final class ClotheslineDragCatcherView: NSView {
     weak var controller: ClotheslineController?
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         guard !(sender.draggingSource is ClotheslineView), !FileTransfer.files(from: sender.draggingPasteboard).isEmpty else { return [] }
         controller?.catcherCaughtDrag()
@@ -121,7 +127,6 @@ final class ClotheslineController {
     private var lastItemCount = 0
     private var lastFirstItemID: String?
     private var catchers: [(screen: NSScreen, panel: ClotheslineDragCatcher, view: ClotheslineDragCatcherView)] = []
-    private var armedDragChangeCount = -1
     private init() {}
 
     func start() {
@@ -139,13 +144,14 @@ final class ClotheslineController {
             self.lastFirstItemID = current.first?.id
             self.entries.forEach { $0.view.reload() }
             // 有内容才垂下：新增暂存内容时绳子在鼠标所在屏幕垂下。
-            if grew, ClipboardPresentation.current == .clothesline, !self.suspended {
+            // 用户正在原生主面板里操作（取条目会 touch 置顶）时不抢戏。
+            if grew, !HistoryPanelController.shared.isVisible,
+               ClipboardPresentation.current == .clothesline, !self.suspended {
                 self.presentAtMouse()
             }
         })
         observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in self?.refreshStyle() })
         if let monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown], handler: { [weak self] event in self?.handleDismissal(event) }) { eventMonitors.append(monitor) }
-        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp], handler: { [weak self] event in self?.handleDragActivity(event) }) { eventMonitors.append(monitor) }
         if let monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown], handler: { [weak self] event in
             self?.handleDismissal(event); return event
         }) { eventMonitors.append(monitor) }
@@ -163,8 +169,8 @@ final class ClotheslineController {
         }
     }
     func refreshStyle() {
+        let migrated = entries.map { ($0.screen, $0.view.exportPresentationState()) }
         entries.forEach { $0.panel.orderOut(nil) }; entries.removeAll()
-        disarmCatchers()
         catchers.forEach { $0.panel.orderOut(nil) }; catchers.removeAll()
         guard ClipboardPresentation.current == .clothesline else { return }
         for screen in NSScreen.screens {
@@ -174,46 +180,33 @@ final class ClotheslineController {
             panel.level = .floating; panel.hidesOnDeactivate = false; panel.acceptsMouseMovedEvents = true
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             let view = ClotheslineView(frame: CGRect(origin: .zero, size: frame.size))
-            view.controller = self; panel.contentView = view
+            view.controller = self
+            // 热插拔显示器/改分辨率时迁移垂绳与钉图状态，不让绳子凭空消失。
+            if let old = migrated.first(where: { $0.0 === screen })?.1 { view.importPresentationState(old) }
+            panel.contentView = view
             panel.isReleasedWhenClosed = false
             entries.append((screen, panel, view))
-            // 隐形接取条：贴可见区上缘（主屏在菜单栏正下方），平时不显示。
-            let strip = CGRect(x: screen.visibleFrame.minX, y: screen.visibleFrame.maxY - 24,
-                               width: screen.visibleFrame.width, height: 24)
-            let catcherPanel = ClotheslineDragCatcher(contentRect: strip, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            if view.expanded { panel.orderFrontRegardless() }
+            // 隐形接取区：常驻在刘海正下方，无刘海屏为顶部居中，点击穿透。
+            let catcherFrame = ClotheslineLayout.catcherFrame(screen: screen.frame, visible: screen.visibleFrame, cutout: ClotheslineLayout.cutout(on: screen))
+            let catcherPanel = ClotheslineDragCatcher(contentRect: catcherFrame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             catcherPanel.isOpaque = false; catcherPanel.backgroundColor = .clear; catcherPanel.hasShadow = false
             catcherPanel.level = .floating; catcherPanel.hidesOnDeactivate = false
             catcherPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            let catcherView = ClotheslineDragCatcherView(frame: CGRect(origin: .zero, size: strip.size))
+            let catcherView = ClotheslineDragCatcherView(frame: CGRect(origin: .zero, size: catcherFrame.size))
             catcherView.controller = self
             catcherView.registerForDraggedTypes([.fileURL])
             catcherPanel.contentView = catcherView
             catcherPanel.isReleasedWhenClosed = false
             catchers.append((screen, catcherPanel, catcherView))
-            // 不再常驻：有内容或快捷键调用时才显示。
+            catcherPanel.orderFrontRegardless()
         }
     }
-    /// 检测到文件拖拽会话开始（拖拽剪贴板出现新的 fileURL 写入）时布防接取条。
-    private func handleDragActivity(_ event: NSEvent) {
-        guard ClipboardPresentation.current == .clothesline, !suspended else { return }
-        if event.type == .leftMouseUp { disarmCatchers(); return }
-        let dragPasteboard = NSPasteboard(name: NSPasteboard.Name("Apple CFPasteboard drag"))
-        guard ClotheslineLayout.shouldArmDragCatcher(changeCount: dragPasteboard.changeCount, lastArmed: armedDragChangeCount, types: dragPasteboard.types) else { return }
-        armedDragChangeCount = dragPasteboard.changeCount
-        if entries.isEmpty { refreshStyle() }
-        for entry in entries where !entry.view.expanded {
-            catchers.first { $0.screen === entry.screen }?.panel.orderFrontRegardless()
-        }
-    }
-    private func disarmCatchers() {
-        catchers.forEach { $0.panel.orderOut(nil) }
-    }
-    /// 接取条捕到拖拽：绳子立刻在当前屏幕垂下，绳面接管后续拖拽更新。
+    /// 接取区捕到拖拽：绳子立刻在当前屏幕垂下，绳面接管后续拖拽更新。
     func catcherCaughtDrag() {
-        disarmCatchers()
         presentAtMouse()
     }
-    /// 接取条兜底接收：极少数情况下光标仍停在接取条上松手，走与绳面拖入一致的挂入路径。
+    /// 接取区兜底接收：光标停在接取区内松手时，走与绳面拖入一致的挂入路径。
     func stageFilesAtMouse(_ urls: [URL]) {
         let entry = entries.first { $0.screen.frame.contains(NSEvent.mouseLocation) } ?? entries.first
         guard let entry else { return }
@@ -226,7 +219,7 @@ final class ClotheslineController {
     func resumeAfterCapture() {
         suspended = false
         guard ClipboardPresentation.current == .clothesline, !hidden else { return }
-        entries.forEach { if $0.view.expanded { $0.panel.orderFrontRegardless() } }
+        entries.forEach { if $0.view.expanded, $0.view.interaction.isOpen { $0.panel.orderFrontRegardless() } }
     }
     func toggle(fromHotkey: Bool = false) {
         if entries.isEmpty { refreshStyle() }
@@ -265,9 +258,11 @@ final class ClotheslineController {
                 setExpanded(false, view: other.view)
             }
         }
-        if feedback && view.expanded != expanded { InteractionHaptics.perform(expanded ? .alignment : .levelChange) }
+        let wasExpanded = view.expanded
+        if feedback && wasExpanded != expanded { InteractionHaptics.perform(expanded ? .alignment : .levelChange) }
         view.expanded = expanded
-        view.reveal(expanded)
+        // 只在真实过渡时播淡入，绳已垂下时补挂新内容不得整面闪断。
+        if expanded != wasExpanded { view.reveal(expanded) }
         let frame = ClotheslineLayout.frame(screen: entry.screen.frame, visible: entry.screen.visibleFrame, expanded: expanded)
         if expanded {
             entry.panel.setFrame(frame, display: true)
@@ -479,6 +474,17 @@ final class ClotheslineView: NSView, NSDraggingSource {
     init(frame: NSRect, store: HistoryStore = .shared) { self.store = store; super.init(frame: frame); registerForDraggedTypes([.fileURL]); reload() }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     var capacity: Int { items.count }
+    /// 换屏/重建 entries 时迁移垂绳与钉图状态，绳子不能凭空消失。
+    struct PresentationState { var expanded: Bool; var pins: [String: NSPanel]; var scrollOffset: CGFloat }
+    func exportPresentationState() -> PresentationState {
+        PresentationState(expanded: expanded, pins: pins, scrollOffset: scrollOffset)
+    }
+    func importPresentationState(_ state: PresentationState) {
+        expanded = state.expanded
+        pins = state.pins
+        scrollOffset = state.scrollOffset
+        reflow()
+    }
     override func setFrameSize(_ newSize: NSSize) { super.setFrameSize(newSize); reflow() }
     private func reflow() {
         contentWidth = ClotheslineLayout.railWidth(widths: cardSizes.map(\.width))
@@ -511,14 +517,17 @@ final class ClotheslineView: NSView, NSDraggingSource {
         }
         tilt = tilt.filter { known.contains($0.key) }
         swayPhase = swayPhase.filter { known.contains($0.key) }
-        // 取空自动收绳：历史清空（或最后一条被移除）时绳子自己收走。
-        if items.isEmpty, expanded, !dragging { interaction.showManually(false) }
+        // 取空自动收绳：历史清空（或最后一条被移除）时绳子立刻收走，不等下一帧。
+        if items.isEmpty, expanded, !dragging {
+            interaction.showManually(false)
+            controller?.setExpanded(false, view: self, manual: false)
+        }
         reflow()
         pins = pins.filter { $0.value.isVisible }
         needsDisplay = true
     }
     private func cardRect(_ i: Int) -> CGRect { frames[i] }
-    private func clipRect(_ i: Int) -> CGRect { let r = cardRect(i); return CGRect(x: r.midX - 12, y: r.minY - 22, width: 24, height: 36) }
+    private func clipRect(_ i: Int) -> CGRect { let r = cardRect(i); return CGRect(x: r.midX - 16, y: r.minY - 24, width: 32, height: 40) }
     private func pinRect(_ i: Int) -> CGRect {
         let card = cardRect(i)
         return CGRect(x: card.maxX - 65, y: card.maxY - 29, width: 59, height: 25)
@@ -557,21 +566,30 @@ final class ClotheslineView: NSView, NSDraggingSource {
         needsDisplay = true
     }
     /// 光标扫过绳面的摆动物理：接近即让位，离开后弹回，另有极轻微的悬挂晃动。
+    /// 光标落在卡片上时该卡摆正，保证绘制与轴对齐命中矩形一致。
     func advanceSway(at point: CGPoint, now: TimeInterval) {
         guard !dragging, !items.isEmpty else { return }
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        var changed = false
         for (i, item) in items.enumerated() {
             let frame = frames[i]
             if frame.minX > bounds.width + 260 || frame.maxX < -260 { continue }
+            if reduceMotion {
+                if wind[item.id] != 0 { wind[item.id] = 0; changed = true }
+                continue
+            }
             let dx = frame.midX - point.x
             let inf = max(0, 1 - abs(dx) / 240)
-            let target = reduceMotion ? 0 : (dx >= 0 ? 1 : -1) * inf * inf * 5.5
+            let hover = frame.contains(point) || clipRect(i).contains(point)
+            let target = hover ? 0 : (dx >= 0 ? 1 : -1) * inf * inf * 5.5
             let current = wind[item.id] ?? 0
-            let next = current + (target - current) * (reduceMotion ? 1 : 0.2)
+            let next = current + (target - current) * 0.2
             if abs(next) > 3, abs(current) <= 3 { InteractionHaptics.perform() }
+            if abs(next - current) > 0.015 { changed = true }
             wind[item.id] = next
         }
-        needsDisplay = true
+        // 常态下环境微晃每帧都不同；reduceMotion 下只在归零过程中重绘，省电。
+        needsDisplay = !reduceMotion || changed
     }
     private func swayAngle(for item: ClipboardItem, now: TimeInterval) -> CGFloat {
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -586,33 +604,46 @@ final class ClotheslineView: NSView, NSDraggingSource {
         let paragraph = NSMutableParagraphStyle(); paragraph.lineBreakMode = wrap ? .byWordWrapping : .byTruncatingTail
         (text as NSString).draw(in: rect, withAttributes: [.font: NSFont.systemFont(ofSize: size, weight: bold ? .medium : .regular), .foregroundColor: color, .paragraphStyle: paragraph])
     }
-    /// Small spring photo clip: a rear jaw, a narrower front jaw and a metal hinge.
-    private func drawPhotoClip(in rect: CGRect, dim: CGFloat = 0) {
+    private enum ClipVariant { case chrome, brass }
+    /// 金属弹簧夹：铬丝环 + 渐变夹身，铬/黄铜两变体按卡片身份确定性分配。
+    private func drawMetalClip(in rect: CGRect, variant: ClipVariant, dim: CGFloat = 0) {
         NSGraphicsContext.saveGraphicsState()
         let transform = NSAffineTransform()
         transform.translateX(by: rect.minX, yBy: rect.minY)
-        transform.scaleX(by: rect.width / 12, yBy: rect.height / 36)
+        transform.scaleX(by: rect.width / 32, yBy: rect.height / 40)
         transform.concat()
-        func color(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> NSColor {
-            NSColor(calibratedRed: r * (1 - dim), green: g * (1 - dim), blue: b * (1 - dim), alpha: 1)
+        let metal: [NSColor]
+        if variant == .chrome {
+            metal = [NSColor(calibratedWhite: 0.96 * (1 - dim) + 0.04, alpha: 1),
+                     NSColor(calibratedWhite: 0.74 * (1 - dim), alpha: 1),
+                     NSColor(calibratedWhite: 0.44 * (1 - dim), alpha: 1)]
+        } else {
+            metal = [NSColor(calibratedRed: 0.93 * (1 - dim) + 0.04, green: 0.80 * (1 - dim) + 0.04, blue: 0.42 * (1 - dim), alpha: 1),
+                     NSColor(calibratedRed: 0.72 * (1 - dim), green: 0.55 * (1 - dim), blue: 0.17 * (1 - dim), alpha: 1),
+                     NSColor(calibratedRed: 0.40 * (1 - dim), green: 0.29 * (1 - dim), blue: 0.08 * (1 - dim), alpha: 1)]
         }
-        let back = NSBezierPath()
-        back.move(to: CGPoint(x: 3, y: 0)); back.line(to: CGPoint(x: 10, y: 1))
-        back.line(to: CGPoint(x: 12, y: 33)); back.line(to: CGPoint(x: 8, y: 36))
-        back.line(to: CGPoint(x: 2, y: 34)); back.close()
-        color(0.09, 0.33, 0.24).setFill(); back.fill()
-        let front = NSBezierPath()
-        front.move(to: CGPoint(x: 1, y: 1)); front.line(to: CGPoint(x: 8, y: 2))
-        front.line(to: CGPoint(x: 9, y: 33)); front.line(to: CGPoint(x: 1, y: 32)); front.close()
-        color(0.22, 0.53, 0.40).setFill(); front.fill()
-        let edge = NSBezierPath(); edge.move(to: CGPoint(x: 3, y: 5)); edge.line(to: CGPoint(x: 3, y: 28))
-        edge.lineWidth = 0.7; color(0.45, 0.68, 0.55).setStroke(); edge.stroke()
-        let spring = NSBezierPath(); spring.move(to: CGPoint(x: 0, y: 17)); spring.line(to: CGPoint(x: 10, y: 17))
-        spring.move(to: CGPoint(x: 0, y: 19)); spring.line(to: CGPoint(x: 10, y: 19))
-        spring.lineWidth = 1; color(0.60, 0.67, 0.63).setStroke(); spring.stroke()
-        color(0.78, 0.82, 0.79).setFill(); NSBezierPath(ovalIn: CGRect(x: 3, y: 16, width: 4, height: 4)).fill()
-        color(0.30, 0.41, 0.35).setFill(); NSBezierPath(ovalIn: CGRect(x: 4.5, y: 17.5, width: 1, height: 1)).fill()
+        let loop = NSBezierPath(roundedRect: CGRect(x: 5, y: 24, width: 22, height: 14), xRadius: 10, yRadius: 7)
+        NSColor(calibratedWhite: 0.2 * (1 - dim) + 0.08, alpha: 1).setStroke()
+        loop.lineWidth = 2.2; loop.stroke()
+        NSGradient(colors: metal.reversed())?.draw(in: loop, angle: -90)
+        loop.stroke()
+        let body = NSBezierPath(roundedRect: CGRect(x: 2, y: 9, width: 28, height: 16), xRadius: 3, yRadius: 3)
+        NSGradient(colors: metal)?.draw(in: body, angle: 90)
+        NSColor.black.withAlphaComponent(0.45).setStroke(); body.lineWidth = 0.7; body.stroke()
+        NSColor.black.withAlphaComponent(0.35 * (1 - dim)).setStroke()
+        let seam = NSBezierPath(); seam.move(to: CGPoint(x: 8, y: 17)); seam.line(to: CGPoint(x: 24, y: 17)); seam.lineWidth = 1
+        seam.stroke()
+        NSColor.black.withAlphaComponent(0.3 * (1 - dim)).setFill()
+        NSBezierPath(roundedRect: CGRect(x: 6, y: 5, width: 20, height: 4), xRadius: 2, yRadius: 2).fill()
         NSGraphicsContext.restoreGraphicsState()
+    }
+    private func clipVariant(for id: String) -> ClipVariant { abs(id.hashValue) % 2 == 0 ? .chrome : .brass }
+    private static let captionTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter(); formatter.dateFormat = "HH:mm"; return formatter
+    }()
+    private static func captionTime(_ date: Date?) -> String {
+        guard let date else { return "" }
+        return captionTimeFormatter.string(from: date)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -630,7 +661,11 @@ final class ClotheslineView: NSView, NSDraggingSource {
         thread.lineWidth = 0.9; thread.setLineDash([2, 3], count: 2, phase: 0)
         NSColor(calibratedRed: 0.88, green: 0.84, blue: 0.74, alpha: 1).setStroke(); thread.stroke()
         for x in [ropeStart, ropeEnd] {
-            green.setFill(); NSBezierPath(ovalIn: CGRect(x: x - 2, y: 42, width: 4, height: 4)).fill()
+            let peg = NSBezierPath(ovalIn: CGRect(x: x - 5, y: 39, width: 10, height: 10))
+            NSGradient(colors: [NSColor(calibratedRed: 0.88, green: 0.74, blue: 0.34, alpha: 1),
+                                NSColor(calibratedRed: 0.42, green: 0.31, blue: 0.08, alpha: 1)])?.draw(in: peg, angle: -70)
+            NSColor.black.withAlphaComponent(0.55).setFill()
+            NSBezierPath(ovalIn: CGRect(x: x - 1.6, y: 42.4, width: 3.2, height: 3.2)).fill()
         }
         for (i, item) in items.enumerated() {
             let rect = cardRect(i)
@@ -643,11 +678,13 @@ final class ClotheslineView: NSView, NSDraggingSource {
             transform.rotate(byDegrees: angle)
             transform.translateX(by: -anchor.x, yBy: -anchor.y)
             transform.concat()
-            let shadow = NSShadow(); shadow.shadowBlurRadius = 8; shadow.shadowOffset = NSSize(width: 0, height: -3); shadow.shadowColor = NSColor.black.withAlphaComponent(0.17); shadow.set()
-            NSColor(calibratedRed: 0.99, green: 0.985, blue: 0.97, alpha: 1).setFill(); NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).fill()
+            let shadow = NSShadow(); shadow.shadowBlurRadius = 10; shadow.shadowOffset = NSSize(width: 0, height: -4); shadow.shadowColor = NSColor.black.withAlphaComponent(0.28); shadow.set()
+            let paper = NSBezierPath(roundedRect: rect, xRadius: 2.5, yRadius: 2.5)
+            NSColor(calibratedRed: 0.980, green: 0.973, blue: 0.957, alpha: 1).setFill(); paper.fill()
             NSGraphicsContext.restoreGraphicsState()
             NSGraphicsContext.saveGraphicsState()
             transform.concat()
+            NSColor(calibratedRed: 0.918, green: 0.898, blue: 0.867, alpha: 1).setStroke(); paper.lineWidth = 0.6; paper.stroke()
             let content = CGRect(x: rect.minX + 10, y: rect.minY + 10, width: rect.width - 20, height: rect.height - 54)
             NSColor(calibratedWhite: 0.94, alpha: 1).setFill(); content.fill()
             if item.kind == .image, let image = store.thumbnail(for: item, maxPixel: 320) {
@@ -666,7 +703,27 @@ final class ClotheslineView: NSView, NSDraggingSource {
                 label("Aa  文字", in: CGRect(x: content.minX, y: content.minY, width: content.width, height: 18), color: green, bold: true)
                 label(String((item.text ?? "").prefix(600)), in: CGRect(x: content.minX, y: content.minY + 23, width: content.width, height: max(20, content.height - 27)), size: 13, color: NSColor(calibratedWhite: 0.18, alpha: 1), wrap: true)
             }
-            label(item.kind == .image ? "图片" : (item.kind == .file ? "文件 · ⌘点击多选" : "文字 · 点按粘贴"), in: CGRect(x: rect.minX + 8, y: rect.maxY - 22, width: rect.width - 16, height: 18), size: 11, color: NSColor(calibratedWhite: 0.48, alpha: 1))
+            // 拍立得图注：标题 + 元信息 + 状态点，占卡片底部 34pt。
+            let captionTop = rect.maxY - 34
+            var captionTitle: String
+            var captionMeta: String
+            var metaColor = NSColor(calibratedWhite: 0.49, alpha: 1)
+            switch item.kind {
+            case .image:
+                captionTitle = "图片"
+                if let w = item.metaWidth, let h = item.metaHeight { captionMeta = "\(w) × \(h)" } else { captionMeta = Self.captionTime(item.timestamp) }
+            case .file:
+                let exists = item.filePath.map { FileManager.default.fileExists(atPath: $0) } ?? false
+                captionTitle = FileTransfer.filename(item)
+                captionMeta = exists ? "可拖出 · ⌘多选" : "源文件已移动或删除"
+                if !exists { metaColor = .systemRed }
+            case .text:
+                captionTitle = "文字"
+                captionMeta = Self.captionTime(item.timestamp)
+            }
+            label(captionTitle, in: CGRect(x: rect.minX + 8, y: captionTop + 1, width: rect.width - 44, height: 15), size: 11.5, color: NSColor(calibratedWhite: 0.16, alpha: 1), bold: true)
+            label(captionMeta, in: CGRect(x: rect.minX + 8, y: captionTop + 16, width: rect.width - 44, height: 13), size: 9.5, color: metaColor)
+            green.setFill(); NSBezierPath(ovalIn: CGRect(x: rect.maxX - 17, y: captionTop + 8, width: 7, height: 7)).fill()
             if item.kind == .image {
                 let button = pinRect(i)
                 let pinned = pins[item.id]?.isVisible == true
@@ -694,10 +751,9 @@ final class ClotheslineView: NSView, NSDraggingSource {
                 let outline = NSBezierPath(roundedRect: rect.insetBy(dx: -1, dy: -1), xRadius: 6, yRadius: 6)
                 outline.lineWidth = 2; outline.stroke()
             }
-            let clip = clipRect(i).insetBy(dx: 6, dy: 0)
-            drawPhotoClip(in: clip, dim: shade[item.id] ?? 0)
+            drawMetalClip(in: clipRect(i), variant: clipVariant(for: item.id), dim: shade[item.id] ?? 0)
             if hoverClipID == item.id {
-                let badge = CGRect(x: clip.maxX + 5, y: clip.minY + 3, width: 45, height: 24)
+                let badge = CGRect(x: clipRect(i).maxX + 5, y: clipRect(i).minY + 3, width: 45, height: 24)
                 NSColor.windowBackgroundColor.withAlphaComponent(0.96).setFill()
                 NSBezierPath(roundedRect: badge, xRadius: 8, yRadius: 8).fill()
                 label("移除", in: badge.insetBy(dx: 8, dy: 5), size: 11, color: .systemRed)
