@@ -20,8 +20,8 @@ struct ClotheslineTests {
                 let frame = ClotheslineLayout.frame(screen: screen, visible: visible, expanded: expanded)
                 #expect(visible.contains(frame))
                 #expect(frame.maxY < visible.maxY)
-                #expect(frame.maxX == visible.maxX - 16)
-                if !expanded { #expect(frame.width == 72) }
+                #expect(frame.midX == screen.midX)
+                if !expanded { #expect(frame.width == 96) }
             }
         }
     }
@@ -48,15 +48,18 @@ struct ClotheslineTests {
         #expect(long.height <= 274)
         #expect(ClotheslineLayout.cardSize(image: CGSize(width: 0, height: 0), text: nil).height.isFinite)
     }
-    @Test func movedAnchorRestoresAndExpansionStaysInsideScreen() {
-        let screen = CGRect(x: -2560, y: -200, width: 2560, height: 1440)
-        let visible = screen.insetBy(dx: 0, dy: 30)
-        for anchor in [CGPoint(x: 0, y: 0), CGPoint(x: 0.4, y: 0.5), CGPoint(x: 1, y: 1)] {
-            let tab = ClotheslineLayout.frame(screen: screen, visible: visible, expanded: false, anchor: anchor)
-            let open = ClotheslineLayout.frame(screen: screen, visible: visible, expanded: true, anchor: anchor)
+    @Test func fixedEntrySitsBelowReportedCutoutAcrossScreens() {
+        for origin in [CGPoint.zero, CGPoint(x: -2560, y: -200), CGPoint(x: 0, y: 982)] {
+            let screen = CGRect(origin: origin, size: CGSize(width: 1512, height: 982))
+            let visible = CGRect(x: screen.minX, y: screen.minY + 40, width: screen.width, height: screen.height - 78)
+            let cutout = CGRect(x: screen.midX - 90, y: screen.maxY - 38, width: 180, height: 38)
+            let tab = ClotheslineLayout.frame(screen: screen, visible: visible, expanded: false, cutout: cutout)
+            let open = ClotheslineLayout.frame(screen: screen, visible: visible, expanded: true, cutout: cutout)
             #expect(visible.contains(tab) && visible.contains(open))
+            #expect(tab.midX == cutout.midX)
+            #expect(tab.maxY == open.maxY)
+            #expect(tab.maxY < cutout.minY)
             #expect(open.width == visible.width - 32)
-            if anchor.x == 0.4 { #expect(abs(tab.minX - (visible.minX + 0.4 * visible.width)) < 0.01) }
         }
     }
     @Test func noPasteIntoButtonOrUnknownFocus() {

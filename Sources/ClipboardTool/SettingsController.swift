@@ -699,7 +699,7 @@ struct SettingsView: View {
                             .onChange(of: rememberPosition) { v in
                                 UserDefaults.standard.set(v, forKey: "panel.rememberPosition")
                             }
-                        Text("原生：双栏历史；Dock：底部卡片；随手夹：图文自动上绳，单击粘贴、拖入使用。\(HotkeyManager.shared.panelShortcutDisplay) 展开或收起。")
+                        Text("原生：双栏历史；Dock：底部卡片；随手夹：刘海下沿固定入口，点击展开照片墙，拖入文件暂存。\(HotkeyManager.shared.panelShortcutDisplay) 展开或收起。")
                             .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                     }
                 }
@@ -717,11 +717,12 @@ struct SettingsView: View {
                 settingCard {
                     VStack(alignment: .leading, spacing: 4) {
                         Toggle("粘贴后保持面板打开", isOn: $keepOpen)
+                            .disabled(panelForm == "clothesline")
                             .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
                             .onChange(of: keepOpen) { newValue in
                                 UserDefaults.standard.set(newValue, forKey: "keepPanelOpen")
                             }
-                        Text("开启后可连续粘贴多条，按 ⎋ 关闭；按住 ⌥ 点击条目可仅复制。")
+                        Text(panelForm == "clothesline" ? "照片墙取用后自动收起，拖拽取消时保持展开；点外部或按 Esc 也可收起。" : "开启后可连续粘贴多条，按 ⎋ 关闭；按住 ⌥ 点击条目可仅复制。")
                             .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                     }
                 }

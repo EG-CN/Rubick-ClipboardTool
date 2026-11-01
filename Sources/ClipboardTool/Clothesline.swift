@@ -20,12 +20,21 @@ enum ClipboardPresentation: String, CaseIterable {
 }
 
 struct ClotheslineLayout {
-    static func frame(screen: CGRect, visible: CGRect, expanded: Bool, anchor: CGPoint? = nil) -> CGRect {
-        let width: CGFloat = expanded ? max(120, visible.width - 32) : 72
-        let height: CGFloat = expanded ? min(360, visible.height - 6) : 34
-        let top = anchor.map { visible.minY + $0.y * visible.height + 34 } ?? (min(visible.maxY, screen.maxY) - 3)
-        let x = expanded ? visible.minX + 16 : anchor.map { visible.minX + $0.x * visible.width } ?? (visible.maxX - width - 16)
-        return CGRect(x: min(max(x, visible.minX), visible.maxX - width), y: min(max(top - height, visible.minY), visible.maxY - height), width: width, height: height)
+    static func frame(screen: CGRect, visible: CGRect, expanded: Bool, cutout: CGRect? = nil) -> CGRect {
+        let width: CGFloat = expanded ? max(120, visible.width - 32) : 96
+        let height: CGFloat = expanded ? min(416, visible.height - 6) : 26
+        let top = min(visible.maxY, cutout?.minY ?? screen.maxY) - 2
+        let center = expanded ? visible.midX : (cutout?.midX ?? screen.midX)
+        let x = min(max(center - width / 2, visible.minX), visible.maxX - width)
+        return CGRect(x: x, y: max(visible.minY, top - height), width: width, height: height)
+    }
+    static func cutout(on screen: NSScreen) -> CGRect? {
+        guard screen.safeAreaInsets.top > 0 else { return nil }
+        let left = screen.auxiliaryTopLeftArea, right = screen.auxiliaryTopRightArea
+        let start = left?.maxX ?? (screen.frame.midX - 100)
+        let end = right?.minX ?? (screen.frame.midX + 100)
+        return CGRect(x: start, y: screen.frame.maxY - screen.safeAreaInsets.top,
+                      width: max(1, end - start), height: screen.safeAreaInsets.top)
     }
     static func cardSize(image: CGSize?, text: String?) -> CGSize {
         if let image, image.width > 0, image.height > 0 {
@@ -75,6 +84,7 @@ final class ClotheslineController {
     private var timer: Timer?
     private var suspended = false
     private var hidden = false
+    private var eventMonitors: [Any] = []
     private init() {}
 
     func start() {
@@ -83,23 +93,21 @@ final class ClotheslineController {
             self?.entries.forEach { $0.view.reload() }
         })
         observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in self?.refreshStyle() })
-        timer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in self?.tick() }
-        timer?.tolerance = 0.03
+        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown], handler: { [weak self] event in self?.handleDismissal(event) }) { eventMonitors.append(monitor) }
+        if let monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown], handler: { [weak self] event in
+            self?.handleDismissal(event); return event
+        }) { eventMonitors.append(monitor) }
+        timer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in self?.tick() }
+        timer?.tolerance = 0.02
         refreshStyle()
     }
-    private func anchor(for screen: NSScreen) -> CGPoint? {
-        guard let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
-              let value = UserDefaults.standard.array(forKey: "clothesline.anchor.\(id)") as? [Double], value.count == 2,
-              value.allSatisfy({ $0.isFinite }) else { return nil }
-        return CGPoint(x: value[0], y: value[1])
-    }
-    func moveTab(_ view: ClotheslineView, to origin: CGPoint, save: Bool) {
-        guard let entry = entries.first(where: { $0.view === view }), !view.expanded else { return }
-        let visible = entry.screen.visibleFrame
-        let point = CGPoint(x: min(max(origin.x, visible.minX), visible.maxX - 72), y: min(max(origin.y, visible.minY), visible.maxY - 34))
-        entry.panel.setFrameOrigin(point)
-        if save, let id = entry.screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
-            UserDefaults.standard.set([(point.x - visible.minX) / visible.width, (point.y - visible.minY) / visible.height], forKey: "clothesline.anchor.\(id)")
+    var layoutDiagnostics: [[String: Any]] {
+        entries.map { entry in
+            ["display": (entry.screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.intValue ?? 0,
+             "hasCutout": ClotheslineLayout.cutout(on: entry.screen) != nil,
+             "screenFrame": NSStringFromRect(entry.screen.frame),
+             "entryFrame": NSStringFromRect(entry.panel.frame),
+             "expanded": entry.view.expanded]
         }
     }
     func refreshStyle() {
@@ -107,13 +115,13 @@ final class ClotheslineController {
         guard ClipboardPresentation.current == .clothesline else { return }
         hidden = false
         for screen in NSScreen.screens {
-            let frame = ClotheslineLayout.frame(screen: screen.frame, visible: screen.visibleFrame, expanded: false, anchor: anchor(for: screen))
+            let frame = ClotheslineLayout.frame(screen: screen.frame, visible: screen.visibleFrame, expanded: false, cutout: ClotheslineLayout.cutout(on: screen))
             let panel = ClotheslinePanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = false
             panel.level = .floating; panel.hidesOnDeactivate = false; panel.acceptsMouseMovedEvents = true
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             let view = ClotheslineView(frame: CGRect(origin: .zero, size: frame.size))
-            view.controller = self; panel.contentView = view
+            view.controller = self; view.entryCenterX = (ClotheslineLayout.cutout(on: screen)?.midX ?? screen.frame.midX) - frame.minX; panel.contentView = view
             panel.isReleasedWhenClosed = false
             entries.append((screen, panel, view))
             if !suspended { panel.orderFrontRegardless() }
@@ -133,6 +141,7 @@ final class ClotheslineController {
         guard !suspended else { Toast.shared.show("请先完成或取消截图，再打开随手夹"); return }
         let entry = entries.first { $0.screen.frame.contains(NSEvent.mouseLocation) } ?? entries.first
         guard let entry else { return }
+        guard !entry.view.dragging, !entry.view.receivingFiles else { return }
         let expand = ClotheslineLayout.expandsOnInvocation(hidden: hidden, visible: entry.panel.isVisible, expanded: entry.view.expanded)
         if hidden {
             for other in entries where other.panel !== entry.panel { other.panel.orderFrontRegardless() }
@@ -140,52 +149,58 @@ final class ClotheslineController {
         hidden = false
         entry.panel.orderFrontRegardless()
         setExpanded(expand, view: entry.view, feedback: true)
-        entry.view.holdUntilPointerEnters = expand
-        entry.view.hoverBlocked = !expand
+
     }
     func hide() {
         hidden = true
         entries.forEach { entry in
-            entry.view.holdUntilPointerEnters = false
             setExpanded(false, view: entry.view)
             entry.panel.orderOut(nil)
         }
     }
-    func setExpanded(_ expanded: Bool, view: ClotheslineView, feedback: Bool = false) {
+    func setExpanded(_ expanded: Bool, view: ClotheslineView, feedback: Bool = false, manual: Bool = true) {
         guard let entry = entries.first(where: { $0.view === view }), !view.dragging else { return }
+        if manual { view.interaction.showManually(expanded) }
+        if expanded {
+            for other in entries where other.view !== view && other.view.expanded && !other.view.dragging {
+                setExpanded(false, view: other.view)
+            }
+        }
         if feedback && view.expanded != expanded { InteractionHaptics.perform() }
         view.expanded = expanded
         view.reveal(expanded)
-        let frame = ClotheslineLayout.frame(screen: entry.screen.frame, visible: entry.screen.visibleFrame, expanded: expanded, anchor: anchor(for: entry.screen))
+        let frame = ClotheslineLayout.frame(screen: entry.screen.frame, visible: entry.screen.visibleFrame, expanded: expanded, cutout: ClotheslineLayout.cutout(on: entry.screen))
         entry.panel.setFrame(frame, display: true)
         entry.panel.ignoresMouseEvents = false
+        view.entryCenterX = (ClotheslineLayout.cutout(on: entry.screen)?.midX ?? entry.screen.frame.midX) - frame.minX
         view.frame = CGRect(origin: .zero, size: frame.size); view.needsDisplay = true
+    }
+    private func handleDismissal(_ event: NSEvent) {
+        guard !suspended, !hidden else { return }
+        let escape = event.type == .keyDown && event.keyCode == 53
+        guard escape || event.type == .leftMouseDown || event.type == .rightMouseDown else { return }
+        for entry in entries where entry.view.expanded {
+            let view = entry.view
+            guard !view.dragging, !view.receivingFiles, !view.menuOpen else { continue }
+            let local = view.convert(entry.panel.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+            if escape || !entry.panel.frame.contains(NSEvent.mouseLocation) || !view.isInteractive(local) {
+                setExpanded(false, view: view)
+            }
+        }
     }
     private func tick() {
         guard !suspended, !hidden, ClipboardPresentation.current == .clothesline else { return }
-        let now = Date()
+        let now = ProcessInfo.processInfo.systemUptime
         for entry in entries {
-            let inside = entry.panel.frame.contains(NSEvent.mouseLocation)
             let view = entry.view
-            if view.dragging || view.tabPressed || view.menuOpen || view.receivingFiles { continue }
-            if inside {
-                view.holdUntilPointerEnters = false
-                view.leftAt = nil
-                if view.enteredAt == nil { view.enteredAt = now }
-                // A short dwell opens the corner tab without reacting to a passing pointer.
-                if !view.expanded, !view.hoverBlocked,
-                   let enteredAt = view.enteredAt, now.timeIntervalSince(enteredAt) >= 0.2 {
-                    setExpanded(true, view: view, feedback: true)
-                }
-            } else {
-                view.enteredAt = nil; view.hoverBlocked = false
-                if view.leftAt == nil { view.leftAt = now }
-                if view.expanded, !view.holdUntilPointerEnters, now.timeIntervalSince(view.leftAt!) > 0.7 { setExpanded(false, view: view) }
+            if view.dragging || view.menuOpen { continue }
+            view.interaction.advance(to: now)
+            if view.interaction.isOpen != view.expanded {
+                setExpanded(view.interaction.isOpen, view: view, feedback: view.interaction.isOpen, manual: false)
             }
-            // Empty space between hanging cards must not block clicks into the underlying app.
             let local = view.convert(entry.panel.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
             view.updateHover(at: local)
-            entry.panel.ignoresMouseEvents = view.expanded && !view.isInteractive(local)
+            entry.panel.ignoresMouseEvents = view.expanded && !view.receivingFiles && !view.isInteractive(local)
         }
     }
     func use(_ item: ClipboardItem, from view: ClotheslineView, copyOnly: Bool = false, fileSelection: [ClipboardItem] = []) {
@@ -215,9 +230,7 @@ final class ClotheslineController {
                 Toast.shared.show("已复制 · 输入位置已变化，请手动粘贴"); return
             }
             simulatePaste()
-            if let view, !(UserDefaults.standard.bool(forKey: "keepPanelOpen")) {
-                self?.setExpanded(false, view: view); view.hoverBlocked = true
-            }
+            if let view { view.completeTaking(accepted: true) }
             // A key event cannot prove that another app accepted the payload.
             Toast.shared.show("已发送粘贴指令")
         }
@@ -243,17 +256,12 @@ final class ClotheslineView: NSView, NSDraggingSource {
     weak var controller: ClotheslineController?
     var expanded = false
     var dragging = false
-    var hoverBlocked = false
-    var holdUntilPointerEnters = false
-    var enteredAt: Date?, leftAt: Date?
     private var items: [ClipboardItem] = []
     private var start = 0
     private var cardSizes: [CGSize] = []
     private var ranges: [Range<Int>] = []
     private var frames: [CGRect] = []
     private(set) var tabPressed = false
-    private var tabOrigin = CGPoint.zero
-    private var tabMouseOrigin = CGPoint.zero
     private var lastScroll = Date.distantPast
     private let store: HistoryStore
     private var pressed: ClipboardItem?
@@ -261,7 +269,10 @@ final class ClotheslineView: NSView, NSDraggingSource {
     private var beganDrag = false
     private var pins: [String: NSPanel] = [:]
     private var selectedFiles = Set<String>()
-    private(set) var receivingFiles = false
+    var interaction = PhotoWallInteraction()
+    var entryCenterX: CGFloat?
+    var receivingFiles: Bool { interaction.incoming }
+    private var receiptCount = 0
     private var hoveredID: String?
     private var hoverClipID: String?
     private var hoverTracking: NSTrackingArea?
@@ -275,6 +286,11 @@ final class ClotheslineView: NSView, NSDraggingSource {
 
     deinit { hoverTimer?.invalidate(); undoTimer?.invalidate(); revealTimer?.invalidate() }
 
+    func completeTaking(accepted: Bool) {
+        receiptCount = 0
+        interaction.finishTaking(accepted: accepted, at: ProcessInfo.processInfo.systemUptime)
+        needsDisplay = true
+    }
     func reveal(_ expanded: Bool) {
         revealTimer?.invalidate(); revealTimer = nil; revealAlpha = 1
         guard expanded, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { needsDisplay = true; return }
@@ -323,13 +339,14 @@ final class ClotheslineView: NSView, NSDraggingSource {
     func updateHover(at point: CGPoint) {
         guard !dragging else { return }
         let hint: String
-        if !expanded { hint = "悬停展开 · 按住拖动位置" }
+        if !expanded { hint = "点击展开照片墙 · 拖文件到这里暂存" }
+        else if entryRect.contains(point) { hint = "点击收起照片墙 · Esc 也可收起" }
         else if shown.indices.contains(where: { clipRect($0).contains(point) }) { hint = "移除此记录 · 5 秒内可撤销" }
         else if shown.indices.contains(where: { shown[$0].kind == .file && cardRect($0).contains(point) }) { hint = "拖入其他应用使用 · ⌘点击多选文件" }
         else if undoDeletion != nil && undoRect.contains(point) { hint = "撤销刚才的移除操作" }
         else if moreRect.contains(point) { hint = "更多选项：设置、隐藏入口和操作提示" }
         else if allRect.contains(point) { hint = "打开完整历史记录并搜索" }
-        else if toggleRect.contains(point) { hint = "收回到小夹子 · 悬停可再次展开" }
+        else if toggleRect.contains(point) { hint = "收回到刘海下沿 · 点击或快捷键展开" }
         else { hint = "单击粘贴 · 拖入使用 · ⌥点击仅复制" }
         if toolTip != hint { toolTip = hint }
         let clip = expanded ? shown.enumerated().first(where: { clipRect($0.offset).contains(point) })?.element.id : nil
@@ -338,7 +355,11 @@ final class ClotheslineView: NSView, NSDraggingSource {
         guard id != hoveredID else { return }
         hoveredID = id; animateHover()
     }
-    override func mouseMoved(with event: NSEvent) { updateHover(at: convert(event.locationInWindow, from: nil)) }
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        (entryRect.contains(point) ? NSCursor.pointingHand : NSCursor.arrow).set()
+        updateHover(at: point)
+    }
     override func mouseExited(with event: NSEvent) { updateHover(at: CGPoint(x: -1, y: -1)) }
     private let green = NSColor(calibratedRed: 0.14, green: 0.52, blue: 0.36, alpha: 1)
     override var isFlipped: Bool { true }
@@ -358,7 +379,7 @@ final class ClotheslineView: NSView, NSDraggingSource {
             let size = cardSizes[index]
             let width = min(size.width, max(1, bounds.width - 32))
             let t = (x + width / 2) / max(1, bounds.width)
-            let top = 20 + 48 * t * (1 - t)
+            let top = 54 + 48 * t * (1 - t)
             frames.append(CGRect(x: x, y: top, width: width, height: min(size.height, max(100, bounds.height - top - 45))))
             x += width + 18
         }
@@ -388,6 +409,7 @@ final class ClotheslineView: NSView, NSDraggingSource {
         guard let range = ranges.first(where: { $0.lowerBound == start }) else { return [] }
         return Array(items[range])
     }
+    private var entryRect: CGRect { CGRect(x: (entryCenterX ?? bounds.midX) - 48, y: 0, width: 96, height: 26) }
     private func cardRect(_ i: Int) -> CGRect { frames[i] }
     private func clipRect(_ i: Int) -> CGRect { let r = cardRect(i); return CGRect(x: r.midX - 12, y: r.minY - 22, width: 24, height: 36) }
     private func pinRect(_ i: Int) -> CGRect {
@@ -410,7 +432,7 @@ final class ClotheslineView: NSView, NSDraggingSource {
     private(set) var menuOpen = false
     func isInteractive(_ point: CGPoint) -> Bool {
         !expanded || toolbarRect.contains(point) || (undoDeletion != nil && undoRect.contains(point)) ||
-        point.y < 24 || shown.indices.contains { cardRect($0).contains(point) || clipRect($0).contains(point) }
+        entryRect.contains(point) || shown.indices.contains { cardRect($0).contains(point) || clipRect($0).contains(point) }
     }
     private func changePage(_ delta: Int) {
         guard !ranges.isEmpty else { return }
@@ -458,8 +480,9 @@ final class ClotheslineView: NSView, NSDraggingSource {
 
     }
     private func showMoreMenu(with event: NSEvent) {
+        interaction.showManually(true)
         menuOpen = true
-        defer { menuOpen = false; leftAt = Date() }
+        defer { menuOpen = false }
         let menu = NSMenu()
         let settings = NSMenuItem(title: "打开设置…", action: #selector(openSettingsFromMenu), keyEquivalent: "")
         settings.target = self; menu.addItem(settings)
@@ -471,7 +494,7 @@ final class ClotheslineView: NSView, NSDraggingSource {
         let hint = NSMenuItem(title: "\(HotkeyManager.shared.panelShortcutDisplay) 可重新显示", action: nil, keyEquivalent: ""); hint.isEnabled = false; menu.addItem(hint)
         NSMenu.popUpContextMenu(menu, with: event, for: self)
     }
-    @objc private func showUsage() { Toast.shared.showImportant("小夹子：悬停展开、按住拖动。卡片夹子：移除记录。文件：⌘点击多选，再一起拖出。") }
+    @objc private func showUsage() { Toast.shared.showImportant("入口：点击或快捷键展开，点外部或 Esc 收起。拖文件停留后展开接收；拖出取消时保持打开。卡片夹子：移除记录。") }
     @objc private func openSettingsFromMenu() { controller?.setExpanded(false, view: self); SettingsController.shared.show() }
     @objc private func hideFromMenu() { controller?.hide(); Toast.shared.show("随手夹入口已隐藏 · \(HotkeyManager.shared.panelShortcutDisplay) 可显示") }
     private func label(_ text: String, in rect: CGRect, size: CGFloat = 12, color: NSColor = .labelColor, bold: Bool = false, wrap: Bool = false) {
@@ -508,23 +531,23 @@ final class ClotheslineView: NSView, NSDraggingSource {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        if !expanded {
-            let tab = bounds.insetBy(dx: 1, dy: 1)
-            NSColor.windowBackgroundColor.withAlphaComponent(0.92).setFill()
-            NSBezierPath(roundedRect: tab, xRadius: 12, yRadius: 12).fill()
-            drawPhotoClip(in: CGRect(x: 12, y: 4, width: 9, height: 26))
-            label(items.count > 99 ? "99+" : "\(items.count)", in: CGRect(x: 30, y: 10, width: 37, height: 19), color: green, bold: true)
-            return
-        }
+        let entry = entryRect
+        let hover = window.map { entry.contains(convert($0.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)) } ?? false
+        NSColor(calibratedWhite: hover || receivingFiles ? 0.16 : 0.09, alpha: 0.98).setFill()
+        NSBezierPath(roundedRect: entry, xRadius: 9, yRadius: 9).fill()
+        drawPhotoClip(in: CGRect(x: entry.minX + 10, y: 3, width: 7, height: 20))
+        let title = interaction.phase == .receipt && receiptCount > 0 ? "✓ 收下 \(receiptCount)" : "随手夹 \(items.count > 99 ? "99+" : "\(items.count)")"
+        label(title, in: CGRect(x: entry.minX + 26, y: 7, width: 68, height: 17), size: 11, color: NSColor(calibratedRed: 0.63, green: 0.88, blue: 0.72, alpha: 1))
+        if !expanded { return }
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current?.cgContext.setAlpha(revealAlpha)
-        let rope = NSBezierPath(); rope.move(to: CGPoint(x: 6, y: 10)); rope.curve(to: CGPoint(x: bounds.width - 6, y: 10), controlPoint1: CGPoint(x: bounds.width * 0.35, y: 26), controlPoint2: CGPoint(x: bounds.width * 0.65, y: 26)); rope.lineWidth = 2.4
+        let rope = NSBezierPath(); rope.move(to: CGPoint(x: 6, y: 44)); rope.curve(to: CGPoint(x: bounds.width - 6, y: 44), controlPoint1: CGPoint(x: bounds.width * 0.35, y: 60), controlPoint2: CGPoint(x: bounds.width * 0.65, y: 60)); rope.lineWidth = 2.4
         NSColor(calibratedRed: 0.59, green: 0.55, blue: 0.45, alpha: 1).setStroke(); rope.stroke()
         let thread = rope.copy() as! NSBezierPath
         thread.lineWidth = 0.9; thread.setLineDash([2, 3], count: 2, phase: 0)
         NSColor(calibratedRed: 0.88, green: 0.84, blue: 0.74, alpha: 1).setStroke(); thread.stroke()
         for x in [CGFloat(6), bounds.width - 6] {
-            green.setFill(); NSBezierPath(ovalIn: CGRect(x: x - 2, y: 8, width: 4, height: 4)).fill()
+            green.setFill(); NSBezierPath(ovalIn: CGRect(x: x - 2, y: 42, width: 4, height: 4)).fill()
         }
         for (i, item) in shown.enumerated() {
             let rect = cardRect(i)
@@ -598,22 +621,16 @@ final class ClotheslineView: NSView, NSDraggingSource {
     }
     override func mouseDown(with event: NSEvent) {
         downPoint = convert(event.locationInWindow, from: nil); beganDrag = false; pressed = nil
-        tabPressed = !expanded; tabOrigin = window?.frame.origin ?? .zero; tabMouseOrigin = NSEvent.mouseLocation
+        tabPressed = !expanded || entryRect.contains(downPoint)
         if expanded { pressed = shown.enumerated().first(where: { cardRect($0.offset).contains(downPoint) && !clipRect($0.offset).contains(downPoint) && !($0.element.kind == .image && pinRect($0.offset).contains(downPoint)) })?.element }
     }
     override func mouseUp(with event: NSEvent) {
         defer { pressed = nil; tabPressed = false }
-        if tabPressed, beganDrag {
-            controller?.moveTab(self, to: window?.frame.origin ?? tabOrigin, save: true)
-            InteractionHaptics.perform()
-            dragging = false; enteredAt = Date(); hoverBlocked = false
-            return
-        }
         guard !beganDrag else { return }
         let point = convert(event.locationInWindow, from: nil)
         guard hypot(point.x - downPoint.x, point.y - downPoint.y) < 6 else { return }
-        if !expanded || toggleRect.contains(point) {
-            controller?.setExpanded(!expanded, view: self, feedback: true); hoverBlocked = !expanded; return
+        if !expanded || entryRect.contains(point) || toggleRect.contains(point) {
+            controller?.setExpanded(!expanded, view: self, feedback: true); return
         }
         if undoDeletion != nil, undoRect.contains(point) {
             let undo = undoDeletion; undoDeletion = nil; undoTimer?.invalidate(); undoTimer = nil
@@ -654,12 +671,9 @@ final class ClotheslineView: NSView, NSDraggingSource {
     }
     override func mouseDragged(with event: NSEvent) {
         if tabPressed {
-            let mouse = NSEvent.mouseLocation
-            let delta = CGPoint(x: mouse.x - tabMouseOrigin.x, y: mouse.y - tabMouseOrigin.y)
-            guard hypot(delta.x, delta.y) >= 6 else { return }
-            dragging = true; beganDrag = true
-            controller?.moveTab(self, to: CGPoint(x: tabOrigin.x + delta.x, y: tabOrigin.y + delta.y), save: false)
-            return
+            let point = convert(event.locationInWindow, from: nil)
+            if hypot(point.x - downPoint.x, point.y - downPoint.y) >= 6 { beganDrag = true }
+            return  // The notch entry is fixed; dragging it never moves or toggles it.
         }
         guard !beganDrag, let item = pressed else { return }
         let p = convert(event.locationInWindow, from: nil)
@@ -675,7 +689,7 @@ final class ClotheslineView: NSView, NSDraggingSource {
                 drag.setDraggingFrame(CGRect(x: p.x - 32 + CGFloat(index) * 3, y: p.y - 32 + CGFloat(index) * 3, width: 64, height: 64), contents: NSWorkspace.shared.icon(forFile: url.path))
                 return drag
             }
-            beganDrag = true; dragging = true
+            beganDrag = true; dragging = true; interaction.startTaking()
             let session = beginDraggingSession(with: transfers, event: event, source: self)
             session.draggingFormation = .stack
             return
@@ -699,33 +713,42 @@ final class ClotheslineView: NSView, NSDraggingSource {
         }
         let drag = NSDraggingItem(pasteboardWriter: writer)
         drag.setDraggingFrame(CGRect(x: p.x - 70, y: p.y - 40, width: 140, height: 90), contents: preview)
-        beganDrag = true; dragging = true
+        beganDrag = true; dragging = true; interaction.startTaking()
         beginDraggingSession(with: [drag], event: event, source: self)
     }
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation { .copy }
     func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
-        dragging = false; pressed = nil; reload(); leftAt = Date()
+        dragging = false; pressed = nil; reload()
+        completeTaking(accepted: operation != [])
     }
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         guard !(sender.draggingSource is ClotheslineView), !FileTransfer.files(from: sender.draggingPasteboard).isEmpty else { return [] }
-        receivingFiles = true; needsDisplay = true
-        controller?.setExpanded(true, view: self)
+        interaction.enterDrop(at: ProcessInfo.processInfo.systemUptime); needsDisplay = true
         return .copy
     }
-    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { receivingFiles ? .copy : [] }
-    override func draggingExited(_ sender: NSDraggingInfo?) { receivingFiles = false; leftAt = Date(); needsDisplay = true }
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard receivingFiles else { return [] }
+        interaction.enterDrop(at: ProcessInfo.processInfo.systemUptime)
+        return .copy
+    }
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        interaction.leaveDrop(at: ProcessInfo.processInfo.systemUptime); needsDisplay = true
+    }
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool { receivingFiles }
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        defer { receivingFiles = false; leftAt = Date(); needsDisplay = true }
         let urls = FileTransfer.files(from: sender.draggingPasteboard)
-        guard !urls.isEmpty else { return false }
+        guard !urls.isEmpty else { interaction.cancelDrop(); return false }
         InteractionHaptics.perform(.levelChange)
         let count = store.addFiles(urls.map(\.path), sourceApp: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
+        guard count > 0 else { interaction.cancelDrop(); return false }
+        receiptCount = count
+        interaction.received(at: ProcessInfo.processInfo.systemUptime)
+        controller?.setExpanded(true, view: self, manual: false)
         reload()
-        Toast.shared.show("已挂上 \(count) 个文件 · ⌘点击多选后可一起拖出")
-        return count > 0
+        Toast.shared.show("已暂存 \(count) 个文件")
+        return true
     }
-    override func concludeDragOperation(_ sender: NSDraggingInfo?) { receivingFiles = false; needsDisplay = true }
+    override func concludeDragOperation(_ sender: NSDraggingInfo?) { needsDisplay = true }
 
     override func scrollWheel(with event: NSEvent) {
         guard Date().timeIntervalSince(lastScroll) > 0.18 else { return }

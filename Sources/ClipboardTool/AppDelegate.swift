@@ -93,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "clipboardShortcut": hotkeys.panelShortcutDisplay,
                 "clipboardShortcutRegistered": hotkeys.isRegistered(.togglePanel),
                 "presentation": ClipboardPresentation.current.rawValue,
+                "photoWallDisplays": ClotheslineController.shared.layoutDiagnostics,
                 "accessibilityTrusted": AXIsProcessTrusted(),
                 "menuBarOnly": NSApp.activationPolicy() == .accessory
             ]

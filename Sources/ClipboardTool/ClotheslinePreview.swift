@@ -29,7 +29,7 @@ enum ClotheslinePreview {
         try "项目,预算\n设计,1000\n开发,2000".write(to: csv, atomically: true, encoding: .utf8)
         store.addFiles([md.path, csv.path])
         for expanded in [false, true] {
-            let rect = CGRect(x: 0, y: 0, width: expanded ? 1512 : 72, height: expanded ? 360 : 34)
+            let rect = CGRect(x: 0, y: 0, width: expanded ? 1512 : 96, height: expanded ? 416 : 26)
             let panel = ClotheslinePanel(contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             panel.isReleasedWhenClosed = false; panel.isOpaque = false; panel.backgroundColor = .clear
             let view = ClotheslineView(frame: rect, store: store); view.expanded = expanded
@@ -47,7 +47,7 @@ enum ClotheslinePreview {
                 }
             }
             if expanded {
-                view.updateHover(at: CGPoint(x: 109, y: 20))
+                view.updateHover(at: CGPoint(x: 109, y: 54))
                 RunLoop.main.run(until: Date().addingTimeInterval(0.2))
                 view.cacheDisplay(in: rect, to: bitmap)
                 if let hint = bitmap.representation(using: .png, properties: [:]) {
