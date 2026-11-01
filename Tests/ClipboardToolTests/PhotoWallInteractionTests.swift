@@ -33,11 +33,11 @@ struct PhotoWallInteractionTests {
         state.leaveDrop(at: 0.1); state.advance(to: 0.8)
         #expect(state.isOpen && state.phase == .manual)
     }
-    @Test func directDropIsAcceptedBeforeDwellAndThenCloses() {
+    @Test func directDropIsAcceptedBeforeDwellAndStaysOpenForDraggingOut() {
         var state = PhotoWallInteraction()
         state.enterDrop(at: 0); state.received(at: 0.1)
         state.advance(to: 0.9); #expect(state.isOpen)
-        state.advance(to: 1.01); #expect(!state.isOpen)
+        state.advance(to: 100); #expect(state.isOpen)
     }
     @Test func takingFreezesWallAndCancellationKeepsItOpen() {
         var state = PhotoWallInteraction()

@@ -29,8 +29,9 @@ struct PhotoWallInteraction {
         restoreAt = now + 0.65
     }
     mutating func received(at now: TimeInterval) {
+        // 新规则：挂入后保持垂绳，便于继续拖出；收绳只由取用完成、取空或 Esc 触发。
         phase = .receipt; isOpen = true
-        revealAt = nil; restoreAt = nil; closeAt = now + 0.9
+        revealAt = nil; restoreAt = nil; closeAt = nil
     }
     mutating func cancelDrop() {
         guard incoming else { return }

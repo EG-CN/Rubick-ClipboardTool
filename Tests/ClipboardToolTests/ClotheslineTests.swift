@@ -13,29 +13,41 @@ struct ClotheslineTests {
         #expect(!panel.canBecomeKey && !panel.canBecomeMain)
         #expect(panel.styleMask.contains(.nonactivatingPanel))
     }
-    @Test func usesEachDisplaysOwnCoordinatesAndAvoidsMenuBar() {
+    @Test func ropePanelCentersOnEachDisplayAndStaysInsideVisibleArea() {
         for screen in [CGRect(x: 0, y: 0, width: 1512, height: 982), CGRect(x: -2560, y: -300, width: 2560, height: 1440), CGRect(x: 200, y: 982, width: 1080, height: 1920)] {
             let visible = CGRect(x: screen.minX, y: screen.minY + 40, width: screen.width, height: screen.height - 78)
-            for expanded in [false, true] {
-                let frame = ClotheslineLayout.frame(screen: screen, visible: visible, expanded: expanded)
-                #expect(visible.contains(frame))
-                #expect(frame.maxY < visible.maxY)
-                #expect(frame.midX == screen.midX)
-                if !expanded { #expect(frame.width == 96) }
-            }
+            let frame = ClotheslineLayout.frame(screen: screen, visible: visible, expanded: true)
+            #expect(visible.contains(frame))
+            #expect(frame.maxY < visible.maxY)
+            #expect(frame.midX == visible.midX)
+            #expect(frame.width == min(1080, max(560, visible.width * 0.62)))
         }
     }
-    @Test func variableWidthPagesNeverLoseOrDuplicateItems() {
+    @Test func continuousRailKeepsOrderAndClampsScrollOffset() {
         let sizes = (0..<51).map { CGSize(width: $0 % 2 == 0 ? 164 : 320, height: 250) }
-        for width: CGFloat in [640, 1512, 2560] {
-            let pages = ClotheslineLayout.pages(sizes: sizes, width: width)
-            #expect(pages.flatMap { Array($0) } == Array(sizes.indices))
-            for page in pages {
-                let used = page.reduce(CGFloat(0)) { $0 + sizes[$1].width } + CGFloat(max(0, page.count - 1)) * 18
-                #expect(used <= width - 32)
-            }
+        let content = ClotheslineLayout.railWidth(widths: sizes.map(\.width))
+        #expect(content > 0)
+        for offset in [CGFloat(0), content / 2, content * 2] {
+            let frames = ClotheslineLayout.railFrames(sizes: sizes, offset: offset, boundsWidth: 937)
+            #expect(frames.count == sizes.count)
+            #expect(zip(frames, frames.dropFirst()).allSatisfy { $0.minX < $1.minX })
+            // 越界滚动被夹紧：两端重复调用结果一致。
+            let clamped = ClotheslineLayout.railFrames(sizes: sizes, offset: offset, boundsWidth: 937)
+            #expect(frames == clamped)
         }
-        #expect(ClotheslineLayout.pages(sizes: [], width: 1512).isEmpty)
+        let atEnd = ClotheslineLayout.railFrames(sizes: sizes, offset: content, boundsWidth: 937)
+        #expect((atEnd.last?.maxX ?? 0) <= 938)
+        #expect(ClotheslineLayout.railWidth(widths: []) == 0)
+    }
+    @Test func ropeCardsFollowSagAndNeverExceedPanelHeight() {
+        let sizes = (0..<9).map { _ in CGSize(width: 220, height: 250) }
+        let frames = ClotheslineLayout.railFrames(sizes: sizes, offset: 0, boundsWidth: 800)
+        for frame in frames {
+            #expect(frame.minY >= 54 && frame.minY <= 67)
+            #expect(frame.height <= 250)
+        }
+        let tallest = ClotheslineLayout.cardSize(image: nil, text: String(repeating: "长文字\n", count: 500))
+        #expect(tallest.height <= 274)
     }
     @Test func polaroidShapesFollowContent() {
         let landscape = ClotheslineLayout.cardSize(image: CGSize(width: 1920, height: 1080), text: nil)
@@ -47,20 +59,6 @@ struct ClotheslineTests {
         #expect(short.height < long.height)
         #expect(long.height <= 274)
         #expect(ClotheslineLayout.cardSize(image: CGSize(width: 0, height: 0), text: nil).height.isFinite)
-    }
-    @Test func fixedEntrySitsBelowReportedCutoutAcrossScreens() {
-        for origin in [CGPoint.zero, CGPoint(x: -2560, y: -200), CGPoint(x: 0, y: 982)] {
-            let screen = CGRect(origin: origin, size: CGSize(width: 1512, height: 982))
-            let visible = CGRect(x: screen.minX, y: screen.minY + 40, width: screen.width, height: screen.height - 78)
-            let cutout = CGRect(x: screen.midX - 90, y: screen.maxY - 38, width: 180, height: 38)
-            let tab = ClotheslineLayout.frame(screen: screen, visible: visible, expanded: false, cutout: cutout)
-            let open = ClotheslineLayout.frame(screen: screen, visible: visible, expanded: true, cutout: cutout)
-            #expect(visible.contains(tab) && visible.contains(open))
-            #expect(tab.midX == cutout.midX)
-            #expect(tab.maxY == open.maxY)
-            #expect(tab.maxY < cutout.minY)
-            #expect(open.width == visible.width - 32)
-        }
     }
     @Test func noPasteIntoButtonOrUnknownFocus() {
         #expect(!ClotheslineLayout.isEditable(role: "AXButton", valueSettable: false, explicitlyEditable: false))
@@ -123,12 +121,6 @@ struct ClotheslineTests {
         #expect(try Data(contentsOf: file) == bytes)
         #expect(store.imageFor(item) != nil)
         store.saveNow()
-    }
-    @Test func invocationRestoresHiddenStaleExpandedState() {
-        #expect(ClotheslineLayout.expandsOnInvocation(hidden: true, visible: false, expanded: true))
-        #expect(ClotheslineLayout.expandsOnInvocation(hidden: false, visible: false, expanded: true))
-        #expect(ClotheslineLayout.expandsOnInvocation(hidden: false, visible: true, expanded: false))
-        #expect(!ClotheslineLayout.expandsOnInvocation(hidden: false, visible: true, expanded: true))
     }
     @Test func originalPreferencesRemainCompatible() {
         #expect(ClipboardPresentation(rawValue: "panel") == .native)
