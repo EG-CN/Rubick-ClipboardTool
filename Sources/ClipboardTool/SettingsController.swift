@@ -221,6 +221,7 @@ struct SettingsView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var pane: Pane = .overview
     @State private var autoLaunch = false
+    @AppStorage("interaction.haptics") private var hapticsEnabled = true
     @State private var ignorePassword = ClipboardMonitor.shared.ignorePasswordManagers
     @State private var pasteAuto = UserDefaults.standard.object(forKey: "pasteAuto") as? Bool ?? true
     @State private var panelForm = UserDefaults.standard.string(forKey: "panel.form") ?? "panel"
@@ -465,6 +466,14 @@ struct SettingsView: View {
                 paneHeader("通用", subtitle: "启动与外观")
                 settingCard {
                     VStack(alignment: .leading, spacing: 4) {
+                        Toggle("触控板触觉反馈", isOn: $hapticsEnabled)
+                            .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
+                        Text("展开夹子、移除记录或放入文件时轻触反馈，需要支持触觉反馈的触控板。")
+                            .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
+                    }
+                }
+                settingCard {
+                    VStack(alignment: .leading, spacing: 4) {
                         Toggle("开机自启动", isOn: $autoLaunch)
                             .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
                             .onChange(of: autoLaunch) { newValue in
@@ -675,7 +684,7 @@ struct SettingsView: View {
                         Picker("面板形态", selection: $panelForm) {
                             Text("原生").tag("panel")
                             Text("Dock").tag("dock")
-                            Text("衣架").tag("clothesline")
+                            Text("随手夹").tag("clothesline")
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
@@ -690,7 +699,7 @@ struct SettingsView: View {
                             .onChange(of: rememberPosition) { v in
                                 UserDefaults.standard.set(v, forKey: "panel.rememberPosition")
                             }
-                        Text("原生：双栏历史；Dock：底部卡片；衣架：图文自动上绳，单击粘贴、拖入使用。⌘⇧V 展开或收起。")
+                        Text("原生：双栏历史；Dock：底部卡片；随手夹：图文自动上绳，单击粘贴、拖入使用。\(HotkeyManager.shared.panelShortcutDisplay) 展开或收起。")
                             .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                     }
                 }

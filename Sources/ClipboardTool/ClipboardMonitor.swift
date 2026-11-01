@@ -16,6 +16,7 @@ final class ClipboardMonitor {
     var onImageData: ((Data) -> Void)?
     /// Finder ⌘C 复制的文件（fileURL 类型）
     var onFile: ((String) -> Void)?
+    var onFiles: (([String]) -> Void)?
     /// 内容入册时的前台应用 bundle id（来源图标用）
     private(set) var lastSourceBundleID: String?
 
@@ -58,10 +59,11 @@ final class ClipboardMonitor {
 
         // 文件复制（Finder 等）：先看类型表里有没有 fileURL 再读对象（无文件时零开销）；
         // 纯 legacy alias 类型（部分脚本写入）暂不支持，Finder 路径恒有 fileURL
-        if pb.types?.contains(.fileURL) == true,
-           let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
-           let url = urls.first, url.isFileURL, FileManager.default.fileExists(atPath: url.path) {
-            onFile?(url.path)
+        if pb.types?.contains(.fileURL) == true {
+            let paths = FileTransfer.files(from: pb).map(\.path)
+            if !paths.isEmpty {
+                if let onFiles { onFiles(paths) } else { paths.forEach { onFile?($0) } }
+            }
             return
         }
 

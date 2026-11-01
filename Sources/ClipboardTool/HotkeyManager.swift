@@ -26,6 +26,8 @@ final class HotkeyManager {
 
     private(set) var hotkeys: [Action: Hotkey] = [:]
     var onAction: ((Action) -> Void)?
+    var panelShortcutDisplay: String { hotkeys[.togglePanel]?.display ?? "⌘⇧V" }
+    func isRegistered(_ action: Action) -> Bool { refs[action] != nil }
 
     private var refs: [Action: EventHotKeyRef] = [:]
     private var handlerRef: EventHandlerRef?

@@ -77,8 +77,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController.statusButton = statusItem.button   // 面板锚定菜单栏图标
         wireServices()
         ClotheslineController.shared.start()
+        if !hotkeys.isRegistered(.togglePanel) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                guard let self else { return }
+                Toast.shared.showImportant("剪贴板快捷键「\(self.hotkeys.panelShortcutDisplay)」被占用，请在快捷键设置中更换；菜单栏仍可打开。")
+            }
+        }
         hotkeys.onAction = { [weak self] action in
             self?.handleHotkey(action)
+        }
+
+        if let index = CommandLine.arguments.firstIndex(of: "--diagnose-interactions"), CommandLine.arguments.count > index + 1 {
+            let path = CommandLine.arguments[index + 1]
+            let state: [String: Any] = [
+                "clipboardShortcut": hotkeys.panelShortcutDisplay,
+                "clipboardShortcutRegistered": hotkeys.isRegistered(.togglePanel),
+                "presentation": ClipboardPresentation.current.rawValue,
+                "accessibilityTrusted": AXIsProcessTrusted(),
+                "menuBarOnly": NSApp.activationPolicy() == .accessory
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted, .sortedKeys]) {
+                try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
+            }
         }
 
         if CommandLine.arguments.contains("--show-settings") {
@@ -227,8 +247,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         monitor.onImage = { [weak self] img in
             self?.store.addImage(img, sourceApp: self?.monitor.lastSourceBundleID)
         }
-        monitor.onFile = { [weak self] path in
-            self?.store.addFile(path, sourceApp: self?.monitor.lastSourceBundleID)
+        monitor.onFiles = { [weak self] paths in
+            self?.store.addFiles(paths, sourceApp: self?.monitor.lastSourceBundleID)
         }
         monitor.start()
         screenshotController.onCaptured = { [weak self] img in
@@ -306,8 +326,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem.button?.toolTip = "拉比克截图测试版 \(version) · \(build)"
         }
 
-        let panelItem = NSMenuItem(title: "打开历史面板", action: #selector(togglePanel), keyEquivalent: "v")
-        panelItem.keyEquivalentModifierMask = [.command, .shift]
+        let panelItem = NSMenuItem(title: "打开剪贴板", action: #selector(togglePanel), keyEquivalent: "")
         panelItem.target = self
         menu.addItem(panelItem)
 

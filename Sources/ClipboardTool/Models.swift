@@ -285,19 +285,27 @@ final class HistoryStore: ObservableObject {
 
     /// 文件条目（Finder ⌘C 等 fileURL 来源），按路径去重
     func addFile(_ path: String, sourceApp: String? = nil) {
-        guard FileManager.default.fileExists(atPath: path) else { return }
-        if let idx = items.firstIndex(where: { $0.kind == .file && $0.filePath == path }) {
-            var t = items.remove(at: idx)
-            t.timestamp = Date()
-            items.insert(t, at: 0)
-        } else {
-            items.insert(ClipboardItem(id: UUID().uuidString, kind: .file, text: nil, imageFile: nil,
-                                       timestamp: Date(), pinned: false, filePath: path, tag: nil,
-                                       contentHash: nil, sourceApp: sourceApp, metaWidth: nil, metaHeight: nil), at: 0)
+        addFiles([path], sourceApp: sourceApp)
+    }
+
+    @discardableResult
+    func addFiles(_ paths: [String], sourceApp: String? = nil) -> Int {
+        let urls = FileTransfer.existingFiles(paths.map { URL(fileURLWithPath: $0) })
+        guard !urls.isEmpty else { return 0 }
+        let timestamp = Date()
+        var batch: [ClipboardItem] = []
+        for url in urls {
+            if let index = items.firstIndex(where: { $0.kind == .file && $0.filePath == url.path }) {
+                var existing = items.remove(at: index)
+                existing.timestamp = timestamp; batch.append(existing)
+            } else {
+                batch.append(ClipboardItem(id: UUID().uuidString, kind: .file, timestamp: timestamp, pinned: false, filePath: url.path, sourceApp: sourceApp))
+            }
         }
-        trim()
-        save()
-        notify()
+        items.insert(contentsOf: batch, at: 0)
+        trim(); save(); notify()
+        let ids = Set(batch.map(\.id))
+        return items.filter { ids.contains($0.id) }.count
     }
 
     /// 设置/移除用户标签
@@ -314,6 +322,27 @@ final class HistoryStore: ObservableObject {
         if !keepingFile { deleteImageFile(file) }
         save()
         notify()
+    }
+
+    /// Delete a history entry immediately, retaining only enough data for a short undo window.
+    /// Does not alter the system pasteboard or source files copied from Finder.
+    func removeUndoable(_ id: String) -> (() -> Void)? {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return nil }
+        let item = items[index]
+        let imageData = item.imageFile.flatMap { try? Data(contentsOf: imagesDir.appendingPathComponent($0)) }
+        remove(id)
+        return { [weak self] in
+            guard let self, !self.items.contains(where: {
+                $0.id == item.id || (item.kind == .text && $0.kind == .text && $0.text == item.text) ||
+                (item.kind == .image && item.contentHash != nil && $0.contentHash == item.contentHash)
+            }) else { return }
+            if let file = item.imageFile, let imageData {
+                do { try imageData.write(to: self.imagesDir.appendingPathComponent(file), options: .atomic) }
+                catch { return }
+            }
+            self.items.insert(item, at: min(index, self.items.count))
+            self.trim(); self.save(); self.notify()
+        }
     }
 
     /// 批量删除（多选操作）

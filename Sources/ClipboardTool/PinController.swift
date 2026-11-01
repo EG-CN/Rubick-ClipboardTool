@@ -54,12 +54,14 @@ final class PinController {
         panel.isOpaque = false
         panel.hasShadow = true
         panel.hidesOnDeactivate = false
+        panel.acceptsMouseMovedEvents = true
 
         let model = PinModel()
         // 尺寸同步回调必须挂在 model（class，引用共享）上：直接给 view（struct）赋值
         // 会在 ZoomHostingView 拷贝后失效，窗口将永远停在初始 460×340（透明死区吞点击）
-        model.onResize = { [weak panel] size in
+        model.onResize = { [weak panel, weak model] size in
             guard let panel = panel else { return }
+            if let frame = model?.edgeResizeFrame { panel.setFrame(frame, display: true); return }
             let old = panel.frame
             let dy = size.height - old.height
             var f = CGRect(origin: old.origin, size: size)
@@ -86,7 +88,13 @@ final class PinController {
         }
         let host = ZoomHostingView(rootView: view)
 
+        let edgeResize: (CGRect, CGFloat) -> Void = { [weak panel] frame, zoom in
+            model.edgeResizeFrame = frame
+            model.zoom = zoom
+            panel?.setFrame(frame, display: true)
+        }
         host.onScroll = { delta, flags in
+            model.edgeResizeFrame = nil
             if flags.contains(.option) {
                 // ⌥滚轮：调节基准不透明度（Snipaste 式贴图透明调节），与缩放同向
                 let factor = delta > 0 ? 0.08 : -0.08
@@ -97,6 +105,7 @@ final class PinController {
             }
         }
         host.onMagnify = { delta in
+            model.edgeResizeFrame = nil
             // 触控板捏合缩放（原仅支持滚轮）
             model.zoom = min(max(model.zoom * (1 + delta), 0.1), 6.0)
         }
@@ -113,7 +122,17 @@ final class PinController {
         modelsByPanel[panel] = model
         ensureInteractionMonitors()
 
-        panel.contentView = host
+        let surface = NSView(frame: host.frame)
+        host.autoresizingMask = [.width, .height]
+        surface.addSubview(host)
+        let resizeOverlay = PinResizeOverlay(frame: surface.bounds)
+        resizeOverlay.autoresizingMask = [.width, .height]
+        resizeOverlay.canResize = { !model.ocrMode }
+        resizeOverlay.currentZoom = { model.zoom }
+        resizeOverlay.onResize = edgeResize
+        resizeOverlay.toolTip = "拖动边缘或四角缩放，拖图片内部移动"
+        surface.addSubview(resizeOverlay)
+        panel.contentView = surface
         panel.setFrameOrigin(origin ?? defaultOrigin())
         panel.orderFrontRegardless()
         pins.append(panel)
@@ -174,6 +193,7 @@ final class PinModel: ObservableObject {
     @Published var imageToken: Int = 0
     /// 内容尺寸变化 → 调整贴图窗口（挂在 class 上保证闭包可达；struct 上赋值会被拷贝吞掉）
     var onResize: ((CGSize) -> Void)?
+    var edgeResizeFrame: CGRect?
 }
 
 /// 贴图交互宿主：滚轮/捏合缩放、原生拖拽、双击关闭。
@@ -257,6 +277,14 @@ struct PinImageView: View {
                 .allowsHitTesting(false)
                 .opacity(0.9)
         }
+        .overlay(alignment: .bottomTrailing) {
+            if hovering && !model.ocrMode {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 10, weight: .medium))
+                    .padding(4).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 4))
+                    .padding(2).allowsHitTesting(false)
+            }
+        }
         .shadow(color: Color.black.opacity(0.35), radius: 7, y: 3)
         .contentShape(Rectangle())
         .contextMenu {
@@ -296,6 +324,7 @@ struct PinImageView: View {
         .onChange(of: model.imageToken) { _ in
             // 标注原位替换图片后：重置缩放并按新尺寸重排
             fitScale = Self.defaultScale
+            model.edgeResizeFrame = nil
             model.zoom = 1.0
             model.onResize?(contentSize())
         }
