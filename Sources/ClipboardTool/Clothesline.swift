@@ -92,16 +92,22 @@ final class ClotheslineController {
     private var hidden = false
     private var eventMonitors: [Any] = []
     private var lastItemCount = 0
+    private var lastFirstItemID: String?
     private init() {}
 
     func start() {
         guard timer == nil else { return }
-        lastItemCount = ClotheslineLayout.items(HistoryStore.shared.items).count
+        let initial = ClotheslineLayout.items(HistoryStore.shared.items)
+        lastItemCount = initial.count
+        lastFirstItemID = initial.first?.id
         observers.append(NotificationCenter.default.addObserver(forName: .clipboardHistoryChanged, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
-            let count = ClotheslineLayout.items(HistoryStore.shared.items).count
-            let grew = count > self.lastItemCount
-            self.lastItemCount = count
+            let current = ClotheslineLayout.items(HistoryStore.shared.items)
+            // 数量增长，或重复内容被去重置顶（数量不变但首项变化），都算"挂入新内容"。
+            let grew = current.count > self.lastItemCount
+                || (current.count == self.lastItemCount && current.first?.id != self.lastFirstItemID)
+            self.lastItemCount = current.count
+            self.lastFirstItemID = current.first?.id
             self.entries.forEach { $0.view.reload() }
             // 有内容才垂下：新增暂存内容时绳子在鼠标所在屏幕垂下。
             if grew, ClipboardPresentation.current == .clothesline, !self.suspended {

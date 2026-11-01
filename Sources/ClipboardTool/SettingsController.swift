@@ -699,7 +699,7 @@ struct SettingsView: View {
                             .onChange(of: rememberPosition) { v in
                                 UserDefaults.standard.set(v, forKey: "panel.rememberPosition")
                             }
-                        Text("原生：双栏历史；Dock：底部卡片；随手夹：刘海下沿固定入口，点击展开照片墙，拖入文件暂存。\(HotkeyManager.shared.panelShortcutDisplay) 展开或收起。")
+                        Text("原生：双栏历史；Dock：底部卡片；随手夹：有新内容时绳子自动垂下，取完自动收起，平时不留任何入口。\(HotkeyManager.shared.panelShortcutDisplay) 随时呼出。")
                             .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                     }
                 }
