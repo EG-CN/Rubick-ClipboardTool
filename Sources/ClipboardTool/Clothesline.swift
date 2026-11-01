@@ -71,6 +71,9 @@ struct ClotheslineLayout {
         }
         return frames
     }
+    static func shouldArmDragCatcher(changeCount: Int, lastArmed: Int, types: [NSPasteboard.PasteboardType]?) -> Bool {
+        changeCount != lastArmed && types?.contains(.fileURL) == true
+    }
     static func items(_ items: [ClipboardItem]) -> [ClipboardItem] { items }
     static func isEditable(role: String?, valueSettable: Bool, explicitlyEditable: Bool) -> Bool {
         ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"].contains(role ?? "") || valueSettable || explicitlyEditable
@@ -80,6 +83,30 @@ struct ClotheslineLayout {
 final class ClotheslinePanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+}
+
+/// 隐形拖拽接取条：只在检测到文件拖拽会话时短暂布防，接收"往屏幕上缘拖文件"的手势。
+/// 平时不存在，不吞任何点击；文件靠近上缘即通知控制器垂绳，绳面接管后续拖拽。
+final class ClotheslineDragCatcher: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
+final class ClotheslineDragCatcherView: NSView {
+    weak var controller: ClotheslineController?
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard !(sender.draggingSource is ClotheslineView), !FileTransfer.files(from: sender.draggingPasteboard).isEmpty else { return [] }
+        controller?.catcherCaughtDrag()
+        InteractionHaptics.perform(.alignment)
+        return .copy
+    }
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { .copy }
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let urls = FileTransfer.files(from: sender.draggingPasteboard)
+        guard !urls.isEmpty else { return false }
+        controller?.stageFilesAtMouse(urls)
+        return true
+    }
 }
 
 /// A non-key window preserves the actual target's first responder; no stale application bookmark is used.
@@ -93,6 +120,8 @@ final class ClotheslineController {
     private var eventMonitors: [Any] = []
     private var lastItemCount = 0
     private var lastFirstItemID: String?
+    private var catchers: [(screen: NSScreen, panel: ClotheslineDragCatcher, view: ClotheslineDragCatcherView)] = []
+    private var armedDragChangeCount = -1
     private init() {}
 
     func start() {
@@ -116,6 +145,7 @@ final class ClotheslineController {
         })
         observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in self?.refreshStyle() })
         if let monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown], handler: { [weak self] event in self?.handleDismissal(event) }) { eventMonitors.append(monitor) }
+        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp], handler: { [weak self] event in self?.handleDragActivity(event) }) { eventMonitors.append(monitor) }
         if let monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown], handler: { [weak self] event in
             self?.handleDismissal(event); return event
         }) { eventMonitors.append(monitor) }
@@ -134,6 +164,8 @@ final class ClotheslineController {
     }
     func refreshStyle() {
         entries.forEach { $0.panel.orderOut(nil) }; entries.removeAll()
+        disarmCatchers()
+        catchers.forEach { $0.panel.orderOut(nil) }; catchers.removeAll()
         guard ClipboardPresentation.current == .clothesline else { return }
         for screen in NSScreen.screens {
             let frame = ClotheslineLayout.frame(screen: screen.frame, visible: screen.visibleFrame, expanded: false)
@@ -145,8 +177,47 @@ final class ClotheslineController {
             view.controller = self; panel.contentView = view
             panel.isReleasedWhenClosed = false
             entries.append((screen, panel, view))
+            // 隐形接取条：贴可见区上缘（主屏在菜单栏正下方），平时不显示。
+            let strip = CGRect(x: screen.visibleFrame.minX, y: screen.visibleFrame.maxY - 24,
+                               width: screen.visibleFrame.width, height: 24)
+            let catcherPanel = ClotheslineDragCatcher(contentRect: strip, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            catcherPanel.isOpaque = false; catcherPanel.backgroundColor = .clear; catcherPanel.hasShadow = false
+            catcherPanel.level = .floating; catcherPanel.hidesOnDeactivate = false
+            catcherPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            let catcherView = ClotheslineDragCatcherView(frame: CGRect(origin: .zero, size: strip.size))
+            catcherView.controller = self
+            catcherView.registerForDraggedTypes([.fileURL])
+            catcherPanel.contentView = catcherView
+            catcherPanel.isReleasedWhenClosed = false
+            catchers.append((screen, catcherPanel, catcherView))
             // 不再常驻：有内容或快捷键调用时才显示。
         }
+    }
+    /// 检测到文件拖拽会话开始（拖拽剪贴板出现新的 fileURL 写入）时布防接取条。
+    private func handleDragActivity(_ event: NSEvent) {
+        guard ClipboardPresentation.current == .clothesline, !suspended else { return }
+        if event.type == .leftMouseUp { disarmCatchers(); return }
+        let dragPasteboard = NSPasteboard(name: NSPasteboard.Name("Apple CFPasteboard drag"))
+        guard ClotheslineLayout.shouldArmDragCatcher(changeCount: dragPasteboard.changeCount, lastArmed: armedDragChangeCount, types: dragPasteboard.types) else { return }
+        armedDragChangeCount = dragPasteboard.changeCount
+        if entries.isEmpty { refreshStyle() }
+        for entry in entries where !entry.view.expanded {
+            catchers.first { $0.screen === entry.screen }?.panel.orderFrontRegardless()
+        }
+    }
+    private func disarmCatchers() {
+        catchers.forEach { $0.panel.orderOut(nil) }
+    }
+    /// 接取条捕到拖拽：绳子立刻在当前屏幕垂下，绳面接管后续拖拽更新。
+    func catcherCaughtDrag() {
+        disarmCatchers()
+        presentAtMouse()
+    }
+    /// 接取条兜底接收：极少数情况下光标仍停在接取条上松手，走与绳面拖入一致的挂入路径。
+    func stageFilesAtMouse(_ urls: [URL]) {
+        let entry = entries.first { $0.screen.frame.contains(NSEvent.mouseLocation) } ?? entries.first
+        guard let entry else { return }
+        entry.view.receiveExternalFiles(urls)
     }
     func suspendForCapture() {
         suspended = true
@@ -786,15 +857,19 @@ final class ClotheslineView: NSView, NSDraggingSource {
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let urls = FileTransfer.files(from: sender.draggingPasteboard)
         guard !urls.isEmpty else { interaction.cancelDrop(); return false }
+        receiveExternalFiles(urls)
+        return true
+    }
+    /// 屏幕上缘接取条转发的挂入路径，与绳面拖入完全一致。
+    func receiveExternalFiles(_ urls: [URL]) {
         InteractionHaptics.perform(.levelChange)
         let count = store.addFiles(urls.map(\.path), sourceApp: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
-        guard count > 0 else { interaction.cancelDrop(); return false }
+        guard count > 0 else { return }
         receiptCount = count
         interaction.received(at: ProcessInfo.processInfo.systemUptime)
         controller?.setExpanded(true, view: self, manual: false)
         reload()
         Toast.shared.show("已暂存 \(count) 个文件")
-        return true
     }
     override func concludeDragOperation(_ sender: NSDraggingInfo?) { needsDisplay = true }
 
