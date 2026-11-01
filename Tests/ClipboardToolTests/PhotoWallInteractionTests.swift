@@ -60,4 +60,25 @@ struct PhotoWallInteractionTests {
         state.showManually(true); state.advance(to: 100)
         #expect(state.isOpen && state.phase == .manual)
     }
+    @Test func receiptThenCancelledTakeKeepsRopeOpen() {
+        // 挂入后的绳子，取消送出（拖拽未成功）不能把它收走。
+        var state = PhotoWallInteraction()
+        state.received(at: 0)
+        #expect(state.isOpen)
+        state.startTaking()
+        #expect(state.isOpen && state.outgoing)
+        state.finishTaking(accepted: false, at: 1)
+        state.advance(to: 100)
+        #expect(state.isOpen && state.phase == .manual)
+    }
+    @Test func receiptThenManualCollapseClosesRope() {
+        // 手动收绳（Esc / 点外部）始终生效，即使刚挂入内容。
+        var state = PhotoWallInteraction()
+        state.received(at: 0)
+        #expect(state.isOpen)
+        state.showManually(false)
+        #expect(!state.isOpen && state.phase == .closed)
+        state.advance(to: 100)
+        #expect(!state.isOpen)
+    }
 }

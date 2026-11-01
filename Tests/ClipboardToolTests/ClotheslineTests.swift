@@ -49,6 +49,58 @@ struct ClotheslineTests {
         let tallest = ClotheslineLayout.cardSize(image: nil, text: String(repeating: "长文字\n", count: 500))
         #expect(tallest.height <= 274)
     }
+    @Test func railFramesHandlesOversizedCardAndEdgeOffsets() {
+        // 单卡比面板更宽：frame 仍完整返回，滚动被夹紧后卡片尾部保持可见。
+        let oversized = [CGSize(width: 1200, height: 250)]
+        let clamped = ClotheslineLayout.railFrames(sizes: oversized, offset: 10_000, boundsWidth: 800)
+        #expect(clamped.count == 1)
+        #expect(clamped[0].width == 1200)
+        #expect(clamped[0].maxX > 0 && clamped[0].maxX <= 800)
+        let atStart = ClotheslineLayout.railFrames(sizes: oversized, offset: 0, boundsWidth: 800)
+        #expect(atStart.count == 1 && atStart[0].minX >= 0)
+        // 空内容返回空数组；负偏移等同 0。
+        #expect(ClotheslineLayout.railFrames(sizes: [], offset: 50, boundsWidth: 800).isEmpty)
+        #expect(ClotheslineLayout.railFrames(sizes: oversized, offset: -40, boundsWidth: 800) == atStart)
+    }
+    @Test func railFramesScrollTranslatesXWithoutVerticalParallax() {
+        // 卡片跟随绳滚动：offset 变化只平移 x，y 只取决于卡片在绳上的位置。
+        let sizes = (0..<10).map { _ in CGSize(width: 200, height: 250) }
+        let content = ClotheslineLayout.railWidth(widths: sizes.map(\.width))
+        let delta: CGFloat = 120
+        #expect(content - 800 >= delta) // 两次偏移都落在夹紧范围内
+        let start = ClotheslineLayout.railFrames(sizes: sizes, offset: 0, boundsWidth: 800)
+        let scrolled = ClotheslineLayout.railFrames(sizes: sizes, offset: delta, boundsWidth: 800)
+        #expect(start.count == sizes.count && scrolled.count == sizes.count)
+        for (before, after) in zip(start, scrolled) {
+            #expect(after.minY == before.minY)
+            #expect(after.minX == before.minX - delta)
+        }
+    }
+    @Test func emptyingHistoryCollapsesExpandedRopeButNonEmptyReloadKeepsIt() throws {
+        _ = NSApplication.shared
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = HistoryStore(baseDir: root)
+        let view = ClotheslineView(frame: CGRect(x: 0, y: 0, width: 980, height: 224), store: store)
+        #expect(view.capacity == 0)
+        store.addText("第一条"); store.addText("第二条")
+        view.reload()
+        #expect(view.capacity == 2)
+        view.expanded = true
+        view.interaction.showManually(true)
+        #expect(view.interaction.isOpen)
+        // 非空 reload 不误收：只剩一条时绳子保持垂下。
+        store.removeUndoable(store.items[0].id)
+        view.reload()
+        #expect(view.capacity == 1)
+        #expect(view.interaction.isOpen)
+        // 取空自动收绳：expanded 状态下历史清空后绳子自己收走。
+        store.removeUndoable(store.items[0].id)
+        view.reload()
+        #expect(view.capacity == 0)
+        #expect(!view.interaction.isOpen)
+        store.saveNow()
+    }
     @Test func polaroidShapesFollowContent() {
         let landscape = ClotheslineLayout.cardSize(image: CGSize(width: 1920, height: 1080), text: nil)
         let portrait = ClotheslineLayout.cardSize(image: CGSize(width: 1080, height: 1920), text: nil)
