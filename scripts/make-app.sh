@@ -52,8 +52,18 @@ else
 fi
 
 # Never silently change the signing identity of an installed application.
+# 仓库位于 iCloud FileProvider 同步区：build/ 内文件会被系统反复补写 FinderInfo，
+# codesign 永远报 "detritus not allowed"。在同步区外完成签名与校验再拷回。
+SIGN_STAGE="$(mktemp -d /tmp/rubick-sign.XXXXXX)"
+trap 'rm -rf "$SIGN_STAGE"' EXIT
+cp -R "$APP" "$SIGN_STAGE/app"
+xattr -cr "$SIGN_STAGE/app"
+rubick_sign_app "$SIGN_STAGE/app"
+codesign --verify --strict "$SIGN_STAGE/app"
+rm -rf "$APP"
+cp -R "$SIGN_STAGE/app" "$APP"
 xattr -cr "$APP"
-rubick_sign_app "$APP"
+codesign --verify --strict "$APP"
 
 echo "==> 已生成 $APP"
 echo "    双击即可运行；或将应用拖入「应用程序」文件夹。"
