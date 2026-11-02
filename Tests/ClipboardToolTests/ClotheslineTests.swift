@@ -112,18 +112,22 @@ struct ClotheslineTests {
         #expect(long.height <= 274)
         #expect(ClotheslineLayout.cardSize(image: CGSize(width: 0, height: 0), text: nil).height.isFinite)
     }
-    @Test func dragCatcherSitsBelowCutoutAndInsideVisibleArea() {
+    @Test func dragCatcherCoversNotchBandAndStaysCentered() {
         let screen = CGRect(x: 0, y: 0, width: 1512, height: 982)
         let visible = CGRect(x: screen.minX, y: screen.minY + 40, width: screen.width, height: screen.height - 78)
         let notchless = ClotheslineLayout.catcherFrame(screen: screen, visible: visible, cutout: nil)
-        #expect(visible.contains(notchless))
+        #expect(notchless.maxY == screen.maxY)
+        #expect(notchless.height == 34)
         #expect(notchless.midX == screen.midX)
+        #expect(notchless.minX >= visible.minX)
         let cutout = CGRect(x: screen.midX - 90, y: screen.maxY - 38, width: 180, height: 38)
         let notched = ClotheslineLayout.catcherFrame(screen: screen, visible: visible, cutout: cutout)
-        #expect(visible.contains(notched))
-        #expect(notched.maxY <= cutout.minY)
+        // 覆盖刘海本体：顶到屏幕最上缘，往下越过刘海下缘再留缓冲。
+        #expect(notched.maxY == screen.maxY)
+        #expect(notched.minY < cutout.minY)
+        #expect(notched.contains(cutout))
         #expect(notched.midX == cutout.midX)
-        #expect(notched.width == 220)
+        #expect(notched.width == 260)
     }
     @Test func noPasteIntoButtonOrUnknownFocus() {
         #expect(!ClotheslineLayout.isEditable(role: "AXButton", valueSettable: false, explicitlyEditable: false))

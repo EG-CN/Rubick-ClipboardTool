@@ -71,13 +71,15 @@ struct ClotheslineLayout {
         }
         return frames
     }
-    /// 接取区位置：刘海正下方（无刘海屏为顶部居中），与旧入口同址，避开系统屏幕边缘手势。
+    /// 接取区位置：覆盖刘海本体及其下方缓冲（无刘海屏为顶部居中窄条）。
+    /// 用户瞄准"刘海"甩文件即可命中；宽度略大于刘海，左右稍偏也接得住。
     static func catcherFrame(screen: CGRect, visible: CGRect, cutout: CGRect?) -> CGRect {
-        let width: CGFloat = 220, height: CGFloat = 30
-        let top = min(visible.maxY, cutout?.minY ?? screen.maxY)
+        let width: CGFloat = 260
+        let safeTop = screen.maxY - visible.maxY
+        let height: CGFloat = cutout != nil ? safeTop + 34 : 34
         let center = cutout?.midX ?? screen.midX
         let x = min(max(center - width / 2, visible.minX), visible.maxX - width)
-        return CGRect(x: x, y: top - height - 2, width: width, height: height)
+        return CGRect(x: x, y: screen.maxY - height, width: width, height: height)
     }
     static func items(_ items: [ClipboardItem]) -> [ClipboardItem] { items }
     static func isEditable(role: String?, valueSettable: Bool, explicitlyEditable: Bool) -> Bool {
@@ -161,11 +163,14 @@ final class ClotheslineController {
     }
     var layoutDiagnostics: [[String: Any]] {
         entries.map { entry in
-            ["display": (entry.screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.intValue ?? 0,
-             "hasCutout": ClotheslineLayout.cutout(on: entry.screen) != nil,
-             "screenFrame": NSStringFromRect(entry.screen.frame),
-             "entryFrame": NSStringFromRect(entry.panel.frame),
-             "expanded": entry.view.expanded]
+            let catcher = catchers.first { $0.screen === entry.screen }
+            return ["display": (entry.screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.intValue ?? 0,
+                    "hasCutout": ClotheslineLayout.cutout(on: entry.screen) != nil,
+                    "screenFrame": NSStringFromRect(entry.screen.frame),
+                    "entryFrame": NSStringFromRect(entry.panel.frame),
+                    "catcherFrame": catcher.map { NSStringFromRect($0.panel.frame) } ?? "",
+                    "catcherOnScreen": catcher?.panel.isVisible ?? false,
+                    "expanded": entry.view.expanded]
         }
     }
     func refreshStyle() {
