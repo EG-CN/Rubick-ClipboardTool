@@ -92,8 +92,8 @@ final class ClotheslinePanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// 隐形拖拽接取区：常驻在刘海正下方（无刘海屏为顶部居中），接收"把文件拖到刘海位置"的手势。
-/// hitTest 返回 nil 让所有点击穿透到下层窗口；拖拽会话由拖拽管理器按窗口帧路由，不受 hitTest 影响。
+/// 隐形拖拽接取区：常驻刘海带，平时对点击穿透（hitTest 返回 nil）；
+/// 检测到拖拽会话时变为实体并可接收文件，同时画出虚线引导框指引用户投放。
 final class ClotheslineDragCatcher: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
@@ -101,17 +101,38 @@ final class ClotheslineDragCatcher: NSPanel {
 
 final class ClotheslineDragCatcherView: NSView {
     weak var controller: ClotheslineController?
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    var isRopeVisible: (() -> Bool)?
+    /// 拖拽会话进行中（由控制器的全局鼠标监听翻转）；此静态标记必须走主线程。
+    static var dragSessionActive = false
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        (Self.dragSessionActive && !(isRopeVisible?() ?? false)) ? self : nil
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        guard Self.dragSessionActive, !(isRopeVisible?() ?? false) else { return }
+        let pill = CGRect(x: bounds.midX - 110, y: bounds.maxY - 34, width: 220, height: 26)
+        let path = NSBezierPath(roundedRect: pill, xRadius: 13, yRadius: 13)
+        NSColor(calibratedWhite: 0.05, alpha: 0.88).setFill(); path.fill()
+        let dash = NSBezierPath(roundedRect: pill.insetBy(dx: 1.5, dy: 1.5), xRadius: 12, yRadius: 12)
+        NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.9).setStroke()
+        dash.lineWidth = 1.2; dash.setLineDash([4, 3], count: 2, phase: 0); dash.stroke()
+        let text = "把文件拖到这里挂上绳" as NSString
+        let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11.5, weight: .medium),
+                                                         .foregroundColor: NSColor(calibratedRed: 0.45, green: 0.93, blue: 0.71, alpha: 1)]
+        let size = text.size(withAttributes: attributes)
+        text.draw(at: CGPoint(x: pill.midX - size.width / 2, y: pill.midY - size.height / 2), withAttributes: attributes)
+    }
+    private var receptive: Bool { Self.dragSessionActive && !(isRopeVisible?() ?? false) }
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        guard !(sender.draggingSource is ClotheslineView), !FileTransfer.files(from: sender.draggingPasteboard).isEmpty else { return [] }
+        guard receptive, !(sender.draggingSource is ClotheslineView), !FileTransfer.files(from: sender.draggingPasteboard).isEmpty else { return [] }
         controller?.catcherCaughtDrag()
         InteractionHaptics.perform(.alignment)
         return .copy
     }
-    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { .copy }
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { receptive ? .copy : [] }
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let urls = FileTransfer.files(from: sender.draggingPasteboard)
-        guard !urls.isEmpty else { return false }
+        guard receptive, !urls.isEmpty else { return false }
         controller?.stageFilesAtMouse(urls)
         return true
     }
@@ -154,6 +175,7 @@ final class ClotheslineController {
         })
         observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in self?.refreshStyle() })
         if let monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown], handler: { [weak self] event in self?.handleDismissal(event) }) { eventMonitors.append(monitor) }
+        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp], handler: { [weak self] event in self?.noteDragSession(event.type == .leftMouseDragged) }) { eventMonitors.append(monitor) }
         if let monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown], handler: { [weak self] event in
             self?.handleDismissal(event); return event
         }) { eventMonitors.append(monitor) }
@@ -200,12 +222,22 @@ final class ClotheslineController {
             catcherPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             let catcherView = ClotheslineDragCatcherView(frame: CGRect(origin: .zero, size: catcherFrame.size))
             catcherView.controller = self
+            catcherView.isRopeVisible = { [weak view] in view?.expanded ?? false }
             catcherView.registerForDraggedTypes([.fileURL])
             catcherPanel.contentView = catcherView
             catcherPanel.isReleasedWhenClosed = false
             catchers.append((screen, catcherPanel, catcherView))
             catcherPanel.orderFrontRegardless()
         }
+    }
+    /// 拖拽会话开始/结束时翻转接取区的实体态，并让引导框同步显隐。
+    /// 配合拖拽剪贴板检查，只有文件拖拽才点亮，窗口移动/文字拖拽不干扰。
+    func noteDragSession(_ began: Bool) {
+        guard ClipboardPresentation.current == .clothesline, !suspended else { return }
+        let fileDrag = began && (NSPasteboard(name: NSPasteboard.Name("Apple CFPasteboard drag")).types?.contains(.fileURL) == true)
+        guard ClotheslineDragCatcherView.dragSessionActive != fileDrag else { return }
+        ClotheslineDragCatcherView.dragSessionActive = fileDrag
+        catchers.forEach { $0.view.needsDisplay = true }
     }
     /// 接取区捕到拖拽：绳子立刻在当前屏幕垂下，绳面接管后续拖拽更新。
     func catcherCaughtDrag() {
