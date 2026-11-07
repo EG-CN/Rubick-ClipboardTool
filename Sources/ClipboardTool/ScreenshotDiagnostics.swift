@@ -21,7 +21,7 @@ enum ScreenshotDiagnostics {
         }
         flush()
     }
-    static func windows(_ panels: [NSPanel], stage: String) {
+    static func windows(_ panels: [NSWindow], stage: String) {
         guard Bundle.main.bundleIdentifier == "local.rubick.screenshot-test" else { return }
         for (i, panel) in panels.enumerated() {
             entries.append("\(stage) panel[\(i)]=\(panel.frame) screen=\(String(describing: panel.screen?.frame))")
