@@ -24,7 +24,7 @@ final class LongShotHUD {
         hide()
         let screenFrame = screen.frame
         // 进度胶囊：默认在区域下方 16pt，贴底时翻到区域上方；水平夹紧屏内。
-        let pillSize = CGSize(width: 460, height: 46)
+        let pillSize = CGSize(width: 540, height: 46)
         let pillX = min(max(rect.midX - pillSize.width / 2, screenFrame.minX + 12), screenFrame.maxX - pillSize.width - 12)
         var pillY = rect.minY - pillSize.height - 18
         if pillY < screenFrame.minY + 8 { pillY = rect.maxY + 18 }
@@ -99,7 +99,7 @@ final class LongShotPillView: NSView {
         arc.lineWidth = 2.6; arc.lineCapStyle = .round; arc.stroke()
         // 文案
         let text = bottomReached ? "已到页面底部 · 正在收尾"
-            : "长截图中 · 已拼接 \(stitchedCount) 屏"
+            : "长截图中 · 已拼接 \(stitchedCount) 屏 · 请勿移动鼠标"
         let paragraph = NSMutableParagraphStyle(); paragraph.lineBreakMode = .byTruncatingTail
         (text as NSString).draw(at: CGPoint(x: 44, y: pill.height / 2 - 8), withAttributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .medium),

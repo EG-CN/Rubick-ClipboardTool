@@ -352,8 +352,9 @@ final class CaptureController {
                 : (pendingPurpose == .ocr
                    ? "拖选要取字的区域 · 识别后直接复制 · ⎋ 取消"
                    : (pendingPurpose == .long
-                      ? "框选长截图区域 · 确认后自动滚动采集 · ⎋ 取消"
+                      ? "框选长截图区域 · 松手即自动滚动采集 · ⎋ 取消"
                       : "拖拽框选 · 单击窗口直截 · ⌥ 禁吸附 · ⎋ 取消")),
+            longMode: pendingPurpose == .long,
             onCancel: { [weak self] in self?.teardown(restoreFocus: true) },
             onConfirm: { [weak self] rect in
                 self?.finish(rect: rect, composite: composite, unionRect: unionRect)
@@ -575,6 +576,7 @@ struct CaptureOverlayView: View {
     var windowFrames: [CGRect] = []
     @ObservedObject var session: CaptureSessionState
     var hintText: String = "拖拽框选 · 手柄微调 · ⌥单击取色 · ↵/✓ 确认 · ⎋ 取消"
+    var longMode: Bool = false
     let onCancel: () -> Void
     let onConfirm: (CGRect) -> Void
 
@@ -787,7 +789,17 @@ struct CaptureOverlayView: View {
                         }
                         return
                     }
-                    // 拖拽落定 → 待确认态（8 手柄微调，↵/✓ 确认）
+                    // 拖拽落定：长截图模式松手即采（省一步确认，Shottr 同款）；
+                    // 其他模式进入待确认态（8 手柄微调，↵/✓ 确认）
+                    if longMode {
+                        let finalRect = selectionRect ?? raw
+                        let g = globalRect(finalRect)
+                        if let clamped = g.intersection(unionRect) as CGRect?,
+                           !clamped.isNull, clamped.width > 3, clamped.height > 3 {
+                            onConfirm(clamped)
+                        }
+                        return
+                    }
                     pendingSelection = selectionRect ?? raw
                 }
         )
