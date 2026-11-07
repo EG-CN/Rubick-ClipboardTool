@@ -124,7 +124,7 @@ final class CaptureController {
         beginCapture()
     }
 
-    /// 长截图（实验性）：框选区域 → 滚动采集 → 行对齐拼接（⌘⇧L）
+    /// 长截图：框选区域 → 滚动采集 → 行对齐拼接（⌘⇧L / 菜单「长截图」）
     func captureForLong() {
         pendingPurpose = .long
         beginCapture()

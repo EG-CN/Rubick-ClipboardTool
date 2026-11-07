@@ -336,6 +336,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shotItem.target = self
         menu.addItem(shotItem)
 
+        let longShotItem = NSMenuItem(title: "长截图", action: #selector(captureLongShot), keyEquivalent: "l")
+        longShotItem.keyEquivalentModifierMask = [.command, .shift]
+        longShotItem.target = self
+        menu.addItem(longShotItem)
+
         let dragOCRItem = NSMenuItem(title: "划图取字", action: #selector(startDragOCR), keyEquivalent: "x")
         dragOCRItem.keyEquivalentModifierMask = [.command, .shift]
         dragOCRItem.target = self
@@ -376,6 +381,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func captureScreenshot() {
         panelController.close()
         screenshotController.captureInteractive()
+    }
+
+    @objc private func captureLongShot() {
+        panelController.close()
+        CaptureController.shared.captureForLong()
     }
 
     @objc private func startDragOCR() {

@@ -1,8 +1,178 @@
 import AppKit
 import CoreGraphics
 
-// MARK: - 长截图（实验性，⌘⇧L）
-// 流程：框选区域 → 程序滚动注入 → 分片截屏 → 行对齐拼接。规格 A 组「标实验性」。
+// MARK: - 长截图（⌘⇧L / 菜单「长截图」）
+// 流程：框选区域 → 程序滚动注入 → 分片截屏 → 行对齐拼接；过程 HUD 实时回报，↵ 提前完成，⎋ 取消。
+
+/// 长截图进度 HUD：区域下方进度胶囊 + 右侧实时拼接预览条。
+/// 面板都在选区矩形之外，不会被拍进帧里；非激活、不拦截鼠标。
+final class LongShotHUD {
+    static let shared = LongShotHUD()
+    private var pillPanel: NSPanel?
+    private var stripPanel: NSPanel?
+    private var pillView: LongShotPillView?
+    private var stripView: LongShotStripView?
+    private var tick: Timer?
+
+    private init() {}
+
+    func show(rect: CGRect, screen: NSScreen) {
+        hide()
+        let screenFrame = screen.frame
+        // 进度胶囊：默认在区域下方 16pt，贴底时翻到区域上方；水平夹紧屏内。
+        let pillSize = CGSize(width: 460, height: 46)
+        let pillX = min(max(rect.midX - pillSize.width / 2, screenFrame.minX + 12), screenFrame.maxX - pillSize.width - 12)
+        var pillY = rect.minY - pillSize.height - 18
+        if pillY < screenFrame.minY + 8 { pillY = rect.maxY + 18 }
+        let pillFrame = CGRect(x: pillX, y: pillY, width: pillSize.width, height: pillSize.height)
+        let pv = LongShotPillView(frame: CGRect(origin: .zero, size: pillSize))
+        let pp = Self.makePanel(frame: pillFrame)
+        pp.contentView = pv
+        pp.orderFrontRegardless()
+        pillPanel = pp; pillView = pv
+
+        // 拼接预览条：区域右侧 22pt（放不下换左侧），高度贴合区域并钳到屏内。
+        let stripWidth: CGFloat = 176
+        let stripHeight = min(max(rect.height, 200), screen.visibleFrame.height - 60)
+        var stripX = rect.maxX + 22
+        if stripX + stripWidth > screenFrame.maxX - 12 { stripX = rect.minX - stripWidth - 22 }
+        let stripY = min(max(screen.visibleFrame.minY + 20, rect.minY), screen.visibleFrame.maxY - stripHeight)
+        let stripFrame = CGRect(x: stripX, y: stripY, width: stripWidth, height: stripHeight)
+        let sv = LongShotStripView(frame: CGRect(origin: .zero, size: stripFrame.size))
+        let sp = Self.makePanel(frame: stripFrame)
+        sp.contentView = sv
+        sp.orderFrontRegardless()
+        stripPanel = sp; stripView = sv
+
+        tick = Timer.scheduledTimer(withTimeInterval: 0.09, repeats: true) { [weak pv] _ in pv?.phase += 1 }
+        tick?.tolerance = 0.03
+        RunLoop.main.add(tick!, forMode: .common)
+    }
+
+    private static func makePanel(frame: CGRect) -> NSPanel {
+        let p = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        p.isOpaque = false; p.backgroundColor = .clear; p.hasShadow = false
+        p.level = .floating; p.hidesOnDeactivate = false
+        p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        p.isReleasedWhenClosed = false
+        return p
+    }
+
+    func update(frames: Int, totalPx: Int, percent: Double, preview: CGImage?) {
+        pillView?.stitchedCount = frames
+        stripView?.update(preview: preview, percent: percent, totalPx: totalPx)
+    }
+
+    func markBottom() {
+        pillView?.bottomReached = true
+    }
+
+    func hide() {
+        tick?.invalidate(); tick = nil
+        pillPanel?.orderOut(nil); stripPanel?.orderOut(nil)
+        pillPanel = nil; stripPanel = nil; pillView = nil; stripView = nil
+    }
+}
+
+/// 进度胶囊：旋转指示 + 已拼接层数 + 快捷键提示；页面到底时切换文案。
+final class LongShotPillView: NSView {
+    var stitchedCount = 0 { didSet { needsDisplay = true } }
+    var bottomReached = false { didSet { needsDisplay = true } }
+    var phase: CGFloat = 0 { didSet { needsDisplay = true } }
+
+    override var isFlipped: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let pill = bounds
+        let path = NSBezierPath(roundedRect: pill, xRadius: pill.height / 2, yRadius: pill.height / 2)
+        NSColor(calibratedWhite: 0.05, alpha: 0.9).setFill(); path.fill()
+        NSColor(calibratedWhite: 1, alpha: 0.12).setStroke(); path.lineWidth = 1; path.stroke()
+        // 旋转弧
+        let center = CGPoint(x: 26, y: pill.height / 2)
+        let arc = NSBezierPath()
+        arc.appendArc(withCenter: center, radius: 8, startAngle: phase * 240, endAngle: phase * 240 + 270, clockwise: false)
+        NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 1).setStroke()
+        arc.lineWidth = 2.6; arc.lineCapStyle = .round; arc.stroke()
+        // 文案
+        let text = bottomReached ? "已到页面底部 · 正在收尾"
+            : "长截图中 · 已拼接 \(stitchedCount) 屏"
+        let paragraph = NSMutableParagraphStyle(); paragraph.lineBreakMode = .byTruncatingTail
+        (text as NSString).draw(at: CGPoint(x: 44, y: pill.height / 2 - 8), withAttributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .medium),
+            .foregroundColor: NSColor(calibratedWhite: 0.94, alpha: 1),
+            .paragraphStyle: paragraph
+        ])
+        // 快捷键帽（右对齐）
+        func keycap(_ label: String, rightEdge: CGFloat) -> CGFloat {
+            let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: NSColor(calibratedWhite: 0.85, alpha: 1)]
+            let size = (label as NSString).size(withAttributes: attrs)
+            let width = size.width + 14
+            let box = CGRect(x: rightEdge - width, y: pill.height / 2 - 11, width: width, height: 22)
+            NSColor(calibratedWhite: 1, alpha: 0.09).setFill()
+            NSBezierPath(roundedRect: box, xRadius: 6, yRadius: 6).fill()
+            NSColor(calibratedWhite: 1, alpha: 0.16).setStroke()
+            NSBezierPath(roundedRect: box, xRadius: 6, yRadius: 6).stroke()
+            (label as NSString).draw(at: CGPoint(x: box.minX + 7, y: box.midY - size.height / 2 + 1), withAttributes: attrs)
+            return box.minX - 8
+        }
+        var edge = pill.maxX - 18
+        edge = keycap("Esc 取消", rightEdge: edge)
+        _ = keycap("↵ 完成", rightEdge: edge)
+    }
+}
+
+/// 拼接预览条：实时缩略图 + 进度条 + 像素总高。
+final class LongShotStripView: NSView {
+    private var preview: CGImage?
+    private var percent: Double = 0
+    private var totalPx = 0
+
+    override var isFlipped: Bool { true }
+
+    func update(preview: CGImage?, percent: Double, totalPx: Int) {
+        self.preview = preview
+        self.percent = percent
+        self.totalPx = totalPx
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let panel = bounds
+        let path = NSBezierPath(roundedRect: panel, xRadius: 12, yRadius: 12)
+        NSColor(calibratedWhite: 0.05, alpha: 0.9).setFill(); path.fill()
+        NSColor(calibratedWhite: 1, alpha: 0.1).setStroke(); path.lineWidth = 1; path.stroke()
+        let title = "拼接预览" as NSString
+        let titleAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor(calibratedWhite: 0.62, alpha: 1)]
+        title.draw(at: CGPoint(x: panel.midX - title.size(withAttributes: titleAttrs).width / 2, y: 12), withAttributes: titleAttrs)
+        // 预览图（保持宽高比，贴宽绘制；CG 原点在左下，预览从顶端铺起）
+        let box = CGRect(x: 12, y: 34, width: panel.width - 24, height: panel.height - 106)
+        if let preview {
+            let ratio = CGFloat(preview.height) / max(CGFloat(preview.width), 1)
+            let drawH = min(box.height, box.width * ratio)
+            let drawW = min(box.width, drawH / max(ratio, 0.0001))
+            let ctx = NSGraphicsContext.current!.cgContext
+            ctx.saveGState()
+            NSBezierPath(roundedRect: box, xRadius: 8, yRadius: 8).addClip()
+            ctx.setFillColor(NSColor(calibratedWhite: 0.09, alpha: 1).cgColor)
+            ctx.fill(box)
+            let drawRect = CGRect(x: box.midX - drawW / 2, y: box.maxY - drawH, width: drawW, height: drawH)
+            ctx.draw(preview, in: drawRect)
+            ctx.restoreGState()
+        } else {
+            NSColor(calibratedWhite: 1, alpha: 0.05).setFill()
+            NSBezierPath(roundedRect: box, xRadius: 8, yRadius: 8).fill()
+        }
+        // 进度条 + 数据
+        let bar = CGRect(x: 12, y: panel.height - 58, width: panel.width - 24, height: 5)
+        NSColor(calibratedWhite: 1, alpha: 0.1).setFill()
+        NSBezierPath(roundedRect: bar, xRadius: 2.5, yRadius: 2.5).fill()
+        NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 1).setFill()
+        NSBezierPath(roundedRect: CGRect(x: bar.minX, y: bar.minY, width: max(4, bar.width * CGFloat(percent)), height: 5), xRadius: 2.5, yRadius: 2.5).fill()
+        let info = "\(Int(percent * 100))% · \(totalPx) px" as NSString
+        let infoAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 10.5, weight: .medium), .foregroundColor: NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 1)]
+        info.draw(at: CGPoint(x: panel.midX - info.size(withAttributes: infoAttrs).width / 2, y: panel.height - 44), withAttributes: infoAttrs)
+    }
+}
 
 /// 拼接纯函数引擎：在相邻两帧之间做行对齐（可单测）
 enum StitchEngine {
@@ -81,6 +251,7 @@ final class LongScreenshot {
 
     private var running = false
     private var cancelled = false
+    private var finishNow = false
     private var clampedToSingleScreen = false
     private var escMonitor: Any?
     private let maxFrames = 25
@@ -95,7 +266,7 @@ final class LongScreenshot {
         guard !running else { return }
         defer { if !running { ClotheslineController.shared.resumeAfterCapture() } }
         guard enabled else {
-            Toast.shared.showImportant("长截图（实验性）未开启：设置 → 截图")
+            Toast.shared.showImportant("长截图未开启：设置 → 截图")
             return
         }
         // 跨屏选区钳制到中心点所在屏（多屏拼接不支持）
@@ -125,10 +296,13 @@ final class LongScreenshot {
         }
         // 先收起 Toast：采集期间屏上浮层会被拍进帧里，还会破坏行对齐
         Toast.shared.hide()
-        // ⎋ 中止（全局监听：采集期间本应用非激活）
-        cancelled = false
+        // HUD 在区域外（胶囊在下方、预览条在右侧），不会被拍进帧
+        LongShotHUD.shared.show(rect: rect, screen: screen)
+        // ⎋ 取消（丢弃） / ↵ 提前完成（保留已拼内容）：全局监听，采集期间本应用非激活
+        cancelled = false; finishNow = false
         escMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == 53 { self?.cancelled = true }
+            if event.keyCode == 36 || event.keyCode == 76 { self?.finishNow = true }
         }
 
         Task.detached(priority: .userInitiated) { [weak self] in
@@ -137,22 +311,25 @@ final class LongScreenshot {
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.running = false
+                LongShotHUD.shared.hide()
                 ClotheslineController.shared.resumeAfterCapture()
                 if let m = self.escMonitor { NSEvent.removeMonitor(m); self.escMonitor = nil }
                 switch result {
                 case .success(let image):
                     writeImageToPasteboard(image)
                     HistoryStore.shared.addImage(image)
-                    let note = clampedToSingleScreen ? "（已限制单屏）" : ""
+                    let note = self.clampedToSingleScreen ? "（已限制单屏）" : ""
                     Toast.shared.showImportant("长截图完成\(note)（\(Int(image.size.width))×\(Int(image.size.height))）已进剪贴板")
                 case .failure(let msg):
                     Toast.shared.showImportant("长截图失败：\(msg)")
+                case .cancelled:
+                    break   // 用户主动取消：安静收场
                 }
             }
         }
     }
 
-    private enum Outcome { case success(NSImage); case failure(String) }
+    private enum Outcome { case success(NSImage); case failure(String); case cancelled }
 
     private func cropToRect(_ display: CGImage, rect: CGRect, screen: NSScreen) -> CGImage? {
         let scale = CGFloat(display.width) / max(screen.frame.width, 1)
@@ -166,6 +343,27 @@ final class LongScreenshot {
         return display.cropping(to: CGRect(x: px, y: py, width: pw, height: ph))
     }
 
+    /// 拼接进度预览：把已采集帧缩到 160pt 宽的画布上（仅喂 HUD，不影响成品）
+    private static func makePreview(frames: [(image: CGImage, sampler: StitchEngine.Sampler)], offsets: [Int], width: Int = 160) -> CGImage? {
+        guard let first = frames.first else { return nil }
+        let scale = Double(width) / Double(max(first.image.width, 1))
+        let frameH = Double(first.image.height)
+        let totalH = frameH + Double(offsets.reduce(0, +))
+        let outH = Int(max(1, totalH * scale))
+        guard let ctx = CGContext(data: nil, width: width, height: outH,
+                                  bitsPerComponent: 8, bytesPerRow: width * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.interpolationQuality = .low
+        var shifted = 0.0
+        for (i, f) in frames.enumerated() {
+            if i > 0 { shifted += Double(offsets[i - 1]) }
+            let y = (totalH - shifted - frameH) * scale
+            ctx.draw(f.image, in: CGRect(x: 0, y: y, width: Double(width), height: frameH * scale))
+        }
+        return ctx.makeImage()
+    }
+
     private func run(rect: CGRect, displayID: CGDirectDisplayID) async -> Outcome {
         guard let screen = NSScreen.screens.first(where: {
             ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber).map({ CGDirectDisplayID($0.uint32Value) }) == displayID
@@ -176,7 +374,7 @@ final class LongScreenshot {
         var lastOffset: Int?
 
         for frame in 0..<maxFrames {
-            if cancelled { break }
+            if cancelled { return .cancelled }
             guard let full = CGDisplayCreateImage(displayID),
                   let cropped = cropToRect(full, rect: rect, screen: screen),
                   let sampler = StitchEngine.Sampler(image: cropped) else {
@@ -189,13 +387,25 @@ final class LongScreenshot {
                 guard let offset = StitchEngine.scrollOffset(prev: last.sampler, next: sampler, maxSearch: searchWindow) else {
                     break   // 对齐失败：以已采集内容收尾
                 }
-                if offset == 0 { break }         // 页面到底
+                if offset == 0 {
+                    await MainActor.run { LongShotHUD.shared.markBottom() }
+                    break         // 页面到底
+                }
                 offsets.append(offset)
                 lastOffset = offset
             }
             frames.append((cropped, sampler))
             // 内存：Sampler 只在对齐相邻帧时有用，算完即弃（25 帧 RGBA 常驻可逼近 1GB）
             if frames.count > 1 { frames[frames.count - 2].sampler.data = [] }
+            // 进度回报：层数 + 已拼高度 + 小图预览（HUD 在主线程）
+            let frameCount = frames.count
+            let totalPx = (frames.first?.image.height ?? 0) + offsets.reduce(0, +)
+            let percent = Double(frameCount) / Double(maxFrames)
+            let preview = Self.makePreview(frames: frames, offsets: offsets)
+            await MainActor.run {
+                LongShotHUD.shared.update(frames: frameCount, totalPx: totalPx, percent: percent, preview: preview)
+            }
+            if finishNow { break }   // ↵ 提前完成：保留已拼内容
             // 滚动一屏（线单位，负值 = 向下滚）
             let src = CGEventSource(stateID: .combinedSessionState)
             if let ev = CGEvent(scrollWheelEvent2Source: src, units: .line, wheelCount: 1,
@@ -205,6 +415,7 @@ final class LongScreenshot {
             try? await Task.sleep(nanoseconds: 450_000_000)
         }
 
+        if cancelled { return .cancelled }
         guard let first = frames.first else { return .failure("未采集到帧") }
         guard frames.count > 1 else {
             // 只有 1 帧：页面无滚动，退化为普通截图（保持 Retina 点尺寸）
