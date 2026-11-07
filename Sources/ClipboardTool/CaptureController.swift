@@ -389,7 +389,15 @@ final class CaptureController {
             container.addSubview(hosting)
             window.contentView = container
             overlayWindows.append(window)
-            window.makeKeyAndOrderFront(nil)
+            // 非激活状态下 makeKeyAndOrderFront 不保证跨屏上屏（旧单窗口"只出现一个屏"同根），
+            // 必须 orderFrontRegardless 强制上屏；key 状态仅用于键盘路由。
+            window.makeKey()
+            window.orderFrontRegardless()
+        }
+        ScreenshotDiagnostics.windows(overlayWindows, stage: "overlayOrdered")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            guard let self, !self.overlayWindows.isEmpty else { return }
+            ScreenshotDiagnostics.windows(self.overlayWindows, stage: "overlaySettled")
         }
         if !AXIsProcessTrusted() {
             Toast.shared.showImportant("提示：⎋/↵ 快捷键需辅助功能权限；拖拽与单击不受影响")
