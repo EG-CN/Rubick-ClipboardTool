@@ -380,12 +380,14 @@ final class CaptureController {
             // Nonactivating keyable panels receive input without creating a Dock icon.
             window.becomesKeyOnlyIfNeeded = false
             window.hidesOnDeactivate = false
-            let container = NSView(frame: NSRect(
-                x: unionRect.minX - screen.frame.minX,
-                y: unionRect.minY - screen.frame.minY,
-                width: unionRect.width, height: unionRect.height))
+            // contentView 会被 AppKit 强制重置为窗口大小——偏移必须放在子视图上：
+            // 容器占满窗口，union 坐标的 hosting 视图在容器内按屏偏移摆放。
+            let container = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
+            container.autoresizesSubviews = false
             let hosting = NSHostingView(rootView: view)
-            hosting.frame = NSRect(origin: .zero, size: unionRect.size)
+            hosting.frame = NSRect(x: unionRect.minX - screen.frame.minX,
+                                   y: unionRect.minY - screen.frame.minY,
+                                   width: unionRect.width, height: unionRect.height)
             container.addSubview(hosting)
             window.contentView = container
             overlayWindows.append(window)
