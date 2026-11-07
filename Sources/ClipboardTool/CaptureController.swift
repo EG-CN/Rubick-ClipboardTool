@@ -82,7 +82,7 @@ final class CaptureController {
     var onCaptured: ((NSImage) -> Void)?
 
     private var captureRequestID = UUID()
-    private var overlayWindow: NSWindow?
+    private var overlayWindows: [NSWindow] = []
     private var colorSampler: StitchEngine.Sampler?
     private var delayTask: Task<Void, Never>?
     private var keyMonitor: Any?
@@ -199,7 +199,7 @@ final class CaptureController {
         ClotheslineController.shared.suspendForCapture()
         ScreenshotDiagnostics.begin()
         let requestID = captureRequestID
-        if overlayWindow != nil { teardown(restoreFocus: false) }   // 双触发：先拆旧覆盖层与监听
+        if !overlayWindows.isEmpty { teardown(restoreFocus: false) }   // 双触发：先拆旧覆盖层与监听
         // 像素采集/合成必须留在后台（MainActor 整段提升会让 CGDisplayCreateImage
         // 与全屏合成阻塞主线程）；仅 UI 触点（systemFallback/presentOverlay）回主线程
         Task {
@@ -361,35 +361,48 @@ final class CaptureController {
         )
         // 非激活面板：显示与按键照常，但不激活应用
         // .stationary:覆盖窗不参与空间切换——这是发起截图时"整屏跳动"的根因
-        let window = KeyablePanel(contentRect: unionRect,
-                             styleMask: [.borderless, .nonactivatingPanel],
-                             backing: .buffered, defer: false)
-        window.level = .screenSaver
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        window.backgroundColor = .clear
-        window.isOpaque = false
-        window.hasShadow = false
-        window.ignoresMouseEvents = false
-        // 不开这个，mouseMoved 事件不会投递到本窗口，悬停选窗高亮整体失灵
-        window.acceptsMouseMovedEvents = true
-        window.contentView = NSHostingView(rootView: view)
-        overlayWindow = window
+        // 每屏一个窗口：单窗口跨双屏在「显示器拥有独立空间」（系统默认开启）时
+        // 会被系统钉在其中一个屏所在的空间——另一块屏上表现为整屏冻结且无法交互。
+        // 分屏建窗后各自跟随所在屏的空间，事件由光标下的窗口接收；
+        // 视图仍是 union 坐标系，在每个窗口内按屏偏移对齐，手势与坐标逻辑零改动。
+        for screen in NSScreen.screens {
+            let window = KeyablePanel(contentRect: screen.frame,
+                                 styleMask: [.borderless, .nonactivatingPanel],
+                                 backing: .buffered, defer: false)
+            window.level = .screenSaver
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+            window.backgroundColor = .clear
+            window.isOpaque = false
+            window.hasShadow = false
+            window.ignoresMouseEvents = false
+            // 不开这个，mouseMoved 事件不会投递到本窗口，悬停选窗高亮整体失灵
+            window.acceptsMouseMovedEvents = true
+            // Nonactivating keyable panels receive input without creating a Dock icon.
+            window.becomesKeyOnlyIfNeeded = false
+            window.hidesOnDeactivate = false
+            let container = NSView(frame: NSRect(
+                x: unionRect.minX - screen.frame.minX,
+                y: unionRect.minY - screen.frame.minY,
+                width: unionRect.width, height: unionRect.height))
+            let hosting = NSHostingView(rootView: view)
+            hosting.frame = NSRect(origin: .zero, size: unionRect.size)
+            container.addSubview(hosting)
+            window.contentView = container
+            overlayWindows.append(window)
+            window.makeKeyAndOrderFront(nil)
+        }
         if !AXIsProcessTrusted() {
             Toast.shared.showImportant("提示：⎋/↵ 快捷键需辅助功能权限；拖拽与单击不受影响")
         }
         // Nonactivating keyable panels receive input without creating a Dock icon.
         ActivationPolicyKeeper.shared.acquire("overlay")
-        window.becomesKeyOnlyIfNeeded = false
-        window.hidesOnDeactivate = false
-        window.orderFrontRegardless()
-        window.makeKeyAndOrderFront(nil)
 
         // 取色采样器：合成图一次性解码缓存（悬停 O(1) 取像素；teardown 释放）
         if let cg = composite.cgImage() { colorSampler = StitchEngine.Sampler(image: cg) }
 
         // 悬停窗口高亮（鼠标移动即刷新，Snipaste 式）
         hoverMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .otherMouseDragged]) { [weak self, weak session] event in
-            guard let self = self, self.overlayWindow?.isVisible == true else { return event }
+            guard let self = self, self.overlayWindows.contains(where: { $0.isVisible }) else { return event }
             if let session = session {
                 let m = NSEvent.mouseLocation
                 let viewPoint = CGPoint(x: m.x - unionRect.origin.x,
@@ -409,7 +422,7 @@ final class CaptureController {
         }
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self = self, self.overlayWindow?.isVisible == true else { return event }
+            guard let self = self, self.overlayWindows.contains(where: { $0.isVisible }) else { return event }
             if event.keyCode == 53 {   // ⎋ 取消
                 self.teardown(restoreFocus: true)
                 return nil
@@ -423,7 +436,7 @@ final class CaptureController {
 
         // 全局监听兜底：应用未激活时也能收到 Esc / ↵
         globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self = self, self.overlayWindow?.isVisible == true else { return }
+            guard let self = self, self.overlayWindows.contains(where: { $0.isVisible }) else { return }
             if event.keyCode == 53 {
                 DispatchQueue.main.async { self.teardown(restoreFocus: true) }
             } else if event.keyCode == 36 || event.keyCode == 76 {
@@ -526,8 +539,8 @@ final class CaptureController {
     }
 
     private func teardown(restoreFocus: Bool) {
-        overlayWindow?.orderOut(nil)
-        overlayWindow = nil
+        overlayWindows.forEach { $0.orderOut(nil) }
+        overlayWindows = []
         colorSampler = nil
         ActivationPolicyKeeper.shared.release("overlay")
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
