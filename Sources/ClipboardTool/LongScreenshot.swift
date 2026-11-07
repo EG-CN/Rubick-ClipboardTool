@@ -10,6 +10,9 @@ let longShotLog = Logger(subsystem: "local.rubick.screenshot-test", category: "L
 
 /// 长截图进度 HUD：区域下方进度胶囊 + 右侧实时拼接预览条。
 /// 面板都在选区矩形之外，不会被拍进帧里；非激活、不拦截鼠标。
+/// 滚动控制模式：手动 = 用户自己滚页面（默认，由人控制）；自动 = 程序匀速注入滚动。
+enum LongShotMode { case manual, auto }
+
 final class LongShotHUD {
     static let shared = LongShotHUD()
     private var pillPanel: NSPanel?
@@ -17,6 +20,7 @@ final class LongShotHUD {
     private var pillView: LongShotPillView?
     private var stripView: LongShotStripView?
     private var tick: Timer?
+    private(set) var mode: LongShotMode = .manual
 
     private init() {}
 
@@ -36,8 +40,8 @@ final class LongShotHUD {
         pillPanel = pp; pillView = pv
 
         // 拼接预览条：区域右侧 22pt（放不下换左侧），高度贴合区域并钳到屏内。
-        let stripWidth: CGFloat = 176
-        let stripHeight = min(max(rect.height, 200), screen.visibleFrame.height - 60)
+        let stripWidth: CGFloat = 280
+        let stripHeight = min(max(rect.height, 260), screen.visibleFrame.height - 60)
         var stripX = rect.maxX + 22
         if stripX + stripWidth > screenFrame.maxX - 12 { stripX = rect.minX - stripWidth - 22 }
         let stripY = min(max(screen.visibleFrame.minY + 20, rect.minY), screen.visibleFrame.maxY - stripHeight)
@@ -51,6 +55,13 @@ final class LongShotHUD {
         tick = Timer.scheduledTimer(withTimeInterval: 0.09, repeats: true) { [weak pv] _ in pv?.phase += 1 }
         tick?.tolerance = 0.03
         RunLoop.main.add(tick!, forMode: .common)
+        setMode(mode)
+    }
+
+    func setMode(_ m: LongShotMode) {
+        mode = m
+        pillView?.mode = m
+        stripView?.mode = m
     }
 
     private static func makePanel(frame: CGRect) -> NSPanel {
@@ -83,6 +94,7 @@ final class LongShotPillView: NSView {
     var stitchedCount = 0 { didSet { needsDisplay = true } }
     var bottomReached = false { didSet { needsDisplay = true } }
     var phase: CGFloat = 0 { didSet { needsDisplay = true } }
+    var mode: LongShotMode = .manual { didSet { needsDisplay = true } }
 
     override var isFlipped: Bool { true }
 
@@ -98,8 +110,10 @@ final class LongShotPillView: NSView {
         NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 1).setStroke()
         arc.lineWidth = 2.6; arc.lineCapStyle = .round; arc.stroke()
         // 文案
-        let text = bottomReached ? "已到页面底部 · 正在收尾"
-            : "长截图中 · 已拼接 \(stitchedCount) 屏 · 请勿移动鼠标"
+        let text: String
+        if bottomReached { text = "已到页面底部 · 正在收尾" }
+        else if mode == .auto { text = "自动滚动中 · 已拼 \(stitchedCount) 屏 · 请勿移动鼠标 · 空格切回手动" }
+        else { text = "手动滚动中 · 你来滚页面 · 已拼 \(stitchedCount) 屏 · 空格切自动" }
         let paragraph = NSMutableParagraphStyle(); paragraph.lineBreakMode = .byTruncatingTail
         (text as NSString).draw(at: CGPoint(x: 44, y: pill.height / 2 - 8), withAttributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .medium),
@@ -130,6 +144,7 @@ final class LongShotStripView: NSView {
     private var preview: CGImage?
     private var percent: Double = 0
     private var totalPx = 0
+    var mode: LongShotMode = .manual { didSet { needsDisplay = true } }
 
     override var isFlipped: Bool { true }
 
@@ -145,8 +160,8 @@ final class LongShotStripView: NSView {
         let path = NSBezierPath(roundedRect: panel, xRadius: 12, yRadius: 12)
         NSColor(calibratedWhite: 0.05, alpha: 0.9).setFill(); path.fill()
         NSColor(calibratedWhite: 1, alpha: 0.1).setStroke(); path.lineWidth = 1; path.stroke()
-        let title = "拼接预览" as NSString
-        let titleAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor(calibratedWhite: 0.62, alpha: 1)]
+        let title = (mode == .auto ? "长截图预览 · 自动" : "长截图预览 · 手动") as NSString
+        let titleAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11.5, weight: .medium), .foregroundColor: NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 1)]
         title.draw(at: CGPoint(x: panel.midX - title.size(withAttributes: titleAttrs).width / 2, y: 12), withAttributes: titleAttrs)
         // 预览图（保持宽高比，贴宽绘制；CG 原点在左下，预览从顶端铺起）
         let box = CGRect(x: 12, y: 34, width: panel.width - 24, height: panel.height - 106)
@@ -256,6 +271,8 @@ final class LongScreenshot {
     private var running = false
     private var cancelled = false
     private var finishNow = false
+    /// 当前滚动控制模式：手动（默认）由用户滚页面，自动为程序注入
+    var mode: LongShotMode = .manual
     private var clampedToSingleScreen = false
     private var escMonitor: Any?
     private let maxFrames = 25
@@ -309,6 +326,13 @@ final class LongScreenshot {
         escMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == 53 { longShotLog.notice("keydown: Esc → 取消"); self?.cancelled = true }
             if event.keyCode == 36 || event.keyCode == 76 { longShotLog.notice("keydown: ↵ → 提前完成"); self?.finishNow = true }
+            if event.keyCode == 49 {
+                self?.mode = self?.mode == .auto ? .manual : .auto
+                if let m = self?.mode {
+                    longShotLog.notice("mode → \(m == .auto ? "auto" : "manual")")
+                    LongShotHUD.shared.setMode(m)
+                }
+            }
         }
 
         Task.detached(priority: .userInitiated) { [weak self] in
@@ -391,35 +415,43 @@ final class LongScreenshot {
         var offsets: [Int] = []
         var lastOffset: Int?
 
-        for frame in 0..<maxFrames {
-            if cancelled { longShotLog.notice("run: 第 \(frame) 帧前收到取消"); return .cancelled }
+        var iteration = 0
+        while frames.count < (mode == .auto ? 25 : 60) {
+            iteration += 1
+            if cancelled { longShotLog.notice("run: 第 \(iteration) 轮前收到取消"); return .cancelled }
             // 经典 API 优先，失败回退 SCScreenshotManager（macOS 26 上两者都偶发单边失效）
             var full = CGDisplayCreateImage(displayID)
             if full == nil {
-                longShotLog.error("frame \(frame + 1): CGDisplayCreateImage 失败，回退 ScreenCaptureKit")
+                longShotLog.error("iter \(iteration): CGDisplayCreateImage 失败，回退 ScreenCaptureKit")
                 full = try? await Self.screenKitCapture(displayID: displayID)
             }
             guard let full,
                   let cropped = cropToRect(full, rect: rect, screen: screen),
                   let sampler = StitchEngine.Sampler(image: cropped) else {
-                longShotLog.error("frame \(frame + 1): 采集失败 full=\(full != nil)")
-                return .failure("截屏失败（第 \(frame + 1) 帧）")
+                longShotLog.error("iter \(iteration): 采集失败 full=\(full != nil)")
+                return .failure("截屏失败（第 \(iteration) 轮）")
             }
-            if frame == 0 { longShotLog.notice("frame 1: 首帧 OK \(cropped.width, privacy: .public)×\(cropped.height, privacy: .public)") }
+            if frames.isEmpty { longShotLog.notice("首帧 OK \(cropped.width, privacy: .public)×\(cropped.height, privacy: .public)") }
             // 步长自适应上限须与对齐搜索窗联动（Retina 像素行），否则步长大会撞穿搜索窗
             let step = lastOffset.map { min(24, max(10, $0 / 8)) } ?? 12
             let searchWindow = max(maxSearch, step * 60)
             if let last = frames.last {
                 guard let offset = StitchEngine.scrollOffset(prev: last.sampler, next: sampler, maxSearch: searchWindow) else {
-                    longShotLog.notice("frame \(frame + 1): 对齐失败，以已采集 \(frames.count) 帧收尾")
+                    longShotLog.notice("iter \(iteration): 对齐失败，以已采集 \(frames.count) 帧收尾")
                     break   // 对齐失败：以已采集内容收尾
                 }
                 if offset == 0 {
-                    longShotLog.notice("frame \(frame + 1): 页面到底（offset=0）")
-                    await MainActor.run { LongShotHUD.shared.markBottom() }
-                    break         // 页面到底
+                    if mode == .auto {
+                        longShotLog.notice("iter \(iteration): 页面到底（offset=0）")
+                        await MainActor.run { LongShotHUD.shared.markBottom() }
+                        break     // 自动模式：到底即停
+                    }
+                    // 手动模式：用户还没滚，不追加帧继续等待
+                    if finishNow { longShotLog.notice("run: ↵ 提前完成，共 \(frames.count) 帧"); break }
+                    try? await Task.sleep(nanoseconds: 450_000_000)
+                    continue
                 }
-                longShotLog.notice("frame \(frame + 1): 滚动 \(offset) px")
+                longShotLog.notice("iter \(iteration): 新增 \(offset) px")
                 offsets.append(offset)
                 lastOffset = offset
             }
@@ -429,17 +461,19 @@ final class LongScreenshot {
             // 进度回报：层数 + 已拼高度 + 小图预览（HUD 在主线程）
             let frameCount = frames.count
             let totalPx = (frames.first?.image.height ?? 0) + offsets.reduce(0, +)
-            let percent = Double(frameCount) / Double(maxFrames)
+            let percent = Double(frameCount) / Double(mode == .auto ? 25 : 60)
             let preview = Self.makePreview(frames: frames, offsets: offsets)
             await MainActor.run {
                 LongShotHUD.shared.update(frames: frameCount, totalPx: totalPx, percent: percent, preview: preview)
             }
             if finishNow { longShotLog.notice("run: ↵ 提前完成，共 \(frames.count) 帧"); break }   // ↵ 提前完成：保留已拼内容
-            // 滚动一屏（线单位，负值 = 向下滚）
-            let src = CGEventSource(stateID: .combinedSessionState)
-            if let ev = CGEvent(scrollWheelEvent2Source: src, units: .line, wheelCount: 1,
-                                wheel1: -Int32(step), wheel2: 0, wheel3: 0) {
-                ev.post(tap: .cghidEventTap)
+            // 自动模式才注入滚动；手动模式滚不滚、滚多快由用户决定
+            if mode == .auto {
+                let src = CGEventSource(stateID: .combinedSessionState)
+                if let ev = CGEvent(scrollWheelEvent2Source: src, units: .line, wheelCount: 1,
+                                    wheel1: -Int32(step), wheel2: 0, wheel3: 0) {
+                    ev.post(tap: .cghidEventTap)
+                }
             }
             try? await Task.sleep(nanoseconds: 450_000_000)
         }
