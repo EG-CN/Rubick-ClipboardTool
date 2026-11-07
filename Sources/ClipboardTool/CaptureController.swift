@@ -463,6 +463,7 @@ final class CaptureController {
         // 取整到整点边界，避免半像素采样让成品边缘发虚
         let r = rect.integral
         if pendingPurpose == .long {
+            longShotLog.notice("finish→LongShot rect=\(NSStringFromRect(r), privacy: .public)")
             // 长截图：首帧裁剪后交给滚动采集拼接（不经编辑器）
             LongScreenshot.shared.start(rect: r)
             return

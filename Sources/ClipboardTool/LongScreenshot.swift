@@ -6,7 +6,7 @@ import ScreenCaptureKit
 // MARK: - 长截图（⌘⇧L / 菜单「长截图」）
 // 流程：框选区域 → 程序滚动注入 → 分片截屏 → 行对齐拼接；过程 HUD 实时回报，↵ 提前完成，⎋ 取消。
 
-private let longShotLog = Logger(subsystem: "local.rubick.screenshot-test", category: "LongShot")
+let longShotLog = Logger(subsystem: "local.rubick.screenshot-test", category: "LongShot")
 
 /// 长截图进度 HUD：区域下方进度胶囊 + 右侧实时拼接预览条。
 /// 面板都在选区矩形之外，不会被拍进帧里；非激活、不拦截鼠标。
@@ -267,11 +267,11 @@ final class LongScreenshot {
 
     /// rect：AppKit 全局坐标的框选区域
     func start(rect: CGRect) {
-        longShotLog.info("start: rect=\(NSStringFromRect(rect), privacy: .public) enabled=\(self.enabled)")
-        guard !running else { longShotLog.info("start: 已在运行中，忽略"); return }
+        longShotLog.notice("start: rect=\(NSStringFromRect(rect), privacy: .public) enabled=\(self.enabled)")
+        guard !running else { longShotLog.notice("start: 已在运行中，忽略"); return }
         defer { if !running { ClotheslineController.shared.resumeAfterCapture() } }
         guard enabled else {
-            longShotLog.info("start: 功能未开启")
+            longShotLog.notice("start: 功能未开启")
             Toast.shared.showImportant("长截图未开启：设置 → 截图")
             return
         }
@@ -307,8 +307,8 @@ final class LongScreenshot {
         // ⎋ 取消（丢弃） / ↵ 提前完成（保留已拼内容）：全局监听，采集期间本应用非激活
         cancelled = false; finishNow = false
         escMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 { longShotLog.info("keydown: Esc → 取消"); self?.cancelled = true }
-            if event.keyCode == 36 || event.keyCode == 76 { longShotLog.info("keydown: ↵ → 提前完成"); self?.finishNow = true }
+            if event.keyCode == 53 { longShotLog.notice("keydown: Esc → 取消"); self?.cancelled = true }
+            if event.keyCode == 36 || event.keyCode == 76 { longShotLog.notice("keydown: ↵ → 提前完成"); self?.finishNow = true }
         }
 
         Task.detached(priority: .userInitiated) { [weak self] in
@@ -392,7 +392,7 @@ final class LongScreenshot {
         var lastOffset: Int?
 
         for frame in 0..<maxFrames {
-            if cancelled { longShotLog.info("run: 第 \(frame) 帧前收到取消"); return .cancelled }
+            if cancelled { longShotLog.notice("run: 第 \(frame) 帧前收到取消"); return .cancelled }
             // 经典 API 优先，失败回退 SCScreenshotManager（macOS 26 上两者都偶发单边失效）
             var full = CGDisplayCreateImage(displayID)
             if full == nil {
@@ -405,21 +405,21 @@ final class LongScreenshot {
                 longShotLog.error("frame \(frame + 1): 采集失败 full=\(full != nil)")
                 return .failure("截屏失败（第 \(frame + 1) 帧）")
             }
-            if frame == 0 { longShotLog.info("frame 1: 首帧 OK \(cropped.width, privacy: .public)×\(cropped.height, privacy: .public)") }
+            if frame == 0 { longShotLog.notice("frame 1: 首帧 OK \(cropped.width, privacy: .public)×\(cropped.height, privacy: .public)") }
             // 步长自适应上限须与对齐搜索窗联动（Retina 像素行），否则步长大会撞穿搜索窗
             let step = lastOffset.map { min(24, max(10, $0 / 8)) } ?? 12
             let searchWindow = max(maxSearch, step * 60)
             if let last = frames.last {
                 guard let offset = StitchEngine.scrollOffset(prev: last.sampler, next: sampler, maxSearch: searchWindow) else {
-                    longShotLog.info("frame \(frame + 1): 对齐失败，以已采集 \(frames.count) 帧收尾")
+                    longShotLog.notice("frame \(frame + 1): 对齐失败，以已采集 \(frames.count) 帧收尾")
                     break   // 对齐失败：以已采集内容收尾
                 }
                 if offset == 0 {
-                    longShotLog.info("frame \(frame + 1): 页面到底（offset=0）")
+                    longShotLog.notice("frame \(frame + 1): 页面到底（offset=0）")
                     await MainActor.run { LongShotHUD.shared.markBottom() }
                     break         // 页面到底
                 }
-                longShotLog.info("frame \(frame + 1): 滚动 \(offset) px")
+                longShotLog.notice("frame \(frame + 1): 滚动 \(offset) px")
                 offsets.append(offset)
                 lastOffset = offset
             }
@@ -434,7 +434,7 @@ final class LongScreenshot {
             await MainActor.run {
                 LongShotHUD.shared.update(frames: frameCount, totalPx: totalPx, percent: percent, preview: preview)
             }
-            if finishNow { longShotLog.info("run: ↵ 提前完成，共 \(frames.count) 帧"); break }   // ↵ 提前完成：保留已拼内容
+            if finishNow { longShotLog.notice("run: ↵ 提前完成，共 \(frames.count) 帧"); break }   // ↵ 提前完成：保留已拼内容
             // 滚动一屏（线单位，负值 = 向下滚）
             let src = CGEventSource(stateID: .combinedSessionState)
             if let ev = CGEvent(scrollWheelEvent2Source: src, units: .line, wheelCount: 1,
