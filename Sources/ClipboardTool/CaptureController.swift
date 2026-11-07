@@ -717,12 +717,15 @@ struct CaptureOverlayView: View {
                 }
                 HStack(spacing: 8) {
                     confirmPill(icon: "checkmark", label: "确认", tint: .green) { confirmPending() }
-                    confirmPill(icon: "xmark", label: "取消", tint: .white) { pendingSelection = nil }
+                    confirmPill(icon: "arrow.counterclockwise", label: "重选", tint: .white) { pendingSelection = nil }
+                    Text("↵ 确认 · Esc 取消截图")
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(.white.opacity(0.45))
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .background(Capsule().fill(.black.opacity(0.72)))
-                .position(x: sel.midX,
+                .position(x: min(max(sel.midX, 130), unionRect.width - 130),
                           y: sel.maxY + 26 > unionRect.height - 16 ? max(sel.minY - 28, 20) : sel.maxY + 26)
             }
         }

@@ -20,7 +20,7 @@ struct ClotheslineTests {
             #expect(visible.contains(frame))
             #expect(frame.maxY < visible.maxY)
             #expect(frame.midX == visible.midX)
-            #expect(frame.width == min(1080, max(560, visible.width * 0.62)))
+            #expect(frame.width == max(560, visible.width - 16))
         }
     }
     @Test func continuousRailKeepsOrderAndClampsScrollOffset() {
@@ -40,14 +40,14 @@ struct ClotheslineTests {
         #expect(ClotheslineLayout.railWidth(widths: []) == 0)
     }
     @Test func ropeCardsFollowSagAndNeverExceedPanelHeight() {
-        let sizes = (0..<9).map { _ in CGSize(width: 220, height: 250) }
+        let sizes = (0..<9).map { _ in CGSize(width: 180, height: 200) }
         let frames = ClotheslineLayout.railFrames(sizes: sizes, offset: 0, boundsWidth: 800)
         for frame in frames {
-            #expect(frame.minY >= 54 && frame.minY <= 67)
-            #expect(frame.height <= 250)
+            #expect(frame.minY >= 52 && frame.minY <= 63)
+            #expect(frame.height <= 200)
         }
         let tallest = ClotheslineLayout.cardSize(image: nil, text: String(repeating: "长文字\n", count: 500))
-        #expect(tallest.height <= 274)
+        #expect(tallest.height <= 210)
     }
     @Test func railFramesHandlesOversizedCardAndEdgeOffsets() {
         // 单卡比面板更宽：frame 仍完整返回，滚动被夹紧后卡片尾部保持可见。

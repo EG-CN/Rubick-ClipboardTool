@@ -348,7 +348,14 @@ final class AnnotationController {
                 return nil
             }
             if ak.matches(.confirm, event: event) { self.confirm(); return nil }
-            if ak.matches(.cancel, event: event) { self.cancel(); return nil }
+            if ak.matches(.confirm, event: event) { self.confirm(); return nil }
+            if ak.matches(.cancel, event: event) {
+                // Esc 三段式：有标注先撤图形，撤完才退出编辑器（原图已在剪贴板，不丢工作）。
+                if model.sidePanelText != nil { model.closeSidePanel() }
+                else if !model.annotations.isEmpty { model.undo() }
+                else { self.cancel() }
+                return nil
+            }
             if ak.matches(.undo, event: event) { model.undo(); return nil }
             if ak.matches(.redo, event: event) { model.redo(); return nil }
             if ak.matches(.ocr, event: event) {
@@ -384,7 +391,9 @@ final class AnnotationController {
     private func handleGlobalEditorKey(_ event: NSEvent, model: AnnotateModel) {
         let ak = AnnotateKeyConfig.shared
         if event.keyCode == 53 {
-            if model.sidePanelText != nil { model.closeSidePanel() } else { cancel() }
+            if model.sidePanelText != nil { model.closeSidePanel() }
+            else if !model.annotations.isEmpty { model.undo() }
+            else { cancel() }
             return
         }
         if ak.matches(.confirm, event: event) { confirm(); return }

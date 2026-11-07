@@ -20,11 +20,11 @@ enum ClipboardPresentation: String, CaseIterable {
 }
 
 struct ClotheslineLayout {
-    /// 挂绳面板：宽约 62% 屏（上限 1080），贴屏幕上缘水平居中。
+    /// 挂绳面板：绳铺满可见区横向（左右各留 8pt），贴屏幕上缘；高度随卡片缩小收窄。
     /// 收起分支（96×26）仅为 ClotheslinePreview 兼容保留，运行时不再有常驻入口。
     static func frame(screen: CGRect, visible: CGRect, expanded: Bool, cutout: CGRect? = nil) -> CGRect {
-        let width = expanded ? min(1080, max(560, visible.width * 0.62)) : 96
-        let height = expanded ? min(420, visible.height - 8) : 26
+        let width = expanded ? max(560, visible.width - 16) : 96
+        let height = expanded ? min(320, visible.height - 8) : 26
         let top = visible.maxY - 4
         let x = min(max(visible.midX - width / 2, visible.minX), visible.maxX - width)
         return CGRect(x: x, y: max(visible.minY, top - height), width: width, height: height)
@@ -41,22 +41,22 @@ struct ClotheslineLayout {
     static func cardSize(image: CGSize?, text: String?) -> CGSize {
         if let image, image.width > 0, image.height > 0 {
             let ratio = image.width / image.height
-            let height = min(220, max(100, 170 / sqrt(ratio)))
-            let width = min(300, max(104, height * ratio))
-            return CGSize(width: width + 20, height: height + 54)
+            let height = min(150, max(72, 120 / sqrt(ratio)))
+            let width = min(210, max(80, height * ratio))
+            return CGSize(width: width + 18, height: height + 50)
         }
         let value = String((text ?? "").prefix(600))
-        let width: CGFloat = value.count < 35 ? 164 : (value.count < 120 ? 210 : 250)
+        let width: CGFloat = value.count < 35 ? 132 : (value.count < 120 ? 168 : 200)
         let measured = (value as NSString).boundingRect(with: CGSize(width: width - 20, height: 1000), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: NSFont.systemFont(ofSize: 13)])
-        return CGSize(width: width, height: min(220, max(78, ceil(measured.height) + 35)) + 54)
+        return CGSize(width: width, height: min(160, max(64, ceil(measured.height) + 32)) + 50)
     }
     /// 连续挂绳：内容总宽（卡片 + 间距 + 两端留白）。
-    static func railWidth(widths: [CGFloat], gap: CGFloat = 18, margin: CGFloat = 16) -> CGFloat {
+    static func railWidth(widths: [CGFloat], gap: CGFloat = 18, margin: CGFloat = 20) -> CGFloat {
         guard !widths.isEmpty else { return 0 }
         return margin + widths.reduce(0, +) + gap * CGFloat(widths.count - 1) + margin
     }
-    /// 卡片沿绳排布：x 随滚动偏移平移，y 跟随悬链下垂弧度。
-    static func railFrames(sizes: [CGSize], offset: CGFloat, boundsWidth: CGFloat, gap: CGFloat = 18, margin: CGFloat = 16) -> [CGRect] {
+    /// 卡片沿绳排布：x 随滚动偏移平移，y 跟随悬链下垂弧度（弧度按全宽绳算，绳铺满屏幕横向）。
+    static func railFrames(sizes: [CGSize], offset: CGFloat, boundsWidth: CGFloat, gap: CGFloat = 18, margin: CGFloat = 20) -> [CGRect] {
         let content = railWidth(widths: sizes.map(\.width), gap: gap, margin: margin)
         let maxOffset = max(0, content - boundsWidth)
         let clamped = min(max(0, offset), maxOffset)
@@ -64,8 +64,9 @@ struct ClotheslineLayout {
         var x = margin
         for size in sizes {
             let railX = x + size.width / 2
-            let t = content > 1 ? railX / content : 0.5
-            let top = 54 + 48 * t * (1 - t)
+            // 绳铺满全宽：视口内按位置取弧度，滚出视口的卡片夹紧到绳末端，不会翻到绳上方。
+            let t = boundsWidth > 1 ? min(max(railX / boundsWidth, 0), 1) : 0.5
+            let top = 52 + 44 * t * (1 - t)
             frames.append(CGRect(x: x - clamped, y: top, width: size.width, height: size.height))
             x += size.width + gap
         }
@@ -428,6 +429,7 @@ final class ClotheslineView: NSView, NSDraggingSource {
     private var counterText = ""
     private var counterAlpha: CGFloat = 0
     private var counterTimer: Timer?
+    private var swayFrame = 0
 
     deinit { hoverTimer?.invalidate(); undoTimer?.invalidate(); revealTimer?.invalidate(); counterTimer?.invalidate() }
 
@@ -487,7 +489,7 @@ final class ClotheslineView: NSView, NSDraggingSource {
         if undoDeletion != nil && undoRect.contains(point) { hint = "撤销刚才的移除操作" }
         else if items.indices.contains(where: { clipRect($0).contains(point) }) { hint = "移除此记录 · 5 秒内可撤销" }
         else if items.indices.contains(where: { items[$0].kind == .file && cardRect($0).contains(point) }) { hint = "拖入其他应用使用 · ⌘点击多选文件" }
-        else if point.y < 100 { hint = "按住拨绳滑动 · 右键更多操作 · Esc 收起" }
+        else if (26...64).contains(point.y) { hint = "按住拨绳滑动 · 右键更多操作 · Esc 收起" }
         else if undoDeletion != nil { hint = "已移除一条记录" }
         else { hint = "单击粘贴 · 拖入使用 · ⌥点击仅复制 · Esc 收起" }
         if toolTip != hint { toolTip = hint }
@@ -542,7 +544,7 @@ final class ClotheslineView: NSView, NSDraggingSource {
                 if let w = item.metaWidth, let h = item.metaHeight { return CGSize(width: w, height: h) }
                 return store.thumbnail(for: item, maxPixel: 64)?.size
             }() : nil
-            if item.kind == .file { return CGSize(width: 186, height: 196) }
+            if item.kind == .file { return CGSize(width: 150, height: 160) }
             return ClotheslineLayout.cardSize(image: image, text: item.text)
         }
         let known = Set(items.map(\.id))
@@ -572,8 +574,11 @@ final class ClotheslineView: NSView, NSDraggingSource {
     private var undoRect: CGRect { CGRect(x: bounds.width - 158, y: 10, width: 142, height: 30) }
     private(set) var menuOpen = false
     func isInteractive(_ point: CGPoint) -> Bool {
-        !expanded || (undoDeletion != nil && undoRect.contains(point)) || point.y < 96 ||
-        items.indices.contains { cardRect($0).contains(point) || clipRect($0).contains(point) }
+        // 全宽绳面下命中区收窄：绳线一带（y 26–64）可拨绳，其余只有卡片/夹子近旁可点，
+        // 避免顶部横条吞掉下层窗口标题栏的点击。
+        !expanded || (undoDeletion != nil && undoRect.contains(point)) ||
+        (point.y >= 26 && point.y <= 64) ||
+        items.indices.contains { cardRect($0).insetBy(dx: -24, dy: -24).contains(point) || clipRect($0).contains(point) }
     }
     private func setScrollOffset(_ value: CGFloat) {
         scrollOffset = min(max(0, value), maxOffset)
@@ -625,8 +630,9 @@ final class ClotheslineView: NSView, NSDraggingSource {
             if abs(next - current) > 0.015 { changed = true }
             wind[item.id] = next
         }
-        // 常态下环境微晃每帧都不同；reduceMotion 下只在归零过程中重绘，省电。
-        needsDisplay = !reduceMotion || changed
+        // 常态下环境微晃每帧都不同；只在有摆动变化或每 4 帧刷新一次，降功耗。
+        swayFrame += 1
+        needsDisplay = changed || (!reduceMotion && swayFrame % 4 == 0)
     }
     private func swayAngle(for item: ClipboardItem, now: TimeInterval) -> CGFloat {
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -688,8 +694,9 @@ final class ClotheslineView: NSView, NSDraggingSource {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current?.cgContext.setAlpha(revealAlpha)
         let now = ProcessInfo.processInfo.systemUptime
-        let ropeStart = CGFloat(16) - scrollOffset
-        let ropeEnd = contentWidth - 16 - scrollOffset
+        // 绳铺满面板全宽（左右各留 10pt），卡片沿绳滚动。
+        let ropeStart: CGFloat = 10
+        let ropeEnd = bounds.width - 10
         let rope = NSBezierPath(); rope.move(to: CGPoint(x: ropeStart, y: 44))
         rope.curve(to: CGPoint(x: ropeEnd, y: 44), controlPoint1: CGPoint(x: ropeStart + (ropeEnd - ropeStart) * 0.35, y: 60), controlPoint2: CGPoint(x: ropeStart + (ropeEnd - ropeStart) * 0.65, y: 60))
         rope.lineWidth = 2.4
