@@ -271,11 +271,11 @@ struct SettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-            Divider().opacity(0.5)
             content
         }
         .frame(minWidth: 800, idealWidth: 840, maxWidth: .infinity, minHeight: 550, idealHeight: 590, maxHeight: .infinity)
-        .background(SettingsBackdrop())
+        // 稿为不透明黑曜石（obsidian-900）——behind-window 毛玻璃会把桌面内容透进来
+        .background(Color(red: 0.063, green: 0.067, blue: 0.086))
         .tint(RubickTheme.primary(scheme))
         .onAppear {
             autoLaunch = SMAppService.mainApp.status == .enabled
@@ -297,13 +297,19 @@ struct SettingsView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // 品牌区（稿：R 徽标 + 名称 + 版本 Preferences 副标）
             HStack(spacing: 10) {
                 brandEmblem(28)
-                Text("拉比克").font(.system(size: 16, weight: .semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("拉比克").font(.system(size: 15, weight: .semibold))
+                    Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "2.8") Preferences")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(RubickTheme.muted(scheme).opacity(0.75))
+                }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 22)
-            .padding(.bottom, 24)
+            .padding(.horizontal, 16)
+            .padding(.top, 18)
+            .padding(.bottom, 18)
 
             VStack(spacing: 2) {
                 ForEach(Pane.allCases, id: \.self) { p in
@@ -312,24 +318,27 @@ struct SettingsView: View {
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: p.icon)
-                                .font(.system(size: 12))
+                                .font(.system(size: 13))
                                 .frame(width: 18)
                             Text(p.rawValue)
-                                .font(.system(size: 14))
+                                .font(.system(size: 13))
                             Spacer()
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 11)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(pane == p
-                                                                           ? RubickTheme.primary(scheme).opacity(0.12)
-                                                                           : Color.clear))
-                        .overlay(alignment: .trailing) {
+                            // 选中态右缘发光点（稿 shadow 0 0 8px primary）
                             if pane == p {
-                                Capsule().fill(RubickTheme.primary(scheme))
-                                    .frame(width: 3, height: 16)
-                                    .padding(.trailing, 3)
+                                Circle()
+                                    .fill(RubickTheme.primary(scheme))
+                                    .frame(width: 6, height: 6)
+                                    .shadow(color: RubickTheme.primary(scheme), radius: 4)
                             }
                         }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .background(RoundedRectangle(cornerRadius: 9).fill(pane == p
+                                                                           ? RubickTheme.primary(scheme).opacity(0.14)
+                                                                           : Color.clear))
+                        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(pane == p
+                                                                                ? RubickTheme.primary(scheme).opacity(0.25)
+                                                                                : .clear, lineWidth: 1))
                         .foregroundStyle(pane == p ? RubickTheme.primary(scheme) : RubickTheme.muted(scheme))
                         .contentShape(Rectangle())
                     }
@@ -340,8 +349,29 @@ struct SettingsView: View {
 
             Spacer()
 
+            // 底部状态行（稿：绿点 物理悬挂就绪 · macOS 版本）
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(RubickTheme.emerald)
+                    .frame(width: 7, height: 7)
+                    .shadow(color: RubickTheme.emerald, radius: 3)
+                Text("物理悬挂就绪")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(RubickTheme.muted(scheme))
+                Spacer()
+                let v = ProcessInfo.processInfo.operatingSystemVersion
+                Text("macOS \(v.majorVersion).\(v.minorVersion)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(RubickTheme.muted(scheme).opacity(0.7))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
         }
-        .frame(width: 180)
+        .frame(width: 206)
+        .background(Color(red: 0.039, green: 0.043, blue: 0.055))
+        .overlay(alignment: .trailing) {
+            Rectangle().fill(Color.white.opacity(0.06)).frame(width: 1)
+        }
     }
 
     // MARK: 内容区

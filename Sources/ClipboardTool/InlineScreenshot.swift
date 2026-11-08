@@ -642,7 +642,8 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         toolbarRowHeight?.constant = available < toolbarNaturalWidth ? 56 : 44
         toolbar.layoutSubtreeIfNeeded()
         let fit = toolbar.fittingSize
-        let x = min(max(s.maxX - fit.width, safe.minX), max(safe.minX, safe.maxX - fit.width))
+        // 稿：工具条吸附在选区正下方居中（left-1/2），越界时钳回屏内
+        let x = min(max(s.midX - fit.width / 2, safe.minX), max(safe.minX, safe.maxX - fit.width))
         var y = s.minY - fit.height - 10
         if y < safe.minY { y = s.maxY + 10 }
         y = min(max(y, safe.minY), max(safe.minY, safe.maxY - fit.height))

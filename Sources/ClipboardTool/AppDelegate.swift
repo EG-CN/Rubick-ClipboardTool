@@ -23,6 +23,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             runDebugEditorShot()
             return
         }
+        // 调试：启动即打开设置窗（对照 Stitch 稿做视觉自查用）
+        if CommandLine.arguments.contains("--open-settings") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                self.openSettings()
+            }
+        }
         // 调试：钉图裸图样式自拍 → /tmp/rubick-pin.png
         if CommandLine.arguments.contains("--debug-pin-shot") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
