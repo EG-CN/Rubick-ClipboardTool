@@ -258,24 +258,46 @@ enum StitchEngine {
     }
 
     /// 返回 next 相对 prev 的滚动行数。向下滚 s 行 ⟺ 内容上移，next 顶部锚 prev 下方：
-    /// 关系为 next[r] == prev[r + s]。0 = 无滚动（页面到底）；nil = 对齐失败。
-    /// 锚行取 40–70（避开吸顶导航条，否则 s=0 恒命中会被误判为"到底"）。
+    /// 关系为 next[r] == prev[r + s]。0 = 无滚动；nil = 对齐失败。
     static func scrollOffset(prev: Sampler, next: Sampler, maxSearch: Int = 600) -> Int? {
+        // 快速通道：全局采样差异 < 15% 视为未滚动（容忍光标闪烁等微动画，真实滚动差异 > 50%）
+        if frameDiffRatio(prev, next) < 0.15 { return 0 }
         let anchorRows = 30
         let anchorBase = 40
+        let rowTolerance = max(3, min(prev.bytesPerRow / 4 / 11 / 8, 12))
         for s in 0...maxSearch {
             guard anchorBase + s + anchorRows < next.height,
                   anchorBase + s + anchorRows < prev.height else { break }
             var matched = 0
             var r = anchorBase
             while r < anchorBase + anchorRows {
-                if next.rowEquals(r, in: prev, r + s) { matched += 1 }
+                if next.rowEquals(r, in: prev, r + s, tolerance: rowTolerance) { matched += 1 }
                 r += 3
             }
             // 10 个锚行里 ≥7 吻合即认为对齐（容忍滚动期间的小动画）
             if matched >= 7 { return s }
         }
         return nil
+    }
+
+    /// 全局采样差异比例（RG 通道、质数步进），用于"画面没变"快速判定
+    static func frameDiffRatio(_ a: Sampler, _ b: Sampler) -> Double {
+        let step = 97
+        var diff = 0, total = 0
+        var y = 0
+        let height = min(a.height, b.height)
+        let rowBytes = min(a.bytesPerRow, b.bytesPerRow)
+        while y + 2 < height {
+            let rowA = y * a.bytesPerRow, rowB = y * b.bytesPerRow
+            var x = 0
+            while x + 2 < rowBytes {
+                if a.data[rowA + x] != b.data[rowB + x] || a.data[rowA + x + 1] != b.data[rowB + x + 1] { diff += 1 }
+                total += 1
+                x += step * 4
+            }
+            y += step
+        }
+        return total == 0 ? 1 : Double(diff) / Double(total)
     }
 }
 
@@ -428,6 +450,7 @@ final class LongScreenshot {
         var frames: [(image: CGImage, sampler: StitchEngine.Sampler)] = []
         var offsets: [Int] = []
         var lastOffset: Int?
+        var alignFailures = 0
 
         var iteration = 0
         while frames.count < (mode == .auto ? 25 : 60) {

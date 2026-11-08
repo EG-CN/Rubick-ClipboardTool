@@ -117,6 +117,11 @@ final class CaptureController {
 
     func captureInteractive() {
         FileTrace.log("captureInteractive triggered (normal)")
+        if RecordingController.shared.isRecording {
+            FileTrace.log("blocked: 录屏进行中")
+            Toast.shared.showImportant("录屏进行中 · ⌘⌥R 停止后再截图")
+            return
+        }
         captureRequestID = UUID()
         if InlineScreenshotController.shared.isVisible {
             InlineScreenshotController.shared.close(restoreFocus: true)
@@ -129,6 +134,11 @@ final class CaptureController {
     /// 长截图：框选区域 → 滚动采集 → 行对齐拼接（⌘⇧L / 菜单「长截图」）
     func captureForLong() {
         FileTrace.log("captureForLong triggered")
+        if RecordingController.shared.isRecording {
+            FileTrace.log("blocked: 录屏进行中")
+            Toast.shared.showImportant("录屏进行中 · ⌘⌥R 停止后再长截图")
+            return
+        }
         pendingPurpose = .long
         beginCapture()
     }
