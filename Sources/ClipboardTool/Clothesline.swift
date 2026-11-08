@@ -272,7 +272,7 @@ final class ClotheslineController {
             setExpanded(true, view: entry.view, feedback: true)
         }
     }
-    private func presentAtMouse(reason: String) {
+    func presentAtMouse(reason: String) {
         FileTrace.log("presentAtMouse reason=\(reason)")
         if entries.isEmpty { refreshStyle() }
         guard ClipboardPresentation.current == .clothesline, !suspended else {
@@ -283,6 +283,14 @@ final class ClotheslineController {
         guard let entry, !entry.view.dragging, !entry.view.receivingFiles else { return }
         hidden = false
         setExpanded(true, view: entry.view, feedback: true)
+    }
+
+    /// 菜单「显示晾衣架」：强制切到随手夹形态并垂绳
+    func presentFromMenu() {
+        UserDefaults.standard.set("clothesline", forKey: "panel.form")
+        ClipboardPresentation.apply()
+        hidden = false
+        presentAtMouse(reason: "menu")
     }
     func hide() {
         hidden = true

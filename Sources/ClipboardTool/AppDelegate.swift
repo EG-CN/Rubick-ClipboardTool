@@ -334,38 +334,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem.button?.toolTip = "拉比克截图测试版 \(version) · \(build)"
         }
 
-        let panelItem = NSMenuItem(title: "打开剪贴板", action: #selector(togglePanel), keyEquivalent: "")
-        panelItem.target = self
-        menu.addItem(panelItem)
+        // 分组头（照效果图：小号分组标签）
+        func sectionHeader(_ title: String) {
+            menu.addItem(NSMenuItem.sectionHeader(title: title))
+        }
+        func item(_ title: String, symbol: String? = nil, key: String = "", mods: NSEvent.ModifierFlags = [], action: Selector) {
+            let it = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            if !key.isEmpty { it.keyEquivalentModifierMask = mods }
+            it.target = self
+            if let symbol, let img = NSImage(systemSymbolName: symbol, accessibilityDescription: title) {
+                it.image = img
+            }
+            menu.addItem(it)
+        }
 
-        let shotItem = NSMenuItem(title: "区域截图", action: #selector(captureScreenshot), keyEquivalent: "a")
-        shotItem.keyEquivalentModifierMask = [.command, .shift]
-        shotItem.target = self
-        menu.addItem(shotItem)
+        sectionHeader("捕捉")
+        item("区域截图", symbol: "camera", key: "a", mods: [.command, .shift], action: #selector(captureScreenshot))
+        item("划图取字", symbol: "text.viewfinder", key: "x", mods: [.command, .shift], action: #selector(startDragOCR))
+        item("延时截图", symbol: "timer", key: "g", mods: [.command, .option, .shift], action: #selector(captureDelayedAction))
+        item("长截图（实验）", symbol: "photo.on.rectangle.angled", key: "l", mods: [.command, .shift], action: #selector(captureLongShot))
+        item("录屏", symbol: "record.circle", key: "r", mods: [.command, .option], action: #selector(captureScreenRecord))
 
-        let longShotItem = NSMenuItem(title: "长截图（实验）", action: #selector(captureLongShot), keyEquivalent: "l")
-        longShotItem.keyEquivalentModifierMask = [.command, .shift]
-        longShotItem.target = self
-        menu.addItem(longShotItem)
+        menu.addItem(.separator())
+        sectionHeader("剪贴板")
+        item("打开剪贴板", symbol: "doc.on.clipboard", key: "z", mods: [.command, .shift], action: #selector(togglePanel))
+        item("钉剪贴板贴图", symbol: "pin", key: "p", mods: [.command, .shift], action: #selector(pinClipboardImage))
 
-        let longShotAutoItem = NSMenuItem(title: "长截图（自动滚动）", action: #selector(captureLongShotAuto), keyEquivalent: "")
-        longShotAutoItem.target = self
-        menu.addItem(longShotAutoItem)
+        menu.addItem(.separator())
+        sectionHeader("随手夹")
+        item("显示晾衣架", symbol: "paperclip", action: #selector(showClothesline))
 
-        let recordItem = NSMenuItem(title: "录屏", action: #selector(captureScreenRecord), keyEquivalent: "r")
-        recordItem.keyEquivalentModifierMask = [.command, .option]
-        recordItem.target = self
-        menu.addItem(recordItem)
-
-        let dragOCRItem = NSMenuItem(title: "划图取字", action: #selector(startDragOCR), keyEquivalent: "x")
-        dragOCRItem.keyEquivalentModifierMask = [.command, .shift]
-        dragOCRItem.target = self
-        menu.addItem(dragOCRItem)
-
-        let pinClipItem = NSMenuItem(title: "钉剪贴板贴图", action: #selector(pinClipboardImage), keyEquivalent: "p")
-        pinClipItem.keyEquivalentModifierMask = [.command, .shift]
-        pinClipItem.target = self
-        menu.addItem(pinClipItem)
+        menu.addItem(.separator())
+        sectionHeader("管理")
+        item("设置…", symbol: "gearshape", key: ",", mods: [.command], action: #selector(openSettings))
+        item("清空历史…", symbol: "trash", action: #selector(clearHistory))
+        item("退出拉比克", symbol: "power", key: "q", mods: [.command], action: #selector(quit))
 
         menu.addItem(.separator())
 
@@ -416,6 +419,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             CaptureController.shared.captureForRecord()
         }
+    }
+
+    @objc private func captureDelayedAction() {
+        panelController.close()
+        CaptureController.shared.captureDelayed()
+    }
+
+    @objc private func showClothesline() {
+        panelController.close()
+        UserDefaults.standard.set("clothesline", forKey: "panel.form")
+        ClipboardPresentation.apply()
+        ClotheslineController.shared.presentFromMenu()
     }
 
     @objc private func startDragOCR() {
