@@ -212,6 +212,20 @@ final class InlineScreenshotController {
     private var layoutProbePending = CommandLine.arguments.contains("--diagnose-screenshot-layout")
     var isVisible: Bool { windows.contains { $0.isVisible } }
 
+    /// 调试：合成测试画面 + 预置选区，让工具条直接呈现（--debug-toolbar-shot 渲染自查用）
+    func debugPresentToolbar() {
+        let image = AppDelegate.debugTestImage()
+        let union = CGRect(origin: .zero, size: image.size)
+        show(image: image, union: union, windows: [])
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let canvas = self?.canvases.first else { return }
+            canvas.document.setSelection(CGRect(x: 60, y: 60,
+                                                width: image.size.width - 120,
+                                                height: image.size.height - 160))
+            canvas.refresh()
+        }
+    }
+
     func show(image: NSImage, union: CGRect, windows windowRects: [CGRect]) {
         close(restoreFocus: false)
         previousApp = NSWorkspace.shared.frontmostApplication
@@ -234,6 +248,8 @@ final class InlineScreenshotController {
             // the mask/marks instead of resampling a full mixed-Retina desktop each time.
             let backdrop = NSView(frame: viewport.canvasFrame)
             backdrop.wantsLayer = true
+            // 手动 wantsLayer 的 layer 默认 1x 采样：2x 屏上整个冻结背景会被重采样发虚
+            backdrop.layer?.contentsScale = panel.backingScaleFactor
             backdrop.layer?.contents = image.cgImage()
             backdrop.layer?.contentsGravity = .resize
             root.addSubview(backdrop)
@@ -414,6 +430,15 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseMoved, .activeAlways, .inVisibleRect, .cursorUpdate], owner: self))
     }
     override func cursorUpdate(with event: NSEvent) { tool == .select ? NSCursor.arrow.set() : NSCursor.crosshair.set() }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // 工具条是手动 wantsLayer 的毛玻璃视图：layer 默认 1x 采样会把整个工具条（含图标）
+        // 在 2x 屏上重采样发虚——贴窗后立刻对齐 backing scale
+        guard let scale = window?.backingScaleFactor else { return }
+        toolbar.layer?.contentsScale = scale
+        for button in toolButtons { button.layer?.contentsScale = scale }
+        toolbar.needsDisplay = true
+    }
 
     private func setupToolbar() {
         // 照 Redesign 稿：#121318/92 深玻璃药丸 + 翡翠 ring + 顶部辉光
@@ -595,6 +620,7 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         badge.layer?.cornerRadius = 4
         badge.layer?.borderWidth = 1
         badge.layer?.borderColor = NSColor.white.withAlphaComponent(0.16).cgColor
+        badge.layer?.contentsScale = window?.backingScaleFactor ?? 2
         badge.translatesAutoresizingMaskIntoConstraints = false
         button.addSubview(badge)
         NSLayoutConstraint.activate([

@@ -23,6 +23,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             runDebugEditorShot()
             return
         }
+        // 调试：呈现捕获工具条并自截渲染结果到 /tmp/rubick-toolbar.png（清晰度/键帽自查）
+        if CommandLine.arguments.contains("--debug-toolbar-shot") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                InlineScreenshotController.shared.debugPresentToolbar()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                    Self.captureScreen(to: "/tmp/rubick-toolbar.png")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { NSApp.terminate(nil) }
+                }
+            }
+            return
+        }
         // 调试：启动即打开设置窗（对照 Stitch 稿做视觉自查用）
         if CommandLine.arguments.contains("--open-settings") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
