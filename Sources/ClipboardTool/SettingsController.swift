@@ -678,6 +678,268 @@ struct SettingsView: View {
 
     // MARK: 历史
 
+    // MARK: 随手夹 · 实时外观预览 + 悬挂画布交互（照 Stitch「偏好设置-外观」1:1）
+
+    /// 蓝图网格 + 环境辉光 + 麻绳与拍立得卡实时预览
+    private var clotheslineLivePreview: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12).fill(Color(red: 0.039, green: 0.043, blue: 0.055))
+            Canvas { ctx, size in
+                let step: CGFloat = 16
+                var y: CGFloat = 0
+                while y < size.height {
+                    ctx.stroke(Path { $0.move(to: .init(x: 0, y: y)); $0.addLine(to: .init(x: size.width, y: y)) },
+                               with: .color(.white.opacity(0.02)), lineWidth: 1)
+                    y += step
+                }
+                var x: CGFloat = 0
+                while x < size.width {
+                    ctx.stroke(Path { $0.move(to: .init(x: x, y: 0)); $0.addLine(to: .init(x: x, y: size.height)) },
+                               with: .color(.white.opacity(0.02)), lineWidth: 1)
+                    x += step
+                }
+            }
+            RadialGradient(colors: [RubickTheme.emerald.opacity(0.10), .clear],
+                           center: UnitPoint(x: 0.5, y: 0.35), startRadius: 10, endRadius: 280)
+            VStack(spacing: 8) {
+                HStack(spacing: 5) {
+                    Circle().fill(RubickTheme.emerald).frame(width: 5, height: 5)
+                    Text("实时外观预览 (LIVE PREVIEW)")
+                        .font(.system(size: 10.5, design: .monospaced))
+                        .kerning(0.8)
+                        .foregroundStyle(RubickTheme.muted(scheme))
+                    Spacer()
+                    Text("\(Int(ropeMaxWidth))% 宽度 · \(String(format: "%.1f", cardTilt))° 摇摆")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(RubickTheme.emerald.opacity(0.9))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 4).fill(RubickTheme.emerald.opacity(0.08)))
+                        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(RubickTheme.emerald.opacity(0.25), lineWidth: 0.8))
+                }
+                GeometryReader { geo in
+                    ZStack {
+                        // 悬链绳：暗主线 + 亮虚线（照稿 #8d6e46 / #d4a373）
+                        let w = geo.size.width, h = geo.size.height
+                        Path { p in
+                            p.move(to: CGPoint(x: w * 0.056, y: h * 0.34))
+                            p.addQuadCurve(to: CGPoint(x: w * 0.944, y: h * 0.34),
+                                           control: CGPoint(x: w * 0.5, y: h * 0.64))
+                        }
+                        .stroke(Color(red: 0.553, green: 0.431, blue: 0.275), style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
+                        Path { p in
+                            p.move(to: CGPoint(x: w * 0.056, y: h * 0.34))
+                            p.addQuadCurve(to: CGPoint(x: w * 0.944, y: h * 0.34),
+                                           control: CGPoint(x: w * 0.5, y: h * 0.64))
+                        }
+                        .stroke(Color(red: 0.831, green: 0.639, blue: 0.451).opacity(0.6),
+                                style: StrokeStyle(lineWidth: 1.1, dash: [3, 3]))
+                        // 两端木锚钉
+                        ForEach([w * 0.056, w * 0.944], id: \.self) { px in
+                            Circle().fill(Color(red: 0.55, green: 0.33, blue: 0.12).opacity(0.85))
+                                .frame(width: 9, height: 9)
+                                .overlay(Circle().strokeBorder(Color(red: 0.85, green: 0.64, blue: 0.25).opacity(0.6), lineWidth: 1))
+                                .shadow(color: .black.opacity(0.7), radius: 2, y: 1.5)
+                                .position(x: px, y: h * 0.34)
+                        }
+                        HStack(spacing: 24) {
+                            miniPolaroid(rotation: -cardTilt, clip: .chrome, caption: "Code.ts")
+                            miniPolaroid(rotation: cardTilt * 0.66, clip: .emerald, caption: "Preview #1", active: true)
+                            miniPolaroid(rotation: -cardTilt * 0.83, clip: .gold, caption: "Asset.png")
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+            }
+            .padding(13)
+        }
+        .frame(height: 156)
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: cardTilt)
+        .animation(.easeOut(duration: 0.2), value: ropeMaxWidth)
+    }
+
+    private enum PreviewClip { case chrome, emerald, gold }
+
+    /// 拍立得缩样：夹子 + 相纸 + 图注，倾角跟随「卡片倾斜幅度」
+    private func miniPolaroid(rotation: Double, clip: PreviewClip, caption: String, active: Bool = false) -> some View {
+        VStack(spacing: 0) {
+            Group {
+                switch clip {
+                case .chrome:
+                    LinearGradient(colors: [Color(white: 0.86), Color(white: 0.62)], startPoint: .top, endPoint: .bottom)
+                case .emerald:
+                    LinearGradient(colors: [RubickTheme.emerald.opacity(0.9), RubickTheme.emerald.opacity(0.5)], startPoint: .top, endPoint: .bottom)
+                case .gold:
+                    LinearGradient(colors: [Color(red: 0.96, green: 0.78, blue: 0.36), Color(red: 0.85, green: 0.60, blue: 0.16)], startPoint: .top, endPoint: .bottom)
+                }
+            }
+            .frame(width: 13, height: 15)
+            .clipShape(RoundedRectangle(cornerRadius: 2))
+            .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(Color.black.opacity(0.3), lineWidth: 0.8))
+            .overlay(Rectangle().fill(Color.black.opacity(0.55)).frame(width: 5, height: 1.6).offset(y: -4))
+            .shadow(color: .black.opacity(0.4), radius: 2, y: 1.5)
+            .zIndex(1)
+            .offset(y: 6)
+            VStack(spacing: 3) {
+                Group {
+                    if active {
+                        VStack(spacing: 3) {
+                            HStack {
+                                Circle().fill(RubickTheme.emerald).frame(width: 3.5, height: 3.5)
+                                Text("LIVE").font(.system(size: 5.5, design: .monospaced)).foregroundStyle(RubickTheme.emerald)
+                                Spacer()
+                            }
+                            RoundedRectangle(cornerRadius: 1).fill(RubickTheme.emerald.opacity(0.6)).frame(height: 4)
+                            RoundedRectangle(cornerRadius: 1).fill(Color.white.opacity(0.22)).frame(height: 2.5)
+                        }
+                    } else if caption == "Asset.png" {
+                        Image(systemName: "photo").font(.system(size: 12)).foregroundStyle(.white.opacity(0.35))
+                    } else {
+                        VStack(alignment: .leading, spacing: 3) {
+                            RoundedRectangle(cornerRadius: 1).fill(RubickTheme.emerald.opacity(0.4)).frame(height: 4)
+                            RoundedRectangle(cornerRadius: 1).fill(Color.white.opacity(0.16)).frame(width: 30, height: 2.5)
+                            RoundedRectangle(cornerRadius: 1).fill(Color.white.opacity(0.12)).frame(width: 20, height: 2.5)
+                        }
+                    }
+                }
+                .frame(width: active ? 58 : 48, height: active ? 42 : 36)
+                .background(RoundedRectangle(cornerRadius: 2).fill(Color(red: 0.067, green: 0.075, blue: 0.094)))
+                .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(Color.black.opacity(0.1), lineWidth: 0.6))
+                Text(caption)
+                    .font(.system(size: 7, design: .monospaced))
+                    .foregroundStyle(Color.black.opacity(0.6))
+                    .lineLimit(1)
+            }
+            .padding(5)
+            .background(RoundedRectangle(cornerRadius: 3).fill(Color(red: 0.957, green: 0.945, blue: 0.918)))
+            .shadow(color: .black.opacity(0.55), radius: active ? 10 : 7, y: 5)
+            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(active ? RubickTheme.emerald.opacity(0.35) : .clear, lineWidth: 1))
+        }
+        .rotationEffect(.degrees(rotation))
+    }
+
+    /// 分组行：左（标题+mono 徽章+说明）右（控件）
+    private func canvasRow<Control: View>(badge: String, title: String, desc: String,
+                                          @ViewBuilder control: () -> Control) -> some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(title).font(.system(size: 13, weight: .medium))
+                    Text(badge)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(RubickTheme.muted(scheme))
+                        .padding(.horizontal, 5).padding(.vertical, 1.5)
+                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.05)))
+                }
+                Text(desc).font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
+                    .frame(maxWidth: 350, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            control()
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+
+    private func valueChip(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .foregroundStyle(RubickTheme.emerald)
+            .frame(width: 52)
+            .padding(.vertical, 3)
+            .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.35)))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(0.08), lineWidth: 0.8))
+    }
+
+    private var canvasSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            clotheslineLivePreview
+            Text("悬挂画布交互 (CANVAS DYNAMICS)")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .kerning(1.1)
+                .foregroundStyle(RubickTheme.muted(scheme))
+                .padding(.horizontal, 2)
+            VStack(spacing: 0) {
+                canvasRow(badge: "Haptic", title: "触觉反馈",
+                          desc: "拖拽卡片卡入吊绳夹具或释放吸附时，通过触控板触发精准震动反馈。") {
+                    Toggle("", isOn: $hapticsEnabled).labelsHidden().toggleStyle(toggleStyle).tint(RubickTheme.emerald)
+                }
+                Divider().opacity(0.5)
+                canvasRow(badge: "Auto Retract", title: "取空自动收绳",
+                          desc: "当最后一张截图卡片被移出或粘贴消费完毕后，自动收起麻绳并隐藏悬浮条。") {
+                    Toggle("", isOn: $autoRetract).labelsHidden().toggleStyle(toggleStyle).tint(RubickTheme.emerald)
+                        .onChange(of: autoRetract) { v in
+                            UserDefaults.standard.set(v, forKey: "clothesline.autoRetract")
+                        }
+                }
+                Divider().opacity(0.5)
+                canvasRow(badge: "Global Hotkey", title: "呼出快捷键",
+                          desc: "随时唤醒屏幕悬挂板以便拖放新剪贴内容或快速回溯。") {
+                    Button {
+                        pane = .hotkeys
+                    } label: {
+                        HStack(spacing: 4) {
+                            ForEach(Array(HotkeyManager.shared.panelShortcutDisplay), id: \.self) { ch in
+                                Text(String(ch))
+                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(Color.white.opacity(0.85))
+                                    .padding(.horizontal, 6).padding(.vertical, 3)
+                                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.06)))
+                                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
+                            }
+                            Image(systemName: "pencil")
+                                .font(.system(size: 11))
+                                .foregroundStyle(RubickTheme.muted(scheme))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                Divider().opacity(0.5)
+                canvasRow(badge: "Max Span", title: "绳子最大宽度",
+                          desc: "悬挂绳横向跨度占当前屏幕分辨率宽度的百分比。") {
+                    HStack(spacing: 10) {
+                        Slider(value: $ropeMaxWidth, in: 30...95, step: 5)
+                            .frame(width: 150).tint(RubickTheme.emerald)
+                            .onChange(of: ropeMaxWidth) { v in
+                                UserDefaults.standard.set(v, forKey: "clothesline.maxWidth")
+                            }
+                        valueChip("\(Int(ropeMaxWidth))%")
+                    }
+                }
+                Divider().opacity(0.5)
+                canvasRow(badge: "Tilt Randomness", title: "卡片倾斜幅度",
+                          desc: "拍立得相纸自然摆动的不规则倾角范围。") {
+                    HStack(spacing: 10) {
+                        Slider(value: $cardTilt, in: 0...10, step: 1)
+                            .frame(width: 150).tint(RubickTheme.emerald)
+                            .onChange(of: cardTilt) { v in
+                                UserDefaults.standard.set(v, forKey: "clothesline.tilt")
+                            }
+                        valueChip("±\(Int(cardTilt))°")
+                    }
+                }
+            }
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.03)))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.white.opacity(0.07), lineWidth: 1))
+            // 底部同步脚注
+            HStack(spacing: 5) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(RubickTheme.emerald)
+                Text("外观改动已即时同步至 macOS 系统常驻托盘")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(RubickTheme.muted(scheme))
+                Spacer()
+                Text("帮助文档 ↗")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(RubickTheme.muted(scheme))
+            }
+            .padding(.top, 2)
+        }
+    }
+
     private var historyPane: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -708,40 +970,12 @@ struct SettingsView: View {
                     }
                 }
 
+                // 随手夹区块（照 Stitch「偏好设置-外观」1:1：实时预览 + 悬挂画布交互分组）
+                canvasSection
                 settingCard {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Toggle("取空自动收绳", isOn: $autoRetract)
-                            .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
-                            .onChange(of: autoRetract) { v in
-                                UserDefaults.standard.set(v, forKey: "clothesline.autoRetract")
-                            }
-                        HStack {
-                            Text("绳子最大宽度").font(.system(size: 13))
-                            Spacer()
-                            Slider(value: $ropeMaxWidth, in: 30...95, step: 5)
-                                .frame(width: 180).tint(RubickTheme.emerald)
-                                .onChange(of: ropeMaxWidth) { v in
-                                    UserDefaults.standard.set(v, forKey: "clothesline.maxWidth")
-                                }
-                            Text("\(Int(ropeMaxWidth))%")
-                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                                .foregroundStyle(RubickTheme.emerald)
-                                .frame(width: 40, alignment: .trailing)
-                        }
-                        HStack {
-                            Text("卡片倾斜幅度").font(.system(size: 13))
-                            Spacer()
-                            Slider(value: $cardTilt, in: 0...8, step: 1)
-                                .frame(width: 180).tint(RubickTheme.emerald)
-                                .onChange(of: cardTilt) { v in
-                                    UserDefaults.standard.set(v, forKey: "clothesline.tilt")
-                                }
-                            Text("±\(Int(cardTilt))°")
-                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                                .foregroundStyle(RubickTheme.emerald)
-                                .frame(width: 40, alignment: .trailing)
-                        }
-                        Text("随手夹：拖文件到刘海触发，平时不留任何入口。复制/截图不会自动触发。")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("触发策略").font(.system(size: 13, weight: .medium))
+                        Text("随手夹：拖文件到刘海触发，平时不留任何入口。复制/截图不会自动触发，\(HotkeyManager.shared.panelShortcutDisplay) 随时调出。")
                             .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                     }
                 }
