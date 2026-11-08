@@ -25,19 +25,12 @@ struct InlineMagnifier: Equatable {
             InlineScreenshotRenderer.drawMarks(overlays, image: image, selection: selection)
         }
         NSGraphicsContext.restoreGraphicsState()
-        // 边框样式（用户可选，默认无边框）：0 无边框（中性细边，非彩色）·1 白 ·2 黑 ·3 跟随标注色
-        switch UserDefaults.standard.object(forKey: "magnifier.ring") as? Int ?? 0 {
-        case 1:
-            NSColor.white.setStroke()
-            let border = NSBezierPath(ovalIn: rect.insetBy(dx: 1.5, dy: 1.5)); border.lineWidth = 2.5; border.stroke()
-        case 2:
-            NSColor.black.setStroke()
-            let border = NSBezierPath(ovalIn: rect.insetBy(dx: 1.5, dy: 1.5)); border.lineWidth = 2.5; border.stroke()
-        case 3:
+        // 边框开关（用户可选，默认无边框）；开=跟随标注色板（与其他工具选色同源）
+        if UserDefaults.standard.object(forKey: "magnifier.ringOn") as? Bool ?? false {
             AnnotationController.palette[color].setStroke()
             let border = NSBezierPath(ovalIn: rect.insetBy(dx: 1.5, dy: 1.5)); border.lineWidth = 3; border.stroke()
-        default:
-            // 无彩色边框：中性深+白双细线，浅色/深色背景都能读出边缘
+        } else {
+            // 无边框：中性深+白双细线，浅色/深色背景都能读出边缘
             NSColor.black.withAlphaComponent(0.3).setStroke()
             let outer = NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1)); outer.lineWidth = 1.5; outer.stroke()
             NSColor.white.withAlphaComponent(0.55).setStroke()

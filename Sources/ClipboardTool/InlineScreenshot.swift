@@ -392,8 +392,9 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
     private let colorRow = NSStackView()
     private var colorButtons: [NSButton] = []
     private let fontSizes = NSPopUpButton()
-    private let widths = NSPopUpButton()
-    private let ringPopup = NSPopUpButton()
+    private let ringSegment = NSSegmentedControl(labels: ["无边框", "有边框"], trackingMode: .selectOne, target: nil, action: nil)
+    private let widthDots = NSStackView()
+    private var widthDotButtons: [NSButton] = []
     private let toolLabel = NSTextField(labelWithString: "")
     private var undoButton = NSButton()
     private var redoButton = NSButton()
@@ -505,17 +506,31 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         fontSizes.target = self; fontSizes.action = #selector(changeFontSize(_:))
         fontSizes.toolTip = "文字大小"
         parameterRow.addArrangedSubview(fontSizes)
-        widths.addItems(withTitles: ["细", "中", "粗"])
-        widths.selectItem(at: 1)
-        widths.target = self; widths.action = #selector(changeWidth(_:))
-        widths.toolTip = "线条粗细"
-        parameterRow.addArrangedSubview(widths)
-        // 放大镜边框样式（用户可选：无边框/白/黑/跟随标注色）
-        ringPopup.addItems(withTitles: ["无边框", "白色", "黑色", "跟随颜色"])
-        ringPopup.selectItem(at: UserDefaults.standard.object(forKey: "magnifier.ring") as? Int ?? 0)
-        ringPopup.target = self; ringPopup.action = #selector(changeRingStyle(_:))
-        ringPopup.toolTip = "放大镜边框"
-        parameterRow.addArrangedSubview(ringPopup)
+        // 线宽三点直选（Redesign 稿 ●◐○，替代下拉，交互与色点一致）
+        widthDots.orientation = .horizontal; widthDots.spacing = 2; widthDots.alignment = .centerY
+        let dotSizes: [CGFloat] = [6, 10, 14]
+        for i in 0..<3 {
+            let b = NSButton(title: "", target: self, action: #selector(changeWidthDot(_:)))
+            b.tag = i; b.isBordered = false; b.wantsLayer = true
+            b.layer?.cornerRadius = 11
+            b.image = NSImage(size: NSSize(width: 22, height: 22), flipped: false) { _ in
+                let d = dotSizes[i]
+                NSColor.white.withAlphaComponent(0.88).setFill()
+                NSBezierPath(ovalIn: NSRect(x: (22 - d) / 2, y: (22 - d) / 2, width: d, height: d)).fill()
+                return true
+            }
+            b.widthAnchor.constraint(equalToConstant: 24).isActive = true
+            b.heightAnchor.constraint(equalToConstant: 24).isActive = true
+            b.toolTip = ["细", "中", "粗"][i]
+            widthDotButtons.append(b)
+            widthDots.addArrangedSubview(b)
+        }
+        parameterRow.addArrangedSubview(widthDots)
+        // 放大镜边框开关（颜色走下方色点，与其他工具一致）
+        ringSegment.target = self; ringSegment.action = #selector(changeRingSegment(_:))
+        ringSegment.selectedSegment = (UserDefaults.standard.object(forKey: "magnifier.ringOn") as? Bool ?? false) ? 1 : 0
+        ringSegment.toolTip = "放大镜边框；颜色跟随当前色板"
+        parameterRow.addArrangedSubview(ringSegment)
         toolbarNaturalWidth = main.fittingSize.width
         main.frame = CGRect(x: 0, y: 0, width: toolbarNaturalWidth, height: 36)
         toolbarScroll.documentView = main
@@ -660,16 +675,22 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
             contextTool = note.number == nil ? .text : .note
         }
         let textTool = contextTool == .text || contextTool == .note || contextTool == .step
-        // 放大镜工具时参数行只显示边框选择器
+        // 放大镜工具时参数行 = 色点（边框颜色）+ 边框开关
         parameterRow.isHidden = contextTool == .select
-        ringPopup.isHidden = contextTool != .magnifier
+        ringSegment.isHidden = contextTool != .magnifier
+        ringSegment.selectedSegment = (UserDefaults.standard.object(forKey: "magnifier.ringOn") as? Bool ?? false) ? 1 : 0
         toolLabel.isHidden = contextTool == .magnifier
         toolLabel.stringValue = contextTool.title
         fontSizes.isHidden = !textTool || contextTool == .magnifier
-        widths.isHidden = textTool || contextTool == .mosaic || contextTool == .magnifier
-        colorRow.isHidden = contextTool == .mosaic || contextTool == .magnifier
+        widthDots.isHidden = textTool || contextTool == .mosaic || contextTool == .magnifier
+        colorRow.isHidden = contextTool == .mosaic
         if let index = [CGFloat(14), 18, 24, 32].firstIndex(of: noteFontSize) { fontSizes.selectItem(at: index) }
-        if let index = [CGFloat(2), 4, 8].firstIndex(of: lineWidth) { widths.selectItem(at: index) }
+        for b in widthDotButtons {
+            let sel = [CGFloat(2), 4, 8][b.tag] == lineWidth
+            b.layer?.backgroundColor = sel ? NSColor(srgbRed: 0.063, green: 0.725, blue: 0.506, alpha: 0.16).cgColor : NSColor.clear.cgColor
+            b.layer?.borderWidth = sel ? 1 : 0
+            b.layer?.borderColor = NSColor(srgbRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.4).cgColor
+        }
         for button in colorButtons {
             button.layer?.borderWidth = button.tag == colorIndex ? 1.5 : 0
             button.layer?.borderColor = emerald.cgColor
@@ -681,9 +702,9 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         commitEditing(); tool = Tool(rawValue: sender.tag) ?? .select; selectedID = nil; refresh()
     }
     @objc private func changeColor(_ sender: NSButton) { onWillInteract?(); colorIndex = sender.tag; updateSelectedNoteStyle() }
-    @objc private func changeRingStyle(_ sender: NSPopUpButton) {
+    @objc private func changeRingSegment(_ sender: NSSegmentedControl) {
         onWillInteract?()
-        UserDefaults.standard.set(sender.indexOfSelectedItem, forKey: "magnifier.ring")
+        UserDefaults.standard.set(sender.selectedSegment == 1, forKey: "magnifier.ringOn")
         refresh()
     }
     @objc private func changeFontSize(_ sender: NSPopUpButton) { onWillInteract?(); noteFontSize=[CGFloat(14),18,24,32][sender.indexOfSelectedItem];updateSelectedNoteStyle() }
@@ -699,7 +720,7 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         } else { document.checkpoint(before) }
         refresh()
     }
-    @objc private func changeWidth(_ sender: NSPopUpButton) { onWillInteract?(); lineWidth = [CGFloat(2), 4, 8][sender.indexOfSelectedItem]; refresh() }
+    @objc private func changeWidthDot(_ sender: NSButton) { onWillInteract?(); lineWidth = [CGFloat(2), 4, 8][sender.tag]; refresh() }
     @objc private func undoAction() { onWillInteract?(); commitEditing(); document.undo(); selectedID = nil; refresh() }
     @objc private func redoAction() { onWillInteract?(); commitEditing(); document.redo(); selectedID = nil; refresh() }
     @objc private func reselect() {
@@ -757,7 +778,7 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         y = min(max(y, safe.minY), max(safe.minY, safe.maxY - fit.height))
         toolbar.setFrameOrigin(CGPoint(x: x, y: y)); toolbar.setFrameSize(fit)
         message = (tool == .note || tool == .text) ? "Enter换行 · 点击空白完成 · 点击文字继续编辑" : "Enter 完成 · Esc 逐层返回"
-        if tool == .magnifier { message = "点击放置放大镜 · 点住拖动可移动 · 滚轮缩放 · ⌫ 删除 · 边框样式见下方选择器" }
+        if tool == .magnifier { message = "点击放置放大镜 · 点住拖动可移动 · 滚轮缩放 · ⌫ 删除 · 边框颜色用下方色点" }
     }
     private func normalized(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x / bounds.width, y: 1 - p.y / bounds.height) }
     private func clamped(_ p: CGPoint, to rect: CGRect) -> CGPoint {
