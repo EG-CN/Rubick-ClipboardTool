@@ -246,8 +246,8 @@ final class V2FeatureTests: XCTestCase {
     func testDragTranslateHotkeyDefault() {
         let hk = HotkeyManager.shared
         XCTAssertEqual(hk.hotkeys[.dragTranslate]?.display, "⌘⇧D")
-        // v5 起 8 个全局动作：+ 延时截图（倒计时框选）
-        XCTAssertEqual(HotkeyManager.Action.allCases.count, 8)
+        // v6 起 9 个全局动作：+ 录屏（⌘⌥R，GIF/MP4 双格式）
+        XCTAssertEqual(HotkeyManager.Action.allCases.count, 9)
         XCTAssertEqual(hk.hotkeys[.longScreenshot]?.display, "⌘⇧L")
         XCTAssertEqual(hk.hotkeys[.pinClipboard]?.display, "⌘⇧P")
         XCTAssertEqual(hk.hotkeys[.dragOCR]?.display, "⌘⇧X")

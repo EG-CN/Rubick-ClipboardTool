@@ -215,45 +215,6 @@ enum StitchEngine {
         let width: Int
         let height: Int
         let bytesPerRow: Int
-        /// 每行亮度剖面（减均值除标准差归一化）：深色/浅色主题通吃，
-        /// 亚像素渲染下逐像素匹配会失败，剖面相关不受影响
-        private(set) var rowProfile: [Double] = []
-        private(set) var rowProfileStd: Double = 0
-        /// 每行对比度（采样亮度的 max-min）：区分"有内容的行"和"纯色行"
-        private(set) var rowContrast: [Double] = []
-
-        mutating func buildProfile() {
-            guard rowProfile.isEmpty else { return }
-            var raw = [Double](repeating: 0, count: height)
-            let step = max(4, width / 400) * 4
-            for y in 0..<height {
-                let off = y * bytesPerRow
-                var sum = 0, n = 0, x = 0
-                while x + 2 < bytesPerRow { sum += Int(data[off + x]) + Int(data[off + x + 1]); n += 1; x += step }
-                raw[y] = n == 0 ? 0 : Double(sum) / Double(n * 2)
-            }
-            let mean = raw.reduce(0, +) / Double(max(raw.count, 1))
-            var sq = 0.0
-            for v in raw { sq += (v - mean) * (v - mean) }
-            let std = (sq / Double(max(raw.count, 1))).squareRoot()
-            rowProfileStd = std
-            // 归一化：纯色页 std≈0 → 剖面接近 0（配合 std 门槛判"无内容"）
-            rowProfile = raw.map { ($0 - mean) / (std + 0.0001) }
-            // 行对比度：该行采样亮度的极差
-            var contrast = [Double](repeating: 0, count: height)
-            for y in 0..<height {
-                let off = y * bytesPerRow
-                var lo = 255.0, hi = 0.0, x = 0
-                while x + 2 < bytesPerRow {
-                    let v = Double(data[off + x])
-                    if v < lo { lo = v }
-                    if v > hi { hi = v }
-                    x += step
-                }
-                contrast[y] = hi - lo
-            }
-            rowContrast = contrast
-        }
 
     init?(image: CGImage) {
         let w = image.width, h = image.height
@@ -297,55 +258,24 @@ enum StitchEngine {
     }
 
     /// 返回 next 相对 prev 的滚动行数。向下滚 s 行 ⟺ 内容上移，next 顶部锚 prev 下方：
-    /// 关系为 next[r] == prev[r + s]。0 = 无滚动；nil = 对齐失败。
+    /// 关系为 next[r] == prev[r + s]。只搜正向（方向锁：长截图不存在反向拼接，
+    /// 且正向限定可避免周期性内容在同余位移上的假对齐）。0 = 无滚动；nil = 对齐失败。
     static func scrollOffset(prev: Sampler, next: Sampler, maxSearch: Int = 600, stickyHeight: Int = 0) -> Int? {
-        var p = prev, n = next
-        p.buildProfile(); n.buildProfile()
         let anchorRows = 30
-        let anchorTop = max(40, stickyHeight + 8)
-        // 纯色/近纯色画面：无内容可追踪
-        guard p.rowProfileStd > 0.5, n.rowProfileStd > 0.5 else { return 0 }
-        // 锚带：对比度最高的 30 行（预留向下搜索余量），避开吸顶区
-        let bandCeiling = max(anchorTop, min(p.rowContrast.count, n.rowContrast.count) - maxSearch - anchorRows - 8)
-        var bandBase = anchorTop
-        var bandContrast = 0.0
-        var y = anchorTop
-        while y + anchorRows + 40 < bandCeiling {
-            var sum = 0.0
-            var r = y
-            while r < y + anchorRows { sum += p.rowContrast[r]; r += 3 }
-            let avg = sum / Double(anchorRows / 3)
-            if avg > bandContrast { bandContrast = avg; bandBase = y }
-            y += 9
-        }
-        guard bandContrast > 8 else { return 0 }
-        // 剖面相关：归一化行亮度剖面双向全量扫描 + 显著性检验。
-        // 亚像素渲染只微扰剖面，逐像素匹配在深色 UI 稀疏内容上会被背景稀释而误判。
-        func scan(_ shift: Int) -> Double? {
-            let lo = max(bandBase, -shift)
-            let hi = min(bandBase + anchorRows, min(n.rowProfile.count, p.rowProfile.count - shift))
-            guard hi - lo >= anchorRows / 2 else { return nil }
-            var err = 0.0
-            for y in lo..<hi { err += abs(n.rowProfile[y] - p.rowProfile[y + shift]) }
-            return err / Double(hi - lo)
-        }
-        var best: (offset: Int, err: Double)?
-        var total = 0.0, count = 0
-        for s in (-maxSearch)...maxSearch where s != 0 {
-            if let e = scan(s) {
-                total += e; count += 1
-                if best == nil || e < best!.err { best = (s, e) }
+        let anchorBase = max(40, stickyHeight + 8)
+        for s in 0...maxSearch {
+            guard anchorBase + s + anchorRows < next.height,
+                  anchorBase + s + anchorRows < prev.height else { break }
+            var matched = 0
+            var r = anchorBase
+            while r < anchorBase + anchorRows {
+                if next.rowEquals(r, in: prev, r + s) { matched += 1 }
+                r += 3
             }
+            // 10 个锚行里 ≥7 吻合即认为对齐（容忍滚动期间的小动画）
+            if matched >= 7 { return s }
         }
-        // 显著性：真实对齐的剖面误差显著低于随机对齐（单位方差下随机≈1.1）
-        guard count > 0, let best, best.err < (total / Double(count)) * 0.6, best.err < 0.9 else { return nil }
-        return best.offset
-    }
-
-    private static func variance(_ v: [Double]) -> Double {
-        guard !v.isEmpty else { return 0 }
-        let mean = v.reduce(0, +) / Double(v.count)
-        return v.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(v.count)
+        return nil
     }
 
 }
@@ -360,6 +290,12 @@ final class LongScreenshot {
     private var clampedToSingleScreen = false
     private var escMonitor: Any?
     private var scrollMonitor: Any?
+    private var tapPort: CFMachPort?
+    private var tapSource: CFRunLoopSource?
+    /// 滚轮回调（静态持有供 C 回调取用；同时只会有一场长截图）
+    private static var activeScrollHandler: ((_ deltaY: Double, _ continuous: Bool) -> Void)?
+    private static var activeTapPort: CFMachPort?
+    private static var scrollEventCount = 0
     private let maxFramesManual = 60
     private let maxFramesAuto = 25
     private var stickyHeight = 0
@@ -421,21 +357,8 @@ final class LongScreenshot {
             }
             if event.keyCode == 53 { FileTrace.log("keydown: Esc → 取消"); self.cancelled = true }
         }
-        // 手动模式：监听滚轮事件的精确像素增量——滚动偏移直接度量，零图像匹配
-        if mode == .manual {
-            scrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
-                guard let self, self.mode == .manual, !self.cancelled, !self.finishNow else { return }
-                let loc = NSEvent.mouseLocation
-                guard rect.insetBy(dx: -40, dy: -40).contains(loc) else { return }
-                let delta: Int
-                if event.hasPreciseScrollingDeltas {
-                    delta = Int(-event.scrollingDeltaY * self.captureScale)
-                } else {
-                    delta = Int(-event.scrollingDeltaY * 16)
-                }
-                self.manualScrollPx = max(0, self.manualScrollPx + delta)
-            }
-        }
+        // 手动模式：滚轮事件精确像素增量——滚动偏移直接度量，零图像匹配
+        if mode == .manual { installScrollCapture(rect: rect) }
 
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
@@ -444,7 +367,7 @@ final class LongScreenshot {
                 guard let self else { return }
                 self.running = false
                 LongShotHUD.shared.hide()
-                if let m = self.scrollMonitor { NSEvent.removeMonitor(m); self.scrollMonitor = nil }
+                self.removeScrollCapture()
                 ClotheslineController.shared.resumeAfterCapture()
                 if let m = self.escMonitor { NSEvent.removeMonitor(m); self.escMonitor = nil }
                 switch result {
@@ -460,6 +383,66 @@ final class LongScreenshot {
                 }
             }
         }
+    }
+
+    // MARK: - 滚轮捕获：CGEventTap（listen-only）为主，NSEvent 全局监听为备
+    // NSEvent 全局监听在本机收不到滚轮事件（Esc 等 keyDown 正常），Mos/BTT 等滚轮工具均走 EventTap。
+    private static let scrollTapCallback: CGEventTapCallBack = { _, type, event, _ in
+        switch type {
+        case .scrollWheel:
+            if let h = activeScrollHandler {
+                h(event.getDoubleValueField(.scrollWheelEventDeltaAxis1),
+                  event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0)
+            }
+        case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            if let port = activeTapPort { CGEvent.tapEnable(tap: port, enable: true) }
+        default:
+            break
+        }
+        return Unmanaged.passUnretained(event)
+    }
+
+    private func installScrollCapture(rect: CGRect) {
+        Self.scrollEventCount = 0
+        Self.activeScrollHandler = { [weak self] deltaY, continuous in
+            guard let self, self.mode == .manual, !self.cancelled, !self.finishNow else { return }
+            let loc = NSEvent.mouseLocation
+            let inside = rect.insetBy(dx: -40, dy: -40).contains(loc)
+            Self.scrollEventCount += 1
+            if Self.scrollEventCount <= 6 || Self.scrollEventCount % 40 == 0 {
+                FileTrace.log("scroll#\(Self.scrollEventCount) dy=\(deltaY) cont=\(continuous) inside=\(inside) loc=(\(Int(loc.x)),\(Int(loc.y)))")
+            }
+            guard inside else { return }
+            let delta = continuous ? Int(-deltaY * self.captureScale) : Int(-deltaY * 16)
+            guard delta != 0 else { return }
+            self.manualScrollPx = max(0, self.manualScrollPx + delta)
+        }
+        if let port = CGEvent.tapCreate(tap: .cghidEventTap, place: .headInsertEventTap,
+                                        options: .listenOnly,
+                                        eventsOfInterest: CGEventMask(1 << CGEventType.scrollWheel.rawValue),
+                                        callback: Self.scrollTapCallback, userInfo: nil) {
+            tapPort = port
+            Self.activeTapPort = port
+            if let src = CFMachPortCreateRunLoopSource(nil, port, 0) {
+                tapSource = src
+                CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
+            }
+            CGEvent.tapEnable(tap: port, enable: true)
+            FileTrace.log("滚轮监听：CGEventTap 已装")
+        } else {
+            FileTrace.log("滚轮监听：CGEventTap 创建失败，退回 NSEvent 全局监听")
+            scrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                Self.activeScrollHandler?(event.scrollingDeltaY, event.hasPreciseScrollingDeltas)
+            }
+        }
+    }
+
+    private func removeScrollCapture() {
+        Self.activeScrollHandler = nil
+        Self.activeTapPort = nil
+        if let src = tapSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes); tapSource = nil }
+        if let port = tapPort { CGEvent.tapEnable(tap: port, enable: false); CFMachPortInvalidate(port); tapPort = nil }
+        if let m = scrollMonitor { NSEvent.removeMonitor(m); scrollMonitor = nil }
     }
 
     private enum Outcome { case success(NSImage); case failure(String); case cancelled }
@@ -493,9 +476,26 @@ final class LongScreenshot {
         let regionPxH = Int((rect.height * captureScale).rounded())
 
         var iteration = 0
+        var lastSeenPx = -1
+        var idleLogs = 0
         while frames.count < cap {
             iteration += 1
             if cancelled { FileTrace.log("run: 取消"); return .cancelled }
+
+            // ── 手动模式：位置没推进就不采集（省 GPU；首帧必采）──
+            if mode == .manual, !frames.isEmpty {
+                let posNow = min(max(manualScrollPx, 0), 20000)
+                if posNow <= captureAnchor + 8 {
+                    if finishNow { break }
+                    idleLogs += 1
+                    if idleLogs % 5 == 1 {
+                        FileTrace.log("iter \(iteration): 等待滚动 pos=\(posNow) anchor=\(captureAnchor)")
+                    }
+                    try? await Task.sleep(nanoseconds: posNow == lastSeenPx ? 400_000_000 : 100_000_000)
+                    lastSeenPx = posNow
+                    continue
+                }
+            }
 
             // ── 采集一帧 ──
             var full = CGDisplayCreateImage(displayID)
@@ -504,21 +504,14 @@ final class LongScreenshot {
             }
             guard let full,
                   let cropped = cropToRect(full, rect: rect, screen: screen),
-                  var sampler = StitchEngine.Sampler(image: cropped) else {
+                  let sampler = StitchEngine.Sampler(image: cropped) else {
                 FileTrace.log("iter \(iteration): 采集失败")
                 return .failure("截屏失败（第 \(iteration) 轮）")
             }
-            sampler.buildProfile()
 
             var pos: Int
             if mode == .manual {
                 pos = min(max(manualScrollPx, 0), 20000)
-                // 滚动位置没推进：不追加帧
-                if !frames.isEmpty, pos <= captureAnchor + 8 {
-                    if finishNow { break }
-                    try? await Task.sleep(nanoseconds: 450_000_000)
-                    continue
-                }
             } else {
                 pos = frames.isEmpty ? 0 : (positions.last ?? 0) + (lastOffset ?? 0)
             }
@@ -553,6 +546,7 @@ final class LongScreenshot {
                 }
             }
 
+            let advanced = pos - captureAnchor
             frames.append((cropped, sampler))
             positions.append(pos)
             captureAnchor = pos   // 关键：记录已采集位置，否则没滚动也会重复采集
@@ -582,7 +576,9 @@ final class LongScreenshot {
                 }
                 lastOffset = nil   // 注入后由匹配器重新度量
             }
-            try? await Task.sleep(nanoseconds: 450_000_000)
+            // 快速滚动（重叠余量不足）时缩短节拍，避免拼接出空洞
+            let fast = mode == .manual && advanced > regionPxH * 3 / 5
+            try? await Task.sleep(nanoseconds: fast ? 30_000_000 : 450_000_000)
         }
 
         if cancelled { return .cancelled }
@@ -634,7 +630,9 @@ final class LongScreenshot {
         ctx.interpolationQuality = .low
         for (i, f) in frames.enumerated() {
             let skip = i == 0 ? 0 : stickyHeight
-            let y = (Double(positions[i] + skip)) * scale
+            // 底上坐标：内容顶距画布顶 = pos + skip → 底边 y = totalH - pos - skip - frameH（与正片拼接同向）
+            let contentTop = totalH - Double(positions[i] + skip)
+            let y = (contentTop - frameH) * scale
             ctx.draw(f.image, in: CGRect(x: 0, y: y, width: Double(width), height: frameH * scale))
         }
         return ctx.makeImage()

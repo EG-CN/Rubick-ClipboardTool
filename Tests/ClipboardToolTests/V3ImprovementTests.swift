@@ -93,7 +93,7 @@ final class V3ImprovementTests: XCTestCase {
     // MARK: 新全局快捷键位
 
     func testGlobalHotkeyActionsCount() {
-        XCTAssertEqual(HotkeyManager.Action.allCases.count, 8, "原有 7 个 + 延时截图")
+        XCTAssertEqual(HotkeyManager.Action.allCases.count, 9, "原有 7 个 + 延时截图 + 录屏")
     }
 
     func testNewActionLabels() {
