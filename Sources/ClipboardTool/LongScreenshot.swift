@@ -274,11 +274,11 @@ enum StitchEngine {
 
     /// 返回 next 相对 prev 的滚动行数。向下滚 s 行 ⟺ 内容上移，next 顶部锚 prev 下方：
     /// 关系为 next[r] == prev[r + s]。0 = 无滚动；nil = 对齐失败。
-    static func scrollOffset(prev: Sampler, next: Sampler, maxSearch: Int = 600) -> Int? {
+    static func scrollOffset(prev: Sampler, next: Sampler, maxSearch: Int = 600, stickyHeight: Int = 0) -> Int? {
         var p = prev, n = next
         p.buildProfile(); n.buildProfile()
         let anchorRows = 30
-        let anchorBase = 40
+        let anchorBase = max(40, stickyHeight + 8)
         let rowTolerance = max(3, min(prev.bytesPerRow / 4 / 11 / 8, 12))
         // 主通道：像素级精确对齐（自动注入是整数行滚动，快且准）
         for s in 0...maxSearch {
@@ -331,6 +331,8 @@ final class LongScreenshot {
     private var running = false
     private var cancelled = false
     private var finishNow = false
+    /// 吸顶区高度（窗口标题栏/固定导航等滚动时不动的顶部行），拼接时跳过
+    private var stickyHeight = 0
     /// 当前滚动控制模式：手动（默认）由用户滚页面，自动为程序注入
     var mode: LongShotMode = .manual
     private var clampedToSingleScreen = false
@@ -497,7 +499,7 @@ final class LongScreenshot {
             let step = lastOffset.map { min(24, max(10, $0 / 8)) } ?? 12
             let searchWindow = max(maxSearch, step * 60)
             if let last = frames.last {
-                guard let offset = StitchEngine.scrollOffset(prev: last.sampler, next: sampler, maxSearch: searchWindow) else {
+                guard let offset = StitchEngine.scrollOffset(prev: last.sampler, next: sampler, maxSearch: searchWindow, stickyHeight: stickyHeight) else {
                     FileTrace.log("iter \(iteration): 对齐失败，以已采集 \(frames.count) 帧收尾")
                     break   // 对齐失败：以已采集内容收尾
                 }
@@ -517,6 +519,16 @@ final class LongScreenshot {
                 lastOffset = offset
             }
             frames.append((cropped, sampler))
+            // 吸顶区检测：两帧间纹丝不动的顶部行（窗口标题栏/固定导航），拼接时跳过
+            if frames.count == 2, offsets.last ?? 0 > 0 {
+                let f1 = frames[0].sampler, f2 = frames[1].sampler
+                var sticky = 0
+                while sticky < min(f1.height, f2.height, 300), f2.rowEquals(sticky, in: f1, sticky, tolerance: 3) { sticky += 1 }
+                if sticky > 4 {
+                    stickyHeight = sticky
+                    FileTrace.log("吸顶区检测：\(sticky) px（拼接时将跳过）")
+                }
+            }
             // 内存：Sampler 只在对齐相邻帧时有用，算完即弃（25 帧 RGBA 常驻可逼近 1GB）
             if frames.count > 1 { frames[frames.count - 2].sampler.data = [] }
             // 进度回报：层数 + 已拼高度 + 小图预览（HUD 在主线程）
@@ -562,9 +574,12 @@ final class LongScreenshot {
         var shifted = 0
         for (i, f) in frames.enumerated() {
             if i > 0 { shifted += offsets[i - 1] }
-            // 帧顶在拼接画布中的像素 y（自顶向下）：shifted → CG y = totalH - shifted - ph
-            ctx.draw(f.image, in: CGRect(x: 0, y: CGFloat(totalH - shifted - ph),
-                                         width: CGFloat(pw), height: CGFloat(ph)))
+            // 吸顶行只在首帧保留；后续帧跳过顶部吸顶行，避免固定标题栏被贴进每个接缝
+            let skip = i == 0 ? 0 : min(stickyHeight, ph - 8)
+            let drawH = ph - skip
+            guard drawH > 0, let sub = f.image.cropping(to: CGRect(x: 0, y: skip, width: pw, height: drawH)) else { continue }
+            ctx.draw(sub, in: CGRect(x: 0, y: CGFloat(totalH - shifted - skip - drawH),
+                                     width: CGFloat(pw), height: CGFloat(drawH)))
         }
         guard let out = ctx.makeImage() else { return .failure("拼接输出失败") }
         let scale = CGFloat(pw) / max(rect.width, 1)
