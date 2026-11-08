@@ -340,7 +340,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem.button else { return }
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "测试版"
         StatusMenuPanelController.shared.sections = [
-            .init(zh: "捕捉", en: "CAPTURE", trailing: "Quick Tools", entries: [
+            .init(zh: "捕捉", en: "CAPTURE", trailing: nil, entries: [
                 .init(title: "区域截图", symbol: "camera", shortcut: "⌘⇧A", style: .normal, action: { [weak self] in self?.captureScreenshot() }),
                 .init(title: "划图取字", symbol: "text.viewfinder", shortcut: "⌘⇧X", style: .normal, badge: "OCR", action: { [weak self] in self?.startDragOCR() }),
                 .init(title: "延时截图", symbol: "timer", shortcut: "⌘⌥⇧G", style: .normal, action: { [weak self] in self?.captureDelayedAction() }),
