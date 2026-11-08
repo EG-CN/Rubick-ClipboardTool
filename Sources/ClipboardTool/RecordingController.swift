@@ -346,13 +346,17 @@ struct RecordingExportView: View {
             Text(metaText)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 330, alignment: .leading)
             Spacer()
             Button("重新录制") { onReRecord() }
                 .buttonStyle(.bordered)
-            Button(gifSelected ? "导出 GIF" : "导出 MP4") { Task { await export() } }
+            Button(exporting ? "导出中…" : (gifSelected ? "导出 GIF" : "导出 MP4")) { Task { await export() } }
                 .buttonStyle(.borderedProminent)
                 .tint(Color(nsColor: NSColor(srgbRed: 0.063, green: 0.725, blue: 0.506, alpha: 1)))
                 .disabled(exporting)
+                .keyboardShortcut(.defaultAction)
         }
         .padding(.horizontal, 20)
         .padding(.top, 14)
@@ -400,46 +404,58 @@ struct RecordingExportView: View {
     }
 
     private func export() async {
+        FileTrace.log("export clicked: gif=\(gifSelected) url=\(movieURL.lastPathComponent)")
         exporting = true
         defer { exporting = false }
         let asset = AVURLAsset(url: movieURL)
         let out = targetURL
+        let start = trimStart, end = trimEnd, useGIF = gifSelected
         try? FileManager.default.removeItem(at: out)
-        if gifSelected {
-            await exportGIF(asset: asset, to: out)
-        } else {
-            await exportMP4(asset: asset, to: out)
-        }
+        // 逐帧解码是重活：离主线程，避免整窗冻结被当成"按钮没作用"
+        await Task.detached(priority: .userInitiated) {
+            if useGIF {
+                await RecordingExportView.exportGIF(asset: asset, to: out, start: start, end: end)
+            } else {
+                await RecordingExportView.exportMP4(asset: asset, to: out, start: start, end: end)
+            }
+        }.value
         if FileManager.default.fileExists(atPath: out.path) {
             Toast.shared.showImportant("已导出：\(out.lastPathComponent)")
             NSWorkspace.shared.activateFileViewerSelecting([out])
             onClose()
+        } else {
+            Toast.shared.showImportant("导出失败，请重试或改换格式")
         }
     }
 
-    private func exportMP4(asset: AVURLAsset, to out: URL) async {
-        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else { return }
+    private static func exportMP4(asset: AVURLAsset, to out: URL, start: Double, end: Double) async {
+        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
+            await MainActor.run { Toast.shared.showImportant("导出失败：无法创建导出会话") }
+            return
+        }
         session.outputURL = out
         session.outputFileType = .mp4
-        session.timeRange = CMTimeRange(start: CMTime(seconds: trimStart, preferredTimescale: 600),
-                                        end: CMTime(seconds: trimEnd, preferredTimescale: 600))
-        try? await session.export(to: out, as: .mp4)
+        session.timeRange = CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600),
+                                        end: CMTime(seconds: end, preferredTimescale: 600))
+        do { try await session.export(to: out, as: .mp4) }
+        catch { await MainActor.run { Toast.shared.showImportant("导出失败：\(error.localizedDescription)") } }
     }
 
-    private func exportGIF(asset: AVURLAsset, to out: URL) async {
+    private static func exportGIF(asset: AVURLAsset, to out: URL, start: Double, end: Double) async {
         let fps = 15
-        let count = max(1, Int(trimmedDuration * Double(fps)))
+        let count = max(1, Int(max(0.5, end - start) * Double(fps)))
         let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true
-        gen.requestedTimeToleranceBefore = .zero
-        gen.requestedTimeToleranceAfter = CMTime(seconds: 0.02, preferredTimescale: 600)
+        // 0.05s 容差：精确 seek 每帧一次磁盘往返，248 帧能拖住主线程半分钟；15fps 下无感差异
+        gen.requestedTimeToleranceBefore = CMTime(seconds: 0.05, preferredTimescale: 600)
+        gen.requestedTimeToleranceAfter = CMTime(seconds: 0.05, preferredTimescale: 600)
         gen.maximumSize = CGSize(width: 800, height: 4000)
         guard let dest = CGImageDestinationCreateWithURL(out as CFURL, UTType.gif.identifier as CFString, count, nil) else { return }
         let frameProps: [CFString: Any] = [
             kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 1.0 / Double(fps)]
         ]
         for i in 0..<count {
-            let t = trimStart + Double(i) / Double(fps)
+            let t = start + Double(i) / Double(fps)
             guard let cg = try? await gen.image(at: CMTime(seconds: t, preferredTimescale: 600)).image else { continue }
             CGImageDestinationAddImage(dest, cg, frameProps as CFDictionary)
         }

@@ -270,7 +270,7 @@ final class InlineScreenshotController {
                 guard let self, let canvas else { return }
                 for peer in self.canvases where peer !== canvas { peer.commitEditing() }
                 self.activeCanvas = canvas
-                canvas.window?.makeKeyAndOrderFront(nil)
+                if canvas.window?.isKeyWindow != true { canvas.window?.makeKeyAndOrderFront(nil) }
             }
             canvas.onSceneChange = { [weak self, weak canvas] in
                 guard let self, let canvas else { return }
@@ -282,6 +282,9 @@ final class InlineScreenshotController {
         ScreenshotDiagnostics.windows(self.windows, stage: "beforeOrder")
         for panel in self.windows { panel.orderFrontRegardless() }
         activeCanvas = canvases.first { $0.window?.frame.contains(NSEvent.mouseLocation) == true } ?? canvases.first
+        // 后台 app 的面板 makeKey 不生效：第一次点击会被系统消耗在窗口激活上（第二次才能选中）。
+        // 显式激活本应用后再 makeKey，首点即落画布；关闭时 yieldActivation 还给原应用。
+        NSApp.activate(ignoringOtherApps: true)
         activeCanvas?.window?.makeKeyAndOrderFront(nil)
         activeCanvas?.window?.makeFirstResponder(activeCanvas)
         ScreenshotDiagnostics.windows(self.windows, stage: "afterOrder")
