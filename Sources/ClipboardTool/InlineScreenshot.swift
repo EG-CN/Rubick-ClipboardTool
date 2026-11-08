@@ -536,12 +536,15 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
     }
 
     private func iconButton(_ symbol: String, title: String, action: Selector) -> NSButton {
-        let button = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: title) ?? NSImage(), target: self, action: action)
+        let raw = NSImage(systemSymbolName: symbol, accessibilityDescription: title) ?? NSImage()
+        // 显式 pointSize 渲染：不配尺寸的 symbol 模板在非 layer 视图里会被按自然尺寸重采样发虚
+        let button = NSButton(image: raw.withSymbolConfiguration(.init(pointSize: 15, weight: .medium)) ?? raw,
+                              target: self, action: action)
         button.isBordered = false
         button.imageScaling = .scaleProportionallyDown
         button.toolTip = title
         button.setAccessibilityLabel(title)
-        button.contentTintColor = NSColor.white.withAlphaComponent(0.72)
+        button.contentTintColor = NSColor.white.withAlphaComponent(0.88)
         button.wantsLayer = true
         button.layer?.cornerRadius = 10
         button.widthAnchor.constraint(equalToConstant: 32).isActive = true
@@ -559,17 +562,25 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         return t == .note ? "8" : nil
     }
 
-    /// 右下角键帽小方块（照 Redesign 稿角标样式）
+    /// 右下角键帽小方块（autolayout 锚定，杜绝手算 frame 的坐标系错位）
     private func attachKeyBadge(_ key: String, to button: NSButton) {
         let badge = NSTextField(labelWithString: key)
-        badge.font = .systemFont(ofSize: 8.5, weight: .bold)
-        badge.textColor = NSColor.white.withAlphaComponent(0.6)
+        badge.font = .systemFont(ofSize: 9.5, weight: .bold)
+        badge.textColor = NSColor.white.withAlphaComponent(0.85)
         badge.alignment = .center
         badge.wantsLayer = true
-        badge.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.12).cgColor
+        badge.layer?.backgroundColor = NSColor(calibratedRed: 0.13, green: 0.15, blue: 0.19, alpha: 1).cgColor
         badge.layer?.cornerRadius = 4
-        badge.frame = NSRect(x: 19, y: -2, width: 15, height: 13)
+        badge.layer?.borderWidth = 1
+        badge.layer?.borderColor = NSColor.white.withAlphaComponent(0.16).cgColor
+        badge.translatesAutoresizingMaskIntoConstraints = false
         button.addSubview(badge)
+        NSLayoutConstraint.activate([
+            badge.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: 3),
+            badge.bottomAnchor.constraint(equalTo: button.bottomAnchor, constant: 2),
+            badge.widthAnchor.constraint(equalToConstant: 16),
+            badge.heightAnchor.constraint(equalToConstant: 14),
+        ])
     }
 
     // MARK: 识图 / 翻译 / 完成（对含已画标注的当前画面操作）
@@ -769,9 +780,18 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
             if let lens = magnifierPreview ?? remoteMagnifier { marks.append(.magnifier(lens)) }
             if let preview = drawing ?? remoteDrawing { marks.append(.drawing(preview)) }
             InlineScreenshotRenderer.drawMarks(marks, image: image, selection: selection, editingID: editingID ?? remoteEditingID)
-            NSColor.systemGreen.setStroke(); let border = NSBezierPath(rect: selection); border.lineWidth = 1; border.stroke()
+            // 选区：2pt 翡翠边 + 4pt 外辉光（Redesign 稿 border-2 + 0 0 0 4px ring），细线在浅色页面看不清
+            NSColor(srgbRed: 0.063, green: 0.725, blue: 0.506, alpha: 0.16).setStroke()
+            NSBezierPath(rect: selection.insetBy(dx: -4, dy: -4)).lineWidth = 5
+            NSBezierPath(rect: selection.insetBy(dx: -4, dy: -4)).stroke()
+            NSColor(srgbRed: 0.204, green: 0.827, blue: 0.6, alpha: 1).setStroke()
+            let border = NSBezierPath(rect: selection); border.lineWidth = 2; border.stroke()
             if tool == .select {
-                for p in handlePoints(selection) { NSColor.white.setFill(); NSBezierPath(ovalIn: CGRect(x: p.x-4,y:p.y-4,width:8,height:8)).fill() }
+                for p in handlePoints(selection) {
+                    let handle = NSBezierPath(ovalIn: CGRect(x: p.x-4.5, y: p.y-4.5, width: 9, height: 9))
+                    NSColor.white.setFill(); handle.fill()
+                    NSColor.black.withAlphaComponent(0.55).setStroke(); handle.lineWidth = 1.5; handle.stroke()
+                }
             }
             let sizeText = "\(Int(selection.width)) × \(Int(selection.height))" as NSString
             sizeText.draw(at: CGPoint(x: selection.minX + 4, y: min(bounds.maxY - 24, selection.maxY + 5)), withAttributes: [.font:NSFont.monospacedDigitSystemFont(ofSize:11,weight:.medium), .foregroundColor:NSColor.white, .backgroundColor:NSColor.black.withAlphaComponent(0.7)])

@@ -351,17 +351,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 .init(title: "打开主面板", symbol: "clipboard", shortcut: "⇧⌘Z", style: .featured, action: { [weak self] in self?.togglePanel() }),
                 .init(title: "钉贴图", symbol: "pin", shortcut: "⌘⇧P", style: .normal, action: { [weak self] in self?.pinClipboardImage() }),
             ]),
-            .init(zh: "随手夹", en: "HANGING SHELF", trailing: "\(HistoryStore.shared.items.count) items", entries: [
+            .init(zh: "随手夹", en: "HANGING SHELF", trailing: "已挂 \(HistoryStore.shared.items.count) 张", entries: [
                 .init(title: "显示晾衣架", symbol: "paperclip", shortcut: nil, style: .normal, action: { [weak self] in self?.showClothesline() }),
                 .init(title: "自动收绳", symbol: "link", shortcut: nil, style: .toggle, isOn: UserDefaults.standard.object(forKey: "clothesline.autoRetract") as? Bool ?? true, subtitle: "取空后自动收起", action: nil),
             ]),
             .init(zh: "管理", en: "MANAGEMENT", trailing: nil, entries: [
                 .init(title: "偏好设置…", symbol: "gearshape", shortcut: "⌘,", style: .normal, action: { [weak self] in self?.openSettings() }),
-                .init(title: "清空历史…", symbol: "trash", shortcut: nil, style: .destructive, trailing: "Clean", action: { [weak self] in self?.clearHistory() }),
+                .init(title: "清空历史…", symbol: "trash", shortcut: nil, style: .destructive, action: { [weak self] in self?.clearHistory() }),
                 .init(title: "退出拉比克", symbol: "power", shortcut: "⌘Q", style: .normal, action: { self.quit() }),
             ]),
         ]
-        StatusMenuPanelController.shared.footer = ("Rubick v\(version)", "Sonoma Arm64")
+        let osv = ProcessInfo.processInfo.operatingSystemVersion
+        StatusMenuPanelController.shared.footer = ("Rubick v\(version)", "macOS \(osv.majorVersion).\(osv.minorVersion)")
         StatusMenuPanelController.shared.toggle(anchor: button)
     }
 
