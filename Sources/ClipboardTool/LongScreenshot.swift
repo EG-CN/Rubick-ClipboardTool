@@ -215,20 +215,28 @@ enum StitchEngine {
         let width: Int
         let height: Int
         let bytesPerRow: Int
-        /// 每行平均亮度（0~255，惰性构建）：亚像素渲染下逐像素匹配会失败，剖面相关不受影响
+        /// 每行亮度剖面（减均值除标准差归一化）：深色/浅色主题通吃，
+        /// 亚像素渲染下逐像素匹配会失败，剖面相关不受影响
         private(set) var rowProfile: [Double] = []
+        private(set) var rowProfileStd: Double = 0
 
         mutating func buildProfile() {
             guard rowProfile.isEmpty else { return }
-            var prof = [Double](repeating: 0, count: height)
-            let step = max(4, width / 200) * 4
+            var raw = [Double](repeating: 0, count: height)
+            let step = max(2, width / 400) * 2
             for y in 0..<height {
                 let off = y * bytesPerRow
                 var sum = 0, n = 0, x = 0
                 while x + 2 < bytesPerRow { sum += Int(data[off + x]) + Int(data[off + x + 1]); n += 1; x += step }
-                prof[y] = n == 0 ? 0 : Double(sum) / Double(n * 2)
+                raw[y] = n == 0 ? 0 : Double(sum) / Double(n * 2)
             }
-            rowProfile = prof
+            let mean = raw.reduce(0, +) / Double(max(raw.count, 1))
+            var sq = 0.0
+            for v in raw { sq += (v - mean) * (v - mean) }
+            let std = (sq / Double(max(raw.count, 1))).squareRoot()
+            rowProfileStd = std
+            // 归一化：纯色页 std≈0 → 剖面接近 0（配合 std 门槛判"无内容"）
+            rowProfile = raw.map { ($0 - mean) / (std + 0.0001) }
         }
 
     init?(image: CGImage) {
@@ -292,8 +300,8 @@ enum StitchEngine {
             }
             if matched >= 7 { return s }
         }
-        // 剖面方差过小（接近纯色）时剖面不可信，按未滚动处理
-        guard Self.variance(p.rowProfile) > 4, Self.variance(n.rowProfile) > 4 else { return 0 }
+        // 剖面标准差过小（纯色/近纯色页面）时剖面不可信，按未滚动处理
+        guard p.rowProfileStd > 0.5, n.rowProfileStd > 0.5 else { return 0 }
         // 回退主通道：行亮度剖面相关（手动平滑滚动有亚像素重渲染，逐像素必失败；
         // 文本页面的行亮度剖面结构极强，相关性匹配对亚像素免疫）。双向扫描。
         func scan(_ shift: Int) -> Double? {
@@ -312,8 +320,8 @@ enum StitchEngine {
                 if best == nil || e < best!.err { best = (s, e) }
             }
         }
-        // 显著性：最佳偏移的剖面误差需明显低于平均（真实对齐才有低误差峰）
-        guard count > 0, let best, best.err < (total / Double(count)) * 0.6, best.err < 24 else { return nil }
+        // 显著性：最佳偏移的归一化剖面误差需明显低于随机对齐（单位方差下随机≈1.1）
+        guard count > 0, let best, best.err < (total / Double(count)) * 0.6, best.err < 0.9 else { return nil }
         return best.offset
     }
 
