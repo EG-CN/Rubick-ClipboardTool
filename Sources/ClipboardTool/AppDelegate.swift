@@ -15,6 +15,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let screenshotController = ScreenshotController.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 全局锁定深色外观：Arcane Obsidian 设计系统以深黑曜石为基底，
+        // 系统切浅色模式时面板若跟随漂白会整体偏离 Stitch 原稿。
+        NSApp.appearance = NSAppearance(named: .darkAqua)
         // 调试模式：打开标注编辑器并自拍截屏到 /tmp（诊断渲染问题用）
         if CommandLine.arguments.contains("--debug-editor-shot") {
             runDebugEditorShot()

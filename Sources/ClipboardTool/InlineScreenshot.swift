@@ -414,15 +414,21 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
     override func cursorUpdate(with event: NSEvent) { tool == .select ? NSCursor.arrow.set() : NSCursor.crosshair.set() }
 
     private func setupToolbar() {
+        // 照 Redesign 稿：#121318/92 深玻璃药丸 + 翡翠 ring + 顶部辉光
         toolbar.appearance = NSAppearance(named: .darkAqua)
         toolbar.material = .hudWindow
         toolbar.blendingMode = .withinWindow
         toolbar.state = .active
         toolbar.wantsLayer = true
-        toolbar.layer?.cornerRadius = 12
+        toolbar.layer?.cornerRadius = 16
         toolbar.layer?.masksToBounds = true
-        toolbar.layer?.borderWidth = 0.5
-        toolbar.layer?.borderColor = NSColor.separatorColor.cgColor
+        toolbar.layer?.borderWidth = 1
+        toolbar.layer?.borderColor = NSColor(srgbRed: 0.063, green: 0.725, blue: 0.506, alpha: 0.2).cgColor
+        toolbar.layer?.backgroundColor = NSColor(calibratedRed: 0.071, green: 0.075, blue: 0.094, alpha: 0.92).cgColor
+        toolbar.layer?.shadowColor = NSColor.black.cgColor
+        toolbar.layer?.shadowOpacity = 0.6
+        toolbar.layer?.shadowRadius = 14
+        toolbar.layer?.shadowOffset = NSSize(width: 0, height: -6)
         let main = NSStackView()
         main.orientation = .horizontal
         main.spacing = 2
@@ -452,11 +458,13 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         main.addArrangedSubview(iconButton("square.and.arrow.down", title: "保存", action: #selector(saveAction)))
         let copy = NSButton(title: "复制", target: self, action: #selector(copyAction))
         copy.bezelStyle = .rounded
-        copy.bezelColor = NSColor(srgbRed: 0.14, green: 0.52, blue: 0.36, alpha: 1)
-        copy.contentTintColor = .white
+        copy.bezelColor = NSColor(srgbRed: 0.063, green: 0.725, blue: 0.506, alpha: 1)
+        copy.contentTintColor = NSColor(srgbRed: 0.0, green: 0.22, blue: 0.14, alpha: 1)
         copy.font = .systemFont(ofSize: 13, weight: .semibold)
-        copy.widthAnchor.constraint(equalToConstant: 64).isActive = true
-        copy.heightAnchor.constraint(equalToConstant: 40).isActive = true
+        copy.widthAnchor.constraint(equalToConstant: 72).isActive = true
+        copy.heightAnchor.constraint(equalToConstant: 32).isActive = true
+        copy.wantsLayer = true
+        copy.layer?.cornerRadius = 10
         copy.toolTip = "复制截图（选择工具下按Enter）"
         main.addArrangedSubview(copy)
         main.addArrangedSubview(iconButton("xmark", title: "关闭截图", action: #selector(cancelAction)))
@@ -473,11 +481,11 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
             let button = NSButton(title: "●", target: self, action: #selector(changeColor(_:)))
             button.tag = i
             button.isBordered = false
-            button.attributedTitle = NSAttributedString(string: "●", attributes: [.foregroundColor: color, .font: NSFont.systemFont(ofSize: 23)])
+            button.attributedTitle = NSAttributedString(string: "●", attributes: [.foregroundColor: color, .font: NSFont.systemFont(ofSize: 17)])
             button.toolTip = ["绿色", "红色", "黄色", "白色", "黑色"][i]
             button.setAccessibilityLabel(button.toolTip)
-            button.widthAnchor.constraint(equalToConstant: 32).isActive = true
-            button.heightAnchor.constraint(equalToConstant: 36).isActive = true
+            button.widthAnchor.constraint(equalToConstant: 24).isActive = true
+            button.heightAnchor.constraint(equalToConstant: 26).isActive = true
             button.wantsLayer = true
             button.layer?.cornerRadius = 7
             colorButtons.append(button)
@@ -495,14 +503,14 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         widths.toolTip = "线条粗细"
         parameterRow.addArrangedSubview(widths)
         toolbarNaturalWidth = main.fittingSize.width
-        main.frame = CGRect(x: 0, y: 0, width: toolbarNaturalWidth, height: 42)
+        main.frame = CGRect(x: 0, y: 0, width: toolbarNaturalWidth, height: 36)
         toolbarScroll.documentView = main
         toolbarScroll.drawsBackground = false
         toolbarScroll.hasHorizontalScroller = true
         toolbarScroll.autohidesScrollers = true
         toolbarWidth = toolbarScroll.widthAnchor.constraint(equalToConstant: toolbarNaturalWidth)
         toolbarWidth?.isActive = true
-        toolbarRowHeight = toolbarScroll.heightAnchor.constraint(equalToConstant: 44)
+        toolbarRowHeight = toolbarScroll.heightAnchor.constraint(equalToConstant: 38)
         toolbarRowHeight?.isActive = true
         let stack = NSStackView(views: [toolbarScroll, parameterRow])
         stack.orientation = .vertical
@@ -526,20 +534,24 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         button.imageScaling = .scaleProportionallyDown
         button.toolTip = title
         button.setAccessibilityLabel(title)
+        button.contentTintColor = NSColor.white.withAlphaComponent(0.72)
         button.wantsLayer = true
-        button.layer?.cornerRadius = 7
-        button.widthAnchor.constraint(equalToConstant: 40).isActive = true
-        button.heightAnchor.constraint(equalToConstant: 40).isActive = true
+        button.layer?.cornerRadius = 10
+        button.widthAnchor.constraint(equalToConstant: 32).isActive = true
+        button.heightAnchor.constraint(equalToConstant: 32).isActive = true
         return button
     }
 
     private func updateToolbarStyle() {
-        let green = NSColor(srgbRed: 0.14, green: 0.52, blue: 0.36, alpha: 1)
+        // 祖母绿 #10B981：激活钮 = 16% 底 + 40% 环（Redesign 稿）
+        let emerald = NSColor(srgbRed: 0.063, green: 0.725, blue: 0.506, alpha: 1)
         for button in toolButtons {
             let active = button.tag == tool.rawValue
             button.state = active ? .on : .off
-            button.contentTintColor = active ? green : .white
-            button.layer?.backgroundColor = active ? green.withAlphaComponent(0.18).cgColor : NSColor.clear.cgColor
+            button.contentTintColor = active ? NSColor(srgbRed: 0.31, green: 0.87, blue: 0.64, alpha: 1) : NSColor.white.withAlphaComponent(0.72)
+            button.layer?.backgroundColor = active ? emerald.withAlphaComponent(0.16).cgColor : NSColor.clear.cgColor
+            button.layer?.borderWidth = active ? 1 : 0
+            button.layer?.borderColor = NSColor(srgbRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.4).cgColor
         }
         var contextTool = tool
         if let id = editingID ?? selectedID,
@@ -557,7 +569,7 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         if let index = [CGFloat(2), 4, 8].firstIndex(of: lineWidth) { widths.selectItem(at: index) }
         for button in colorButtons {
             button.layer?.borderWidth = button.tag == colorIndex ? 1.5 : 0
-            button.layer?.borderColor = green.cgColor
+            button.layer?.borderColor = emerald.cgColor
         }
     }
 
