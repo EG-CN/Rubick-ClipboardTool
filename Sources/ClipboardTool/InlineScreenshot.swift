@@ -393,6 +393,7 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
     private var colorButtons: [NSButton] = []
     private let fontSizes = NSPopUpButton()
     private let widths = NSPopUpButton()
+    private let ringPopup = NSPopUpButton()
     private let toolLabel = NSTextField(labelWithString: "")
     private var undoButton = NSButton()
     private var redoButton = NSButton()
@@ -509,6 +510,12 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         widths.target = self; widths.action = #selector(changeWidth(_:))
         widths.toolTip = "线条粗细"
         parameterRow.addArrangedSubview(widths)
+        // 放大镜边框样式（用户可选：无边框/白/黑/跟随标注色）
+        ringPopup.addItems(withTitles: ["无边框", "白色", "黑色", "跟随颜色"])
+        ringPopup.selectItem(at: UserDefaults.standard.object(forKey: "magnifier.ring") as? Int ?? 0)
+        ringPopup.target = self; ringPopup.action = #selector(changeRingStyle(_:))
+        ringPopup.toolTip = "放大镜边框"
+        parameterRow.addArrangedSubview(ringPopup)
         toolbarNaturalWidth = main.fittingSize.width
         main.frame = CGRect(x: 0, y: 0, width: toolbarNaturalWidth, height: 36)
         toolbarScroll.documentView = main
@@ -653,11 +660,14 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
             contextTool = note.number == nil ? .text : .note
         }
         let textTool = contextTool == .text || contextTool == .note || contextTool == .step
-        parameterRow.isHidden = contextTool == .select || contextTool == .magnifier
+        // 放大镜工具时参数行只显示边框选择器
+        parameterRow.isHidden = contextTool == .select
+        ringPopup.isHidden = contextTool != .magnifier
+        toolLabel.isHidden = contextTool == .magnifier
         toolLabel.stringValue = contextTool.title
-        fontSizes.isHidden = !textTool
-        widths.isHidden = textTool || contextTool == .mosaic
-        colorRow.isHidden = contextTool == .mosaic
+        fontSizes.isHidden = !textTool || contextTool == .magnifier
+        widths.isHidden = textTool || contextTool == .mosaic || contextTool == .magnifier
+        colorRow.isHidden = contextTool == .mosaic || contextTool == .magnifier
         if let index = [CGFloat(14), 18, 24, 32].firstIndex(of: noteFontSize) { fontSizes.selectItem(at: index) }
         if let index = [CGFloat(2), 4, 8].firstIndex(of: lineWidth) { widths.selectItem(at: index) }
         for button in colorButtons {
@@ -671,6 +681,11 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         commitEditing(); tool = Tool(rawValue: sender.tag) ?? .select; selectedID = nil; refresh()
     }
     @objc private func changeColor(_ sender: NSButton) { onWillInteract?(); colorIndex = sender.tag; updateSelectedNoteStyle() }
+    @objc private func changeRingStyle(_ sender: NSPopUpButton) {
+        onWillInteract?()
+        UserDefaults.standard.set(sender.indexOfSelectedItem, forKey: "magnifier.ring")
+        refresh()
+    }
     @objc private func changeFontSize(_ sender: NSPopUpButton) { onWillInteract?(); noteFontSize=[CGFloat(14),18,24,32][sender.indexOfSelectedItem];updateSelectedNoteStyle() }
     private func updateSelectedNoteStyle() {
         guard let id=editingID ?? selectedID,let index=document.state.marks.firstIndex(where:{$0.id==id}),case .note(var note)=document.state.marks[index] else { refresh();return }
@@ -742,7 +757,7 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         y = min(max(y, safe.minY), max(safe.minY, safe.maxY - fit.height))
         toolbar.setFrameOrigin(CGPoint(x: x, y: y)); toolbar.setFrameSize(fit)
         message = (tool == .note || tool == .text) ? "Enter换行 · 点击空白完成 · 点击文字继续编辑" : "Enter 完成 · Esc 逐层返回"
-        if tool == .magnifier { message = "点击放置放大镜 · 点住拖动可移动 · 滚轮缩放 · ⌫ 删除" }
+        if tool == .magnifier { message = "点击放置放大镜 · 点住拖动可移动 · 滚轮缩放 · ⌫ 删除 · 边框样式见下方选择器" }
     }
     private func normalized(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x / bounds.width, y: 1 - p.y / bounds.height) }
     private func clamped(_ p: CGPoint, to rect: CGRect) -> CGPoint {
