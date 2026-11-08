@@ -322,73 +322,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let button = statusItem.button {
             button.image = RubickBrand.image(size: 18)
             button.toolTip = "拉比克 · 剪贴板历史"
+            button.action = #selector(statusItemClicked)
+            button.target = self
         }
-        let menu = NSMenu()
-        if Bundle.main.bundleIdentifier == "local.rubick.screenshot-test" {
-            let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "测试版"
-            let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
-            let versionItem = NSMenuItem(title: "截图测试版 \(version) · \(build)", action: nil, keyEquivalent: "")
-            versionItem.isEnabled = false
-            menu.addItem(versionItem)
-            menu.addItem(.separator())
-            statusItem.button?.toolTip = "拉比克截图测试版 \(version) · \(build)"
-        }
+    }
 
-        // 分组头（照效果图：小号分组标签）
-        func sectionHeader(_ title: String) {
-            menu.addItem(NSMenuItem.sectionHeader(title: title))
-        }
-        func item(_ title: String, symbol: String? = nil, key: String = "", mods: NSEvent.ModifierFlags = [], action: Selector) {
-            let it = NSMenuItem(title: title, action: action, keyEquivalent: key)
-            if !key.isEmpty { it.keyEquivalentModifierMask = mods }
-            it.target = self
-            if let symbol, let img = NSImage(systemSymbolName: symbol, accessibilityDescription: title) {
-                it.image = img
-            }
-            menu.addItem(it)
-        }
-
-        sectionHeader("捕捉")
-        item("区域截图", symbol: "camera", key: "a", mods: [.command, .shift], action: #selector(captureScreenshot))
-        item("划图取字", symbol: "text.viewfinder", key: "x", mods: [.command, .shift], action: #selector(startDragOCR))
-        item("延时截图", symbol: "timer", key: "g", mods: [.command, .option, .shift], action: #selector(captureDelayedAction))
-        item("长截图（实验）", symbol: "photo.on.rectangle.angled", key: "l", mods: [.command, .shift], action: #selector(captureLongShot))
-        item("录屏", symbol: "record.circle", key: "r", mods: [.command, .option], action: #selector(captureScreenRecord))
-
-        menu.addItem(.separator())
-        sectionHeader("剪贴板")
-        item("打开剪贴板", symbol: "doc.on.clipboard", key: "z", mods: [.command, .shift], action: #selector(togglePanel))
-        item("钉剪贴板贴图", symbol: "pin", key: "p", mods: [.command, .shift], action: #selector(pinClipboardImage))
-
-        menu.addItem(.separator())
-        sectionHeader("随手夹")
-        item("显示晾衣架", symbol: "paperclip", action: #selector(showClothesline))
-
-        menu.addItem(.separator())
-        sectionHeader("管理")
-        item("设置…", symbol: "gearshape", key: ",", mods: [.command], action: #selector(openSettings))
-        item("清空历史…", symbol: "trash", action: #selector(clearHistory))
-        item("退出拉比克", symbol: "power", key: "q", mods: [.command], action: #selector(quit))
-
-        menu.addItem(.separator())
-
-        let clearItem = NSMenuItem(title: "清空历史…", action: #selector(clearHistory), keyEquivalent: "")
-        clearItem.target = self
-        menu.addItem(clearItem)
-
-        let settingsItem = NSMenuItem(title: "设置…", action: #selector(openSettings), keyEquivalent: ",")
-        settingsItem.keyEquivalentModifierMask = [.command]
-        settingsItem.target = self
-        menu.addItem(settingsItem)
-
-        menu.addItem(.separator())
-
-        let quitItem = NSMenuItem(title: "退出拉比克", action: #selector(quit), keyEquivalent: "q")
-        quitItem.keyEquivalentModifierMask = [.command]
-        quitItem.target = self
-        menu.addItem(quitItem)
-
-        statusItem.menu = menu
+    @objc private func statusItemClicked() {
+        guard let button = statusItem.button else { return }
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "测试版"
+        StatusMenuPanelController.shared.sections = [
+            .init(zh: "捕捉", en: "CAPTURE", trailing: "Quick Tools", entries: [
+                .init(title: "区域截图", symbol: "camera", shortcut: "⌘⇧A", style: .normal, action: { [weak self] in self?.captureScreenshot() }),
+                .init(title: "划图取字", symbol: "text.viewfinder", shortcut: "⌘⇧X", style: .normal, action: { [weak self] in self?.startDragOCR() }),
+                .init(title: "延时截图", symbol: "timer", shortcut: "⌘⌥⇧G", style: .normal, action: { [weak self] in self?.captureDelayedAction() }),
+                .init(title: "长截图（实验）", symbol: "photo.on.rectangle.angled", shortcut: "⌘⇧L", style: .normal, action: { [weak self] in self?.captureLongShot() }),
+                .init(title: "录屏", symbol: "record.circle", shortcut: "⌘⌥R", style: .normal, action: { [weak self] in self?.captureScreenRecord() }),
+            ]),
+            .init(zh: "剪贴板", en: "CLIPBOARD", trailing: nil, entries: [
+                .init(title: "打开主面板", symbol: "clipboard", shortcut: "⇧⌘Z", style: .featured, action: { [weak self] in self?.togglePanel() }),
+                .init(title: "钉贴图", symbol: "pin", shortcut: "⌘⇧P", style: .normal, action: { [weak self] in self?.pinClipboardImage() }),
+            ]),
+            .init(zh: "随手夹", en: "HANGING SHELF", trailing: "\(HistoryStore.shared.items.count) items", entries: [
+                .init(title: "显示晾衣架", symbol: "paperclip", shortcut: nil, style: .normal, action: { [weak self] in self?.showClothesline() }),
+                .init(title: "自动收绳", symbol: "link", shortcut: nil, style: .toggle, isOn: UserDefaults.standard.object(forKey: "clothesline.autoRetract") as? Bool ?? true, subtitle: "取空后自动收起", action: nil),
+            ]),
+            .init(zh: "管理", en: "MANAGEMENT", trailing: nil, entries: [
+                .init(title: "偏好设置…", symbol: "gearshape", shortcut: "⌘,", style: .normal, action: { [weak self] in self?.openSettings() }),
+                .init(title: "清空历史…", symbol: "trash", shortcut: nil, style: .destructive, action: { [weak self] in self?.clearHistory() }),
+                .init(title: "退出拉比克", symbol: "power", shortcut: "⌘Q", style: .normal, action: { self?.quit() }),
+            ]),
+        ]
+        StatusMenuPanelController.shared.footer = ("Rubick v\(version)", "Sonoma Arm64")
+        StatusMenuPanelController.shared.toggle(anchor: button)
     }
 
     // MARK: 菜单动作
