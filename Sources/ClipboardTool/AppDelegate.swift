@@ -23,6 +23,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             runDebugEditorShot()
             return
         }
+        // 调试：走真实 ⌘⇧A 管线弹出框选覆盖层（Computer Use 首点/跳动自查用）
+        if CommandLine.arguments.contains("--debug-capture-live") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                self.captureScreenshot()
+            }
+        }
         // 调试：呈现捕获工具条并自截渲染结果到 /tmp/rubick-toolbar.png（清晰度/键帽自查）
         if CommandLine.arguments.contains("--debug-toolbar-shot") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {

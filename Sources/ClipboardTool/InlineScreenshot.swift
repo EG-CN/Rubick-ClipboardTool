@@ -242,7 +242,9 @@ final class InlineScreenshotController {
             panel.title = "拉比克 · 截图"
             panel.level = demo ? .floating : .screenSaver
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-            panel.isOpaque = true; panel.backgroundColor = .black; panel.hasShadow = false; panel.acceptsMouseMovedEvents = true
+            // 不透明黑底会让覆盖窗首帧闪黑（用户感知为"页面跳一下"）：透明窗让真实画面
+            // 透过未提交的 backdrop layer，冻结图提交后与其像素对齐，唯一可见变化只剩压暗
+            panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = false; panel.acceptsMouseMovedEvents = true
             let root = NSView(frame: CGRect(origin: .zero, size: frame.size))
             // Keep the frozen scene on a separate backing layer. Dragging only redraws
             // the mask/marks instead of resampling a full mixed-Retina desktop each time.
@@ -288,6 +290,7 @@ final class InlineScreenshotController {
         activeCanvas?.window?.makeKeyAndOrderFront(nil)
         activeCanvas?.window?.makeFirstResponder(activeCanvas)
         ScreenshotDiagnostics.windows(self.windows, stage: "afterOrder")
+        FileTrace.log("overlay.present frames=\(windows.map { NSStringFromRect($0.frame) }.joined(separator: ";")) canvas=\(canvases.map { NSStringFromRect($0.frame) }.joined(separator: ";")) img=\(image.size.width)x\(image.size.height) px=\(image.cgImage()?.width ?? -1)x\(image.cgImage()?.height ?? -1) scale=\(windows.first?.backingScaleFactor ?? -1)")
         let sessionDocument = document
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             guard let self, self.activeCanvas?.document === sessionDocument else { return }
@@ -300,6 +303,7 @@ final class InlineScreenshotController {
         }
     }
     func close(restoreFocus: Bool) {
+        FileTrace.log("overlay.close restore=\(restoreFocus) callstack=\(Thread.callStackSymbols.prefix(6).joined(separator: " | "))")
         for panel in windows { panel.orderOut(nil) }
         windows.removeAll(); canvases.removeAll(); activeCanvas = nil
         ActivationPolicyKeeper.shared.release("inlineScreenshot")
@@ -897,6 +901,7 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func mouseDown(with event: NSEvent) {
+        FileTrace.log("canvas.mouseDown key=\(window?.isKeyWindow == true) main=\(window?.isMainWindow == true) tool=\(tool.rawValue) sel=\(document.state.selection != nil) editing=\(editingID != nil) scale=\(window?.backingScaleFactor ?? -1)")
         onWillInteract?()
         let wasEditing = editingID != nil
         commitEditing(); window?.makeFirstResponder(self)

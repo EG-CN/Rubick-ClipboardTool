@@ -37,6 +37,26 @@ final class RecordingController: NSObject, SCStreamDelegate {
     }
 
     /// rect：AppKit 全局坐标（左下原点）的录制区域
+    private var pendingRect: CGRect?
+
+    /// 选区完成 → 武装态：呈现「开始录制」控制条，等用户显式开始
+    func arm(rect: CGRect) {
+        guard stream == nil else { return }
+        pendingRect = rect
+        showControlBar(rect: rect, mode: .armed)
+    }
+
+    func startArmed() {
+        guard let r = pendingRect else { return }
+        pendingRect = nil
+        start(rect: r)
+    }
+
+    func cancelArmed() {
+        pendingRect = nil
+        controlPanel?.orderOut(nil); controlPanel = nil; controlView = nil
+    }
+
     func start(rect: CGRect) {
         guard stream == nil else { return }
         guard let screen = NSScreen.screens.first(where: {
@@ -102,7 +122,7 @@ final class RecordingController: NSObject, SCStreamDelegate {
         self.recording = recording
         self.startedAt = Date()
         self.isRecording = true
-        showControlBar(rect: rect)
+        showControlBar(rect: rect, mode: .recording)
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self, let startedAt = self.startedAt else { return }
             let secs = Int(Date().timeIntervalSince(startedAt))
@@ -141,7 +161,7 @@ final class RecordingController: NSObject, SCStreamDelegate {
 
     // MARK: 控制条（效果图 ③）
 
-    private func showControlBar(rect: CGRect) {
+    private func showControlBar(rect: CGRect, mode: RecordControlView.Mode) {
         guard let screen = NSScreen.screens.first(where: {
             $0.frame.contains(CGPoint(x: rect.midX, y: rect.midY))
         }) else { return }
@@ -149,7 +169,9 @@ final class RecordingController: NSObject, SCStreamDelegate {
         let x = min(max(rect.midX - size.width / 2, screen.frame.minX + 12), screen.frame.maxX - size.width - 12)
         var y = rect.minY - size.height - 16
         if y < screen.frame.minY + 8 { y = rect.maxY + 16 }
-        let view = RecordControlView(frame: NSRect(origin: .zero, size: size),
+        let view = RecordControlView(frame: NSRect(origin: .zero, size: size), mode: mode,
+                                     onStart: { [weak self] in self?.startArmed() },
+                                     onCancel: { [weak self] in self?.cancelArmed() },
                                      onStop: { [weak self] in self?.stop(keepFile: true) },
                                      onRestart: { [weak self] in self?.restart() },
                                      onCamera: { Toast.shared.show("摄像头画中画：下一版本") })
@@ -196,15 +218,22 @@ final class RecordingController: NSObject, SCStreamDelegate {
     }()
 }
 
-/// 录制控制条视图：红点 + 计时 + 停止/重录 + 摄像头占位
+/// 录制控制条视图：武装态（开始/取消）与录制态（红点+计时+停止/重录+摄像头）
 final class RecordControlView: NSView {
+    enum Mode { case armed, recording }
+    let mode: Mode
     var seconds = 0 { didSet { timerLabel.stringValue = Self.clock(seconds) } }
     private let timerLabel = NSTextField(labelWithString: "00:00")
+    private let onStart: () -> Void
+    private let onCancel: () -> Void
     private let onStop: () -> Void
     private let onRestart: () -> Void
     private let onCamera: () -> Void
 
-    init(frame: NSRect, onStop: @escaping () -> Void, onRestart: @escaping () -> Void, onCamera: @escaping () -> Void) {
+    init(frame: NSRect, mode: Mode, onStart: @escaping () -> Void = {}, onCancel: @escaping () -> Void = {},
+         onStop: @escaping () -> Void = {}, onRestart: @escaping () -> Void = {}, onCamera: @escaping () -> Void = {}) {
+        self.mode = mode
+        self.onStart = onStart; self.onCancel = onCancel
         self.onStop = onStop; self.onRestart = onRestart; self.onCamera = onCamera
         super.init(frame: frame)
         wantsLayer = true
@@ -212,6 +241,37 @@ final class RecordControlView: NSView {
         layer?.backgroundColor = NSColor(calibratedWhite: 0.05, alpha: 0.94).cgColor
         layer?.borderWidth = 1
         layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
+
+        if mode == .armed {
+            let start = NSButton(title: "●  开始录制", target: self, action: #selector(startClicked))
+            start.bezelStyle = .rounded
+            start.bezelColor = NSColor(srgbRed: 0.94, green: 0.27, blue: 0.27, alpha: 1)
+            start.contentTintColor = .white
+            start.font = .systemFont(ofSize: 13.5, weight: .semibold)
+            start.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(start)
+            let cancel = NSButton(title: "取消", target: self, action: #selector(cancelClicked))
+            cancel.bezelStyle = .rounded
+            cancel.contentTintColor = NSColor.white.withAlphaComponent(0.8)
+            cancel.font = .systemFont(ofSize: 12.5)
+            cancel.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(cancel)
+            let hint = NSTextField(labelWithString: "框选完成 · 点击开始后正式录制")
+            hint.font = NSFont.systemFont(ofSize: 10.5)
+            hint.textColor = .white.withAlphaComponent(0.4)
+            hint.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(hint)
+            NSLayoutConstraint.activate([
+                start.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18),
+                start.centerYAnchor.constraint(equalTo: centerYAnchor),
+                start.heightAnchor.constraint(equalToConstant: 32),
+                cancel.leadingAnchor.constraint(equalTo: start.trailingAnchor, constant: 12),
+                cancel.centerYAnchor.constraint(equalTo: centerYAnchor),
+                hint.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -18),
+                hint.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+            return
+        }
 
         let dot = NSView(frame: NSRect(x: 0, y: 0, width: 12, height: 12))
         dot.wantsLayer = true
@@ -272,6 +332,8 @@ final class RecordControlView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    @objc private func startClicked() { onStart() }
+    @objc private func cancelClicked() { onCancel() }
     @objc private func stopClicked() { onStop() }
     @objc private func restartClicked() { onRestart() }
     @objc private func cameraClicked() { onCamera() }
@@ -379,8 +441,9 @@ struct RecordingExportView: View {
     }
 
     private var targetURL: URL {
-        movieURL.deletingPathExtension()
-            .appendingPathComponent(" · 修剪")
+        // appendingPathComponent 会把" · 修剪"当路径组件插出斜杠（子目录不存在 → 导出必败），必须字符串拼接
+        let base = movieURL.deletingPathExtension().path
+        return URL(fileURLWithPath: base + " · 修剪")
             .appendingPathExtension(gifSelected ? "gif" : "mp4")
     }
 

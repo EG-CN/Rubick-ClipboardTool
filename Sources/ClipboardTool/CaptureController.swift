@@ -490,7 +490,8 @@ final class CaptureController {
         let r = rect.integral
         if pendingPurpose == .record {
             teardown(restoreFocus: false)
-            RecordingController.shared.start(rect: r)
+            // 用户要求显式开始：选完框先武装（呈现「开始录制」条），不自动开录
+            RecordingController.shared.arm(rect: r)
             return
         }
         if pendingPurpose == .long {
