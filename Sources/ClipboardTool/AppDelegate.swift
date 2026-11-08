@@ -349,7 +349,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .init(zh: "管理", en: "MANAGEMENT", trailing: nil, entries: [
                 .init(title: "偏好设置…", symbol: "gearshape", shortcut: "⌘,", style: .normal, action: { [weak self] in self?.openSettings() }),
                 .init(title: "清空历史…", symbol: "trash", shortcut: nil, style: .destructive, action: { [weak self] in self?.clearHistory() }),
-                .init(title: "退出拉比克", symbol: "power", shortcut: "⌘Q", style: .normal, action: { self?.quit() }),
+                .init(title: "退出拉比克", symbol: "power", shortcut: "⌘Q", style: .normal, action: { self.quit() }),
             ]),
         ]
         StatusMenuPanelController.shared.footer = ("Rubick v\(version)", "Sonoma Arm64")
