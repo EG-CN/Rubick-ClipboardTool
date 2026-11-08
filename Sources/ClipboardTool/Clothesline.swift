@@ -133,7 +133,9 @@ final class ClotheslineDragCatcherView: NSView {
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { receptive ? .copy : [] }
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let urls = FileTransfer.files(from: sender.draggingPasteboard)
-        guard receptive, !urls.isEmpty else { return false }
+        // 不再检查 receptive：mouseUp 解除武装可能先于 drop 到达（竞态会导致投放被拒），
+        // 有文件就收——引导框的显隐只影响视觉。
+        guard !urls.isEmpty else { return false }
         Self.dragSessionActive = false
         needsDisplay = true
         controller?.stageFilesAtMouse(urls)
@@ -268,6 +270,7 @@ final class ClotheslineController {
         suspended = false
         guard ClipboardPresentation.current == .clothesline, !hidden else { return }
         entries.forEach { if $0.view.expanded, $0.view.interaction.isOpen { $0.panel.orderFrontRegardless() } }
+        FileTrace.log("resumeAfterCapture: 恢复 \(entries.filter { $0.view.expanded }.count) 个屏的绳")
     }
     func toggle(fromHotkey: Bool = false) {
         if entries.isEmpty { refreshStyle() }
@@ -284,9 +287,13 @@ final class ClotheslineController {
             setExpanded(true, view: entry.view, feedback: true)
         }
     }
-    private func presentAtMouse() {
+    private func presentAtMouse(reason: String) {
+        FileTrace.log("presentAtMouse reason=\(reason)")
         if entries.isEmpty { refreshStyle() }
-        guard ClipboardPresentation.current == .clothesline, !suspended else { return }
+        guard ClipboardPresentation.current == .clothesline, !suspended else {
+            FileTrace.log("present blocked: form/\(suspended ? "suspended" : "ok")")
+            return
+        }
         let entry = entries.first { $0.screen.frame.contains(NSEvent.mouseLocation) } ?? entries.first
         guard let entry, !entry.view.dragging, !entry.view.receivingFiles else { return }
         hidden = false
