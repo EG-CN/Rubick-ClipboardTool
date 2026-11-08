@@ -1,0 +1,60 @@
+<meta charset="utf-8"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1280px;height:760px;overflow:hidden;position:relative;background:#06070a;color:#e3e1e9;
+  font-family:-apple-system,BlinkMacSystemFont,"Inter","PingFang SC",sans-serif;user-select:none}
+.aur{position:absolute;top:-15%;left:50%;transform:translateX(-50%);width:900px;height:420px;border-radius:50%;background:rgba(16,185,129,.10);filter:blur(120px)}
+.dim{position:absolute;inset:0;background:rgba(2,4,6,.72)}
+.win{position:absolute;top:80px;left:150px;width:980px;height:560px;background:#10131a;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,.06)}
+.win .bar{height:34px;background:#161a21;display:flex;align-items:center;gap:7px;padding:0 14px}
+.win .bar i{width:10px;height:10px;border-radius:50%}
+.win .body{padding:22px;display:flex;gap:16px}
+.win .body .c{flex:1;height:150px;border-radius:10px;background:linear-gradient(150deg,#141d18,#0d1512);border:1px solid rgba(78,222,163,.18);padding:14px}
+.win .body .c i{display:block;height:8px;border-radius:4px;background:rgba(255,255,255,.08);margin-bottom:9px}
+.win .body .c i.g{width:45%;background:rgba(78,222,163,.35)}
+.region{position:absolute;top:150px;left:230px;width:640px;height:340px;border:2px solid #34d399;border-radius:6px;
+  box-shadow:0 0 0 4px rgba(16,185,129,.14),0 0 44px rgba(16,185,129,.22);overflow:hidden}
+.region .rec{position:absolute;top:0;left:0;width:100%;height:3px;background:linear-gradient(90deg,#ef4444,#f87171);animation:slide 2.4s linear infinite}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+.badge{position:absolute;top:10px;right:10px;display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
+  background:rgba(0,0,0,.65);border:1px solid rgba(239,68,68,.5);font:600 11px "JetBrains Mono",monospace;color:#f87171}
+.badge i{width:8px;height:8px;border-radius:50%;background:#ef4444;animation:blink 1.2s infinite}
+@keyframes blink{50%{opacity:.25}}
+.bar{position:absolute;left:50%;transform:translateX(-50%);top:520px;display:flex;align-items:center;gap:14px;
+  padding:10px 18px;border-radius:16px;background:rgba(13,16,20,.92);border:1px solid rgba(255,255,255,.12);
+  backdrop-filter:blur(18px);box-shadow:0 14px 34px -8px rgba(0,0,0,.65)}
+.dot{width:12px;height:12px;border-radius:50%;background:#ef4444;box-shadow:0 0 10px rgba(239,68,68,.8);animation:blink 1.2s infinite}
+.tmr{font:600 15px "JetBrains Mono",monospace;color:#f1f5f9;letter-spacing:.04em}
+.btn{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#e3e1e9}
+.btn.stop{background:#ef4444;border-color:#ef4444;color:#fff;box-shadow:0 0 14px rgba(239,68,68,.5)}
+.btn i{width:11px;height:11px;border-radius:2px;background:currentColor}
+.btn .tri{width:0;height:0;border-left:10px solid currentColor;border-top:6px solid transparent;border-bottom:6px solid transparent;margin-left:2px}
+.btn .pb2{display:flex;gap:3px}.btn .pb2 u{width:3.5px;height:12px;background:currentColor;border-radius:1px}
+.vsep{width:1px;height:20px;background:rgba(255,255,255,.14)}
+.pip{display:flex;align-items:center;gap:7px;font-size:11.5px;color:#8b95a1}
+.pip .cam{width:30px;height:22px;border-radius:5px;background:rgba(78,222,163,.12);border:1px solid rgba(78,222,163,.4);
+  display:flex;align-items:center;justify-content:center;color:#4edea3;font-size:11px}
+.key{font:500 10.5px "JetBrains Mono",monospace;color:#68737e}
+</style>
+<div class="aur"></div>
+<div class="win">
+  <div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span style="margin-left:8px;font:11px 'JetBrains Mono',monospace;color:#4a5568">冲刺复盘.key — 演示</span></div>
+  <div class="body"><div class="c"><i class="g"></i><i></i><i style="width:70%"></i><i style="width:85%"></i></div><div class="c"><i></i><i class="g"></i><i style="width:60%"></i><i></i></div><div class="c"><i class="g"></i><i style="width:75%"></i><i></i><i class="g" style="width:55%"></i></div></div>
+</div>
+<div class="dim"></div>
+<div class="region">
+  <div class="rec"></div>
+  <div class="badge"><i></i>REC 00:42</div>
+</div>
+<div class="bar">
+  <span class="dot"></span>
+  <span class="tmr">00:42</span>
+  <span class="vsep"></span>
+  <div class="btn" title="暂停"><div class="pb2"><u></u><u></u></div></div>
+  <div class="btn stop" title="停止"><i></i></div>
+  <div class="btn" title="重新录制"><div class="tri"></div></div>
+  <span class="vsep"></span>
+  <div class="pip"><div class="cam">◉</div>摄像头</div>
+  <span class="key">⌘⌥R 停止</span>
+</div>

@@ -1,0 +1,74 @@
+<meta charset="utf-8"/>
+<script src="https://unpkg.com/lucide@0.454.0/dist/umd/lucide.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1280px;height:760px;overflow:hidden;position:relative;background:#06070a;color:#e3e1e9;
+  font-family:-apple-system,BlinkMacSystemFont,"Inter","PingFang SC",sans-serif;user-select:none}
+.aur{position:absolute;top:-15%;left:50%;transform:translateX(-50%);width:900px;height:420px;border-radius:50%;background:rgba(16,185,129,.10);filter:blur(120px)}
+.dim{position:absolute;inset:0;background:rgba(2,4,6,.72)}
+.app{position:absolute;top:80px;left:150px;width:980px;height:560px;background:#10131a;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,.06)}
+.app .bar{height:34px;background:#161a21;display:flex;align-items:center;gap:7px;padding:0 14px}
+.app .bar i{width:10px;height:10px;border-radius:50%}
+.region{position:absolute;top:130px;left:210px;width:620px;height:300px;border:2px solid #34d399;border-radius:6px;
+  box-shadow:0 0 0 4px rgba(16,185,129,.14);background:rgba(10,14,12,.4);overflow:hidden}
+.region .demo{position:absolute;inset:20px}
+.region .demo i{display:block;height:9px;border-radius:4px;background:rgba(255,255,255,.14);margin-bottom:12px}
+.region .demo i.g{width:42%;background:rgba(78,222,163,.4)}
+.region .demo svg{position:absolute;left:120px;top:110px;width:220px;height:110px;overflow:visible}
+.hdl{position:absolute;width:9px;height:9px;border-radius:50%;background:#fff;border:1.5px solid rgba(0,0,0,.55)}
+.tb{position:absolute;left:50%;transform:translateX(-50%);top:470px;display:flex;align-items:center;gap:4px;
+  padding:7px 10px;border-radius:13px;background:rgba(13,16,20,.94);border:1px solid rgba(255,255,255,.12);
+  backdrop-filter:blur(18px);box-shadow:0 14px 36px -8px rgba(0,0,0,.7)}
+.t{position:relative;width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  color:#c3cbd4;font-size:0}
+.t svg{width:17px;height:17px}
+.t.on{background:rgba(16,185,129,.16);color:#4edea3;box-shadow:inset 0 0 0 1px rgba(78,222,163,.4)}
+.t .n{position:absolute;right:3px;bottom:2px;font:600 8.5px "JetBrains Mono",monospace;color:#68737e}
+.t.on .n{color:#4edea3}
+.t:hover{background:rgba(255,255,255,.08)}
+.v{width:1px;height:22px;background:rgba(255,255,255,.12);margin:0 5px}
+.ok{width:38px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:#10b981;color:#003824}
+.no{width:38px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.07);color:#8b95a1}
+.hint{position:absolute;left:50%;transform:translateX(-50%);top:536px;font-size:11.5px;color:#8b95a1}
+.hint b{color:#4edea3;font-weight:500}
+</style>
+<div class="aur"></div>
+<div class="app">
+  <div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span style="margin-left:8px;font:11px 'JetBrains Mono',monospace;color:#4a5568">需求文档.md — 预览</span></div>
+</div>
+<div class="dim"></div>
+<div class="region">
+  <div class="demo"><i class="g"></i><i style="width:80%"></i><i style="width:65%"></i><i style="width:88%"></i><i class="g" style="width:55%"></i></div>
+  <svg viewBox="0 0 220 110" fill="none">
+    <defs><marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#34d399"/></marker></defs>
+    <path d="M 8,100 C 60,90 140,60 208,14" stroke="#34d399" stroke-width="3.5" marker-end="url(#ah)"/>
+    <rect x="2" y="92" width="14" height="14" rx="4" fill="#34d399"/><circle cx="9" cy="99" r="3.5" fill="#052e1c"/>
+  </svg>
+</div>
+<div class="hdl" style="left:206px;top:126px"></div><div class="hdl" style="left:516px;top:126px"></div>
+<div class="hdl" style="left:206px;top:426px"></div><div class="hdl" style="left:516px;top:426px"></div>
+<div class="hdl" style="left:361px;top:126px"></div><div class="hdl" style="left:361px;top:426px"></div>
+<div class="hdl" style="left:206px;top:276px"></div><div class="hdl" style="left:516px;top:276px"></div>
+<div class="tb">
+  <div class="t"><i data-lucide="square"></i><span class="n">1</span></div>
+  <div class="t"><i data-lucide="circle"></i><span class="n">2</span></div>
+  <div class="t on"><i data-lucide="move-up-right"></i><span class="n">3</span></div>
+  <div class="t"><i data-lucide="pencil"></i><span class="n">4</span></div>
+  <div class="t"><i data-lucide="type"></i><span class="n">5</span></div>
+  <div class="t"><i data-lucide="grid-3x3"></i><span class="n">6</span></div>
+  <div class="t"><i data-lucide="highlighter"></i><span class="n">7</span></div>
+  <div class="t"><i data-lucide="list-ordered"></i><span class="n">8</span></div>
+  <div class="v"></div>
+  <div class="t"><i data-lucide="scan-text"></i></div>
+  <div class="t"><i data-lucide="languages"></i></div>
+  <div class="v"></div>
+  <div class="t"><i data-lucide="undo-2"></i></div>
+  <div class="t"><i data-lucide="redo-2"></i></div>
+  <div class="v"></div>
+  <div class="no"><i data-lucide="x"></i></div>
+  <div class="ok"><i data-lucide="check"></i></div>
+</div>
+<div class="hint">工具条吸附在选区下方 · 拖过箭头两端可调整指向 · <b>Esc 先撤当前图形再退出</b> · ↵ 确认</div>
+<script>lucide.createIcons();</script>
+</style>
+</div>

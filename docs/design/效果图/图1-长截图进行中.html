@@ -1,0 +1,70 @@
+<meta charset="utf-8"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1280px;height:760px;overflow:hidden;position:relative;background:#06070a;color:#e3e1e9;
+  font-family:-apple-system,BlinkMacSystemFont,"Inter","PingFang SC",sans-serif;user-select:none}
+.aur{position:absolute;top:-15%;left:50%;transform:translateX(-50%);width:900px;height:420px;border-radius:50%;background:rgba(16,185,129,.10);filter:blur(120px)}
+.dim{position:absolute;inset:0;background:rgba(2,4,6,.72)}
+.page{position:absolute;top:70px;left:140px;width:1000px;height:600px;background:#f5f6f8;border-radius:10px;overflow:hidden}
+.page .ph{height:52px;background:#fff;border-bottom:1px solid #e3e5ea;display:flex;align-items:center;gap:8px;padding:0 18px}
+.page .ph b{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#10b981,#059669)}
+.page .ph span{color:#6b7280;font-size:13px;font-weight:600}
+.page .row,.region .row{display:flex;gap:14px;padding:16px 20px 0}
+.page .card,.region .card{flex:1;height:110px;background:#fff;border-radius:10px;border:1px solid #e7e9ee;padding:12px}
+.page .card i,.region .card i{display:block;height:8px;border-radius:4px;background:#e5e7eb;margin-bottom:8px}
+.page .card i.g,.region .card i.g{width:55%;background:#a7f3d0}
+.page .card b,.region .card b{display:block;height:56px;border-radius:8px;background:linear-gradient(140deg,#ecfdf5,#d1fae5)}
+.page .txt,.region .txt{padding:16px 22px}
+.page .txt i,.region .txt i{display:block;height:9px;border-radius:4px;background:#e5e7eb;margin:0 0 10px}
+.region{position:absolute;top:110px;left:190px;width:660px;height:380px;border:2px solid #34d399;border-radius:6px;
+  box-shadow:0 0 0 4px rgba(16,185,129,.15),0 0 40px rgba(16,185,129,.25);overflow:hidden}
+.region .inner{position:absolute;top:-38px;left:0;width:100%;height:820px;background:#f5f6f8}
+.region .mv{position:absolute;left:0;width:100%;height:30px;display:flex;align-items:center;justify-content:center;gap:8px;
+  color:#34d399;font-size:12px;font-weight:600;background:rgba(6,15,10,.35)}
+.region .mv.top{top:0}.region .mv.bot{bottom:0}
+.region .mv u{width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent}
+.region .mv.top u{border-bottom:9px solid #34d399;animation:up 1s infinite alternate}
+.region .mv.bot u{border-top:9px solid #34d399;animation:dn 1s infinite alternate}
+@keyframes up{from{transform:translateY(-3px)}to{transform:translateY(3px)}}
+@keyframes dn{from{transform:translateY(3px)}to{transform:translateY(-3px)}}
+.pill{position:absolute;left:50%;transform:translateX(-50%);top:530px;display:flex;align-items:center;gap:12px;
+  padding:9px 18px;border-radius:999px;background:rgba(13,16,20,.88);border:1px solid rgba(255,255,255,.1);
+  backdrop-filter:blur(16px);box-shadow:0 12px 30px -6px rgba(0,0,0,.6);font-size:13px}
+.spin{width:14px;height:14px;border:2px solid rgba(78,222,163,.25);border-top-color:#4edea3;border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.kbd{padding:2px 8px;border-radius:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);font:500 11px "JetBrains Mono",monospace;color:#bbcabf}
+.hint{position:absolute;left:50%;transform:translateX(-50%);top:588px;font-size:11.5px;color:#8b95a1}
+.strip{position:absolute;right:60px;top:96px;width:150px;height:560px;background:rgba(13,16,20,.9);border:1px solid rgba(255,255,255,.1);
+  border-radius:12px;backdrop-filter:blur(16px);padding:10px;display:flex;flex-direction:column;gap:8px}
+.strip .t{font-size:11px;color:#8b95a1;text-align:center;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,.08)}
+.strip .s{flex:1;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;gap:5px;background:#10151c;padding:8px}
+.strip .s i{height:7px;border-radius:3px;background:#233040}
+.strip .s i.g{background:rgba(78,222,163,.4)}
+.strip .pb{height:4px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden}
+.strip .pb b{display:block;width:62%;height:100%;background:linear-gradient(90deg,#10b981,#34d399)}
+.strip .n{font:500 10.5px "JetBrains Mono",monospace;color:#4edea3;text-align:center}
+</style>
+<div class="aur"></div>
+<div class="page">
+  <div class="ph"><b></b><span>项目进度看板 · 冲刺 14</span></div>
+  <div class="row"><div class="card"><i class="g"></i><i></i><i style="width:70%"></i><b></b></div><div class="card"><i></i><i class="g"></i><i></i><b style="background:linear-gradient(140deg,#eef2ff,#e0e7ff)"></b></div><div class="card"><i class="g"></i><i></i><i class="g"></i><b></b></div></div>
+  <div class="txt"><i style="width:92%"></i><i style="width:85%"></i><i style="width:90%"></i><i style="width:60%"></i></div>
+</div>
+<div class="dim"></div>
+<div class="region">
+  <div class="inner">
+    <div class="row" style="padding-top:20px"><div class="card"><i class="g"></i><i></i><i style="width:70%"></i><b></b></div><div class="card"><i></i><i class="g"></i><i></i><b style="background:linear-gradient(140deg,#eef2ff,#e0e7ff)"></b></div></div>
+    <div class="txt"><i style="width:88%"></i><i style="width:80%"></i><i style="width:92%"></i></div>
+    <div class="row"><div class="card"><i class="g"></i><i style="width:65%"></i><i></i><b style="background:linear-gradient(140deg,#fef3c7,#fde68a)"></b></div><div class="card"><i></i><i class="g"></i><i style="width:75%"></i><b></b></div></div>
+  </div>
+  <div class="mv top"><u></u>自动滚动中</div>
+  <div class="mv bot"><u></u></div>
+</div>
+<div class="pill"><span class="spin"></span><span>长截图中 · 已拼接 <b style="color:#4edea3">3</b> 屏</span><span class="kbd">↵ 完成</span><span class="kbd">Esc 取消</span></div>
+<div class="hint">页面到底会自动停止 · 松开鼠标也可随时结束</div>
+<div class="strip">
+  <div class="t">拼接预览</div>
+  <div class="s"><i class="g" style="width:80%"></i><i></i><i style="width:65%"></i><i class="g" style="width:75%"></i><i></i><i style="width:85%"></i><i class="g" style="width:60%"></i><i style="width:72%"></i><i class="g" style="width:78%"></i><i></i><i style="width:66%"></i><i class="g" style="width:82%"></i><i style="width:58%"></i></div>
+  <div class="pb"><b></b></div>
+  <div class="n">62% · 3280 px</div>
+</div>
