@@ -1,12 +1,13 @@
 import AppKit
 import CoreGraphics
+import os
 import ScreenCaptureKit
 
-// MARK: - 长截图（⌘⇧L / 菜单「长截图」）
-// 流程：框选区域 → 程序滚动注入 → 分片截屏 → 行对齐拼接；过程 HUD 实时回报，↵ 提前完成，⎋ 取消。
+// MARK: - 长截图（⌘⇧L 手动 / 菜单「长截图（自动滚动）」）
+// 手动模式：全局监听滚轮事件的精确像素增量（不靠图像匹配），用户自己控制滚动节奏；
+// 自动模式：程序注入整数行滚动 + 剖面相关对齐。HUD 实时预览，单击完成，Esc 取消。
 
 /// 文件落盘诊断：unified log 对 info/notice 级不可靠（不落盘），文件版一查一个准。
-/// 追加写 $TMPDIR/rubick-trace.txt，诊断后可整包带走。
 enum FileTrace {
     static let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("rubick-trace.txt")
     static func log(_ line: String) {
@@ -20,7 +21,6 @@ enum FileTrace {
         }
     }
 }
-
 
 /// 长截图进度 HUD：区域下方进度胶囊 + 右侧实时拼接预览条。
 /// 面板都在选区矩形之外，不会被拍进帧里；非激活、不拦截鼠标。
@@ -219,11 +219,13 @@ enum StitchEngine {
         /// 亚像素渲染下逐像素匹配会失败，剖面相关不受影响
         private(set) var rowProfile: [Double] = []
         private(set) var rowProfileStd: Double = 0
+        /// 每行对比度（采样亮度的 max-min）：区分"有内容的行"和"纯色行"
+        private(set) var rowContrast: [Double] = []
 
         mutating func buildProfile() {
             guard rowProfile.isEmpty else { return }
             var raw = [Double](repeating: 0, count: height)
-            let step = max(2, width / 400) * 2
+            let step = max(4, width / 400) * 4
             for y in 0..<height {
                 let off = y * bytesPerRow
                 var sum = 0, n = 0, x = 0
@@ -237,6 +239,20 @@ enum StitchEngine {
             rowProfileStd = std
             // 归一化：纯色页 std≈0 → 剖面接近 0（配合 std 门槛判"无内容"）
             rowProfile = raw.map { ($0 - mean) / (std + 0.0001) }
+            // 行对比度：该行采样亮度的极差
+            var contrast = [Double](repeating: 0, count: height)
+            for y in 0..<height {
+                let off = y * bytesPerRow
+                var lo = 255.0, hi = 0.0, x = 0
+                while x + 2 < bytesPerRow {
+                    let v = Double(data[off + x])
+                    if v < lo { lo = v }
+                    if v > hi { hi = v }
+                    x += step
+                }
+                contrast[y] = hi - lo
+            }
+            rowContrast = contrast
         }
 
     init?(image: CGImage) {
@@ -286,27 +302,28 @@ enum StitchEngine {
         var p = prev, n = next
         p.buildProfile(); n.buildProfile()
         let anchorRows = 30
-        let anchorBase = max(40, stickyHeight + 8)
-        let rowTolerance = max(3, min(prev.bytesPerRow / 4 / 11 / 8, 12))
-        // 主通道：像素级精确对齐（自动注入是整数行滚动，快且准）
-        for s in 0...maxSearch {
-            guard anchorBase + s + anchorRows < next.height,
-                  anchorBase + s + anchorRows < prev.height else { break }
-            var matched = 0
-            var r = anchorBase
-            while r < anchorBase + anchorRows {
-                if next.rowEquals(r, in: prev, r + s, tolerance: rowTolerance) { matched += 1 }
-                r += 3
-            }
-            if matched >= 7 { return s }
-        }
-        // 剖面标准差过小（纯色/近纯色页面）时剖面不可信，按未滚动处理
+        let anchorTop = max(40, stickyHeight + 8)
+        // 纯色/近纯色画面：无内容可追踪
         guard p.rowProfileStd > 0.5, n.rowProfileStd > 0.5 else { return 0 }
-        // 回退主通道：行亮度剖面相关（手动平滑滚动有亚像素重渲染，逐像素必失败；
-        // 文本页面的行亮度剖面结构极强，相关性匹配对亚像素免疫）。双向扫描。
+        // 锚带：对比度最高的 30 行（预留向下搜索余量），避开吸顶区
+        let bandCeiling = max(anchorTop, min(p.rowContrast.count, n.rowContrast.count) - maxSearch - anchorRows - 8)
+        var bandBase = anchorTop
+        var bandContrast = 0.0
+        var y = anchorTop
+        while y + anchorRows + 40 < bandCeiling {
+            var sum = 0.0
+            var r = y
+            while r < y + anchorRows { sum += p.rowContrast[r]; r += 3 }
+            let avg = sum / Double(anchorRows / 3)
+            if avg > bandContrast { bandContrast = avg; bandBase = y }
+            y += 9
+        }
+        guard bandContrast > 8 else { return 0 }
+        // 剖面相关：归一化行亮度剖面双向全量扫描 + 显著性检验。
+        // 亚像素渲染只微扰剖面，逐像素匹配在深色 UI 稀疏内容上会被背景稀释而误判。
         func scan(_ shift: Int) -> Double? {
-            let lo = max(anchorBase, -shift)
-            let hi = min(anchorBase + anchorRows, min(n.rowProfile.count, p.rowProfile.count - shift))
+            let lo = max(bandBase, -shift)
+            let hi = min(bandBase + anchorRows, min(n.rowProfile.count, p.rowProfile.count - shift))
             guard hi - lo >= anchorRows / 2 else { return nil }
             var err = 0.0
             for y in lo..<hi { err += abs(n.rowProfile[y] - p.rowProfile[y + shift]) }
@@ -320,7 +337,7 @@ enum StitchEngine {
                 if best == nil || e < best!.err { best = (s, e) }
             }
         }
-        // 显著性：最佳偏移的归一化剖面误差需明显低于随机对齐（单位方差下随机≈1.1）
+        // 显著性：真实对齐的剖面误差显著低于随机对齐（单位方差下随机≈1.1）
         guard count > 0, let best, best.err < (total / Double(count)) * 0.6, best.err < 0.9 else { return nil }
         return best.offset
     }
@@ -333,37 +350,39 @@ enum StitchEngine {
 
 }
 
+
 final class LongScreenshot {
     static let shared = LongScreenshot()
 
     private var running = false
     private var cancelled = false
     private var finishNow = false
-    /// 吸顶区高度（窗口标题栏/固定导航等滚动时不动的顶部行），拼接时跳过
-    private var stickyHeight = 0
-    /// 当前滚动控制模式：手动（默认）由用户滚页面，自动为程序注入
-    var mode: LongShotMode = .manual
     private var clampedToSingleScreen = false
     private var escMonitor: Any?
-    private let maxFrames = 25
-    private let maxSearch = 600
+    private var scrollMonitor: Any?
+    private let maxFramesManual = 60
+    private let maxFramesAuto = 25
+    private var stickyHeight = 0
+    private var mode: LongShotMode = .manual
+    /// 手动模式：滚动事件累计的页面滚动位置（px，向下为正）
+    private var manualScrollPx = 0
+    /// 已采集帧的滚动位置
+    private var framePositions: [Int] = []
+    private var captureAnchor = 0
+    private var captureScale: CGFloat = 2
 
     private init() {}
 
     var enabled: Bool { UserDefaults.standard.object(forKey: "capture.longShot") as? Bool ?? true }
 
-    /// rect：AppKit 全局坐标的框选区域
+    /// rect：AppKit 全局坐标（左下原点）的框选区域；mode 本次采集的滚动控制模式
     func start(rect: CGRect, mode requested: LongShotMode = .manual) {
-        mode = requested   // 每次启动重置：上一轮的模式不带入
-        FileTrace.log("start: rect=\(NSStringFromRect(rect)) enabled=\(self.enabled) mode=\(mode == .auto ? "auto" : "manual")")
-        guard !running else { FileTrace.log("start: 已在运行中，忽略"); return }
+        guard !running else { return }
         defer { if !running { ClotheslineController.shared.resumeAfterCapture() } }
         guard enabled else {
-            FileTrace.log("start: 功能未开启")
             Toast.shared.showImportant("长截图未开启：设置 → 截图")
             return
         }
-        // 跨屏选区钳制到中心点所在屏（多屏拼接不支持）
         var rect = rect
         let spanning = NSScreen.screens.filter { $0.frame.intersects(rect) }
         if spanning.count > 1 {
@@ -381,28 +400,41 @@ final class LongScreenshot {
             return
         }
         running = true
-        let displayID = CGDirectDisplayID(num.uint32Value)
-        // 光标移到区域中心：滚动事件投向光标下的窗口
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        if let move = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
-                              mouseCursorPosition: center, mouseButton: .left) {
-            move.post(tap: .cghidEventTap)
-        }
-        // 先收起 Toast：采集期间屏上浮层会被拍进帧里，还会破坏行对齐
-        Toast.shared.hide()
-        // HUD 在区域外（胶囊在下方、预览条在右侧），不会被拍进帧
-        LongShotHUD.shared.show(rect: rect, screen: screen)
-        // ⎋ 取消（丢弃） / ↵ 提前完成（保留已拼内容）：全局监听，采集期间本应用非激活
+        mode = requested
         cancelled = false; finishNow = false
-        // 结束手势 = 单击（滚动时手就在鼠标上，Shottr 同款）；Esc = 取消。
-        // 不监听空格/回车等字符键：它们与用户在其它应用的打字、翻页天然冲突。
+        manualScrollPx = 0; captureAnchor = 0; framePositions = []; stickyHeight = 0
+        captureScale = screen.backingScaleFactor
+        let displayID = CGDirectDisplayID(num.uint32Value)
+
+        Toast.shared.hide()
+        LongShotHUD.shared.show(rect: rect, screen: screen)
+        LongShotHUD.shared.setMode(mode)
+        FileTrace.log("start rect=\(NSStringFromRect(rect)) mode=\(mode == .auto ? "auto" : "manual")")
+
+        // ⎋ 取消（全局监听：采集期间本应用非激活）；完成手势 = 单击
         escMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { [weak self] event in
+            guard let self else { return }
             if event.type == .leftMouseDown {
-                FileTrace.log("click → 提前完成")
-                self?.finishNow = true
+                FileTrace.log("click → 完成")
+                self.finishNow = true
                 return
             }
-            if event.keyCode == 53 { FileTrace.log("keydown: Esc → 取消"); self?.cancelled = true }
+            if event.keyCode == 53 { FileTrace.log("keydown: Esc → 取消"); self.cancelled = true }
+        }
+        // 手动模式：监听滚轮事件的精确像素增量——滚动偏移直接度量，零图像匹配
+        if mode == .manual {
+            scrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                guard let self, self.mode == .manual, !self.cancelled, !self.finishNow else { return }
+                let loc = NSEvent.mouseLocation
+                guard rect.insetBy(dx: -40, dy: -40).contains(loc) else { return }
+                let delta: Int
+                if event.hasPreciseScrollingDeltas {
+                    delta = Int(-event.scrollingDeltaY * self.captureScale)
+                } else {
+                    delta = Int(-event.scrollingDeltaY * 16)
+                }
+                self.manualScrollPx = max(0, self.manualScrollPx + delta)
+            }
         }
 
         Task.detached(priority: .userInitiated) { [weak self] in
@@ -412,6 +444,7 @@ final class LongScreenshot {
                 guard let self else { return }
                 self.running = false
                 LongShotHUD.shared.hide()
+                if let m = self.scrollMonitor { NSEvent.removeMonitor(m); self.scrollMonitor = nil }
                 ClotheslineController.shared.resumeAfterCapture()
                 if let m = self.escMonitor { NSEvent.removeMonitor(m); self.escMonitor = nil }
                 switch result {
@@ -423,7 +456,7 @@ final class LongScreenshot {
                 case .failure(let msg):
                     Toast.shared.showImportant("长截图失败：\(msg)")
                 case .cancelled:
-                    break   // 用户主动取消：安静收场
+                    break
                 }
             }
         }
@@ -431,7 +464,182 @@ final class LongScreenshot {
 
     private enum Outcome { case success(NSImage); case failure(String); case cancelled }
 
-    /// ScreenCaptureKit 兜底采集（按目标屏真实像素尺寸，避免被默认流拉成 1920×1080）
+    private func cropToRect(_ display: CGImage, rect: CGRect, screen: NSScreen) -> CGImage? {
+        let scale = CGFloat(display.width) / max(screen.frame.width, 1)
+        let localX = rect.minX - screen.frame.minX
+        let topDist = screen.frame.maxY - rect.maxY
+        let px = (localX * scale).rounded()
+        let py = (topDist * scale).rounded()
+        let pw = (rect.width * scale).rounded()
+        let ph = (rect.height * scale).rounded()
+        return display.cropping(to: CGRect(x: px, y: py, width: pw, height: ph))
+    }
+
+    private func screenContaining(_ p: NSPoint) -> NSScreen? {
+        NSScreen.screens.first { $0.frame.contains(p) }
+    }
+
+    private func run(rect: CGRect, displayID: CGDirectDisplayID) async -> Outcome {
+        guard let screen = NSScreen.screens.first(where: {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber).map({ CGDirectDisplayID($0.uint32Value) }) == displayID
+        }) else { return .failure("找不到目标屏幕") }
+
+        var frames: [(image: CGImage, sampler: StitchEngine.Sampler)] = []
+        var positions: [Int] = []
+        var lastOffset: Int?
+        var alignFailures = 0
+        var lastHUDUpdate: TimeInterval = 0
+        let cap = mode == .auto ? maxFramesAuto : maxFramesManual
+        let regionPxH = Int((rect.height * captureScale).rounded())
+
+        var iteration = 0
+        while frames.count < cap {
+            iteration += 1
+            if cancelled { FileTrace.log("run: 取消"); return .cancelled }
+
+            // ── 采集一帧 ──
+            var full = CGDisplayCreateImage(displayID)
+            if full == nil {
+                full = try? await Self.screenKitCapture(displayID: displayID)
+            }
+            guard let full,
+                  let cropped = cropToRect(full, rect: rect, screen: screen),
+                  var sampler = StitchEngine.Sampler(image: cropped) else {
+                FileTrace.log("iter \(iteration): 采集失败")
+                return .failure("截屏失败（第 \(iteration) 轮）")
+            }
+            sampler.buildProfile()
+
+            var pos: Int
+            if mode == .manual {
+                pos = min(max(manualScrollPx, 0), 20000)
+                // 滚动位置没推进：不追加帧
+                if !frames.isEmpty, pos <= captureAnchor + 8 {
+                    if finishNow { break }
+                    try? await Task.sleep(nanoseconds: 450_000_000)
+                    continue
+                }
+            } else {
+                pos = frames.isEmpty ? 0 : (positions.last ?? 0) + (lastOffset ?? 0)
+            }
+
+            // ── 对齐（仅自动模式需要；手动模式位置由滚动事件直接度量）──
+            if mode == .auto, let last = frames.last {
+                guard let offset = StitchEngine.scrollOffset(prev: last.sampler, next: sampler, maxSearch: 600, stickyHeight: stickyHeight) else {
+                    alignFailures += 1
+                    FileTrace.log("iter \(iteration): 对齐失败（连续 \(alignFailures) 次）")
+                    if alignFailures >= 3 { break }
+                    try? await Task.sleep(nanoseconds: 450_000_000)
+                    continue
+                }
+                alignFailures = 0
+                if offset == 0 {
+                    FileTrace.log("iter \(iteration): 页面到底")
+                    await MainActor.run { LongShotHUD.shared.markBottom() }
+                    break
+                }
+                lastOffset = offset
+            }
+
+            // ── 吸顶检测（第 2 帧、确认有滚动时）──
+            if frames.count == 1 {
+                let f1 = frames[0].sampler
+                var sticky = 0
+                while sticky < min(f1.height, sampler.height, 300),
+                      sampler.rowEquals(sticky, in: f1, sticky, tolerance: 3) { sticky += 1 }
+                if sticky > 4 {
+                    stickyHeight = sticky
+                    FileTrace.log("吸顶区检测：\(sticky) px（拼接时跳过）")
+                }
+            }
+
+            frames.append((cropped, sampler))
+            positions.append(pos)
+            if frames.count > 1, mode == .auto { frames[frames.count - 2].sampler.data = [] }
+
+            // ── 进度 HUD ──
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - lastHUDUpdate > 0.35 || frames.count == 1 {
+                lastHUDUpdate = now
+                let totalPx = pos + regionPxH
+                let percent = min(1, Double(frames.count) / Double(cap))
+                let preview = Self.makePreview(frames: frames, positions: positions, stickyHeight: stickyHeight)
+                await MainActor.run {
+                    LongShotHUD.shared.update(frames: frames.count, totalPx: totalPx, percent: percent, preview: preview)
+                }
+            }
+
+            if finishNow { FileTrace.log("run: 完成，共 \(frames.count) 帧"); break }
+
+            // ── 自动模式注入滚动；手动模式等用户 ──
+            if mode == .auto {
+                let step = lastOffset.map { min(24, max(10, $0 / 8)) } ?? 12
+                let src = CGEventSource(stateID: .combinedSessionState)
+                if let ev = CGEvent(scrollWheelEvent2Source: src, units: .line, wheelCount: 1,
+                                    wheel1: -Int32(step), wheel2: 0, wheel3: 0) {
+                    ev.post(tap: .cghidEventTap)
+                }
+                lastOffset = nil   // 注入后由匹配器重新度量
+            }
+            try? await Task.sleep(nanoseconds: 450_000_000)
+        }
+
+        if cancelled { return .cancelled }
+        guard let first = frames.first else { return .failure("未采集到帧") }
+        let pw = first.image.width
+        let ph = first.image.height
+        let top = positions.first ?? 0
+        let bottom = (positions.last ?? 0) + ph
+        let totalH = max(bottom - top, ph)
+        guard frames.count > 1 || (mode == .auto) else {
+            let scale = CGFloat(pw) / max(rect.width, 1)
+            return .success(NSImage(cgImage: first.image,
+                                    size: CGSize(width: CGFloat(pw) / scale,
+                                                 height: CGFloat(ph) / scale)))
+        }
+        guard let ctx = CGContext(data: nil, width: pw, height: totalH,
+                                  bitsPerComponent: 8, bytesPerRow: pw * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return .failure("拼接画布创建失败")
+        }
+        ctx.interpolationQuality = .none
+        for (i, f) in frames.enumerated() {
+            let pos = positions[i]
+            let skip = i == 0 ? 0 : min(stickyHeight, ph - 8)
+            let drawH = ph - skip
+            guard drawH > 0,
+                  let sub = f.image.cropping(to: CGRect(x: 0, y: skip, width: pw, height: drawH)) else { continue }
+            // 帧 i 的内容顶 = pos + skip（吸顶行只保留首帧的）
+            ctx.draw(sub, in: CGRect(x: 0, y: CGFloat(totalH - pos - skip - drawH),
+                                     width: CGFloat(pw), height: CGFloat(drawH)))
+        }
+        guard let out = ctx.makeImage() else { return .failure("拼接输出失败") }
+        let scale = CGFloat(pw) / max(rect.width, 1)
+        return .success(NSImage(cgImage: out, size: CGSize(width: CGFloat(pw) / scale, height: CGFloat(totalH) / scale)))
+    }
+
+    /// 拼接进度预览：把已采集帧按各自滚动位置缩到 160pt 宽画布
+    private static func makePreview(frames: [(image: CGImage, sampler: StitchEngine.Sampler)], positions: [Int], stickyHeight: Int, width: Int = 160) -> CGImage? {
+        guard let first = frames.first, let lastPos = positions.last else { return nil }
+        let scale = Double(width) / Double(max(first.image.width, 1))
+        let frameH = Double(first.image.height)
+        let totalH = Double(lastPos) + frameH
+        let outH = Int(max(1, totalH * scale))
+        guard let ctx = CGContext(data: nil, width: width, height: outH,
+                                  bitsPerComponent: 8, bytesPerRow: width * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.interpolationQuality = .low
+        for (i, f) in frames.enumerated() {
+            let skip = i == 0 ? 0 : stickyHeight
+            let y = (Double(positions[i] + skip)) * scale
+            ctx.draw(f.image, in: CGRect(x: 0, y: y, width: Double(width), height: frameH * scale))
+        }
+        return ctx.makeImage()
+    }
+
+    /// ScreenCaptureKit 兜底采集
     private static func screenKitCapture(displayID: CGDirectDisplayID) async throws -> CGImage? {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         guard let display = content.displays.first(where: { $0.displayID == displayID }) else { return nil }
@@ -441,156 +649,5 @@ final class LongScreenshot {
         config.height = max(CGDisplayPixelsHigh(displayID), 1)
         config.showsCursor = false
         return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
-    }
-
-    private func cropToRect(_ display: CGImage, rect: CGRect, screen: NSScreen) -> CGImage? {
-        let scale = CGFloat(display.width) / max(screen.frame.width, 1)
-        let localX = rect.minX - screen.frame.minX
-        // CGImage.cropping(to:) 是左上原点像素坐标：py = 距屏顶的距离（此前按底部原点算会截到镜像区域）
-        let topDist = screen.frame.maxY - rect.maxY
-        let px = (localX * scale).rounded()
-        let py = (topDist * scale).rounded()
-        let pw = (rect.width * scale).rounded()
-        let ph = (rect.height * scale).rounded()
-        return display.cropping(to: CGRect(x: px, y: py, width: pw, height: ph))
-    }
-
-    /// 拼接进度预览：把已采集帧缩到 160pt 宽的画布上（仅喂 HUD，不影响成品）
-    private static func makePreview(frames: [(image: CGImage, sampler: StitchEngine.Sampler)], offsets: [Int], width: Int = 160) -> CGImage? {
-        guard let first = frames.first else { return nil }
-        let scale = Double(width) / Double(max(first.image.width, 1))
-        let frameH = Double(first.image.height)
-        let totalH = frameH + Double(offsets.reduce(0, +))
-        let outH = Int(max(1, totalH * scale))
-        guard let ctx = CGContext(data: nil, width: width, height: outH,
-                                  bitsPerComponent: 8, bytesPerRow: width * 4,
-                                  space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        ctx.interpolationQuality = .low
-        var shifted = 0.0
-        for (i, f) in frames.enumerated() {
-            if i > 0 { shifted += Double(offsets[i - 1]) }
-            let y = (totalH - shifted - frameH) * scale
-            ctx.draw(f.image, in: CGRect(x: 0, y: y, width: Double(width), height: frameH * scale))
-        }
-        return ctx.makeImage()
-    }
-
-    private func run(rect: CGRect, displayID: CGDirectDisplayID) async -> Outcome {
-        guard let screen = NSScreen.screens.first(where: {
-            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber).map({ CGDirectDisplayID($0.uint32Value) }) == displayID
-        }) else { return .failure("找不到目标屏幕") }
-
-        var frames: [(image: CGImage, sampler: StitchEngine.Sampler)] = []
-        var offsets: [Int] = []
-        var lastOffset: Int?
-        var alignFailures = 0
-
-        var iteration = 0
-        while frames.count < (mode == .auto ? 25 : 60) {
-            iteration += 1
-            if cancelled { FileTrace.log("run: 第 \(iteration) 轮前收到取消"); return .cancelled }
-            // 经典 API 优先，失败回退 SCScreenshotManager（macOS 26 上两者都偶发单边失效）
-            var full = CGDisplayCreateImage(displayID)
-            if full == nil {
-                FileTrace.log("iter \(iteration): CGDisplayCreateImage 失败，回退 ScreenCaptureKit")
-                full = try? await Self.screenKitCapture(displayID: displayID)
-            }
-            guard let full,
-                  let cropped = cropToRect(full, rect: rect, screen: screen),
-                  var sampler = StitchEngine.Sampler(image: cropped) else {
-                FileTrace.log("iter \(iteration): 采集失败 full=\(full != nil)")
-                return .failure("截屏失败（第 \(iteration) 轮）")
-            }
-            if frames.isEmpty { FileTrace.log("首帧 OK \(cropped.width)×\(cropped.height)") }
-            // 步长自适应上限须与对齐搜索窗联动（Retina 像素行），否则步长大会撞穿搜索窗
-            let step = lastOffset.map { min(24, max(10, $0 / 8)) } ?? 12
-            let searchWindow = max(maxSearch, step * 60)
-            if let last = frames.last {
-                guard let offset = StitchEngine.scrollOffset(prev: last.sampler, next: sampler, maxSearch: searchWindow, stickyHeight: stickyHeight) else {
-                    FileTrace.log("iter \(iteration): 对齐失败，以已采集 \(frames.count) 帧收尾")
-                    break   // 对齐失败：以已采集内容收尾
-                }
-                if offset == 0 {
-                    if mode == .auto {
-                        FileTrace.log("iter \(iteration): 页面到底（offset=0）")
-                        await MainActor.run { LongShotHUD.shared.markBottom() }
-                        break     // 自动模式：到底即停
-                    }
-                    // 手动模式：用户还没滚，不追加帧继续等待
-                    if finishNow { FileTrace.log("run: ↵ 提前完成，共 \(frames.count) 帧"); break }
-                    try? await Task.sleep(nanoseconds: 450_000_000)
-                    continue
-                }
-                FileTrace.log("iter \(iteration): 新增 \(offset) px")
-                offsets.append(offset)
-                lastOffset = offset
-            }
-            frames.append((cropped, sampler))
-            // 吸顶区检测：两帧间纹丝不动的顶部行（窗口标题栏/固定导航），拼接时跳过
-            if frames.count == 2, offsets.last ?? 0 > 0 {
-                let f1 = frames[0].sampler, f2 = frames[1].sampler
-                var sticky = 0
-                while sticky < min(f1.height, f2.height, 300), f2.rowEquals(sticky, in: f1, sticky, tolerance: 3) { sticky += 1 }
-                if sticky > 4 {
-                    stickyHeight = sticky
-                    FileTrace.log("吸顶区检测：\(sticky) px（拼接时将跳过）")
-                }
-            }
-            // 内存：Sampler 只在对齐相邻帧时有用，算完即弃（25 帧 RGBA 常驻可逼近 1GB）
-            if frames.count > 1 { frames[frames.count - 2].sampler.data = [] }
-            // 进度回报：层数 + 已拼高度 + 小图预览（HUD 在主线程）
-            let frameCount = frames.count
-            let totalPx = (frames.first?.image.height ?? 0) + offsets.reduce(0, +)
-            let percent = Double(frameCount) / Double(mode == .auto ? 25 : 60)
-            let preview = Self.makePreview(frames: frames, offsets: offsets)
-            await MainActor.run {
-                LongShotHUD.shared.update(frames: frameCount, totalPx: totalPx, percent: percent, preview: preview)
-            }
-            if finishNow { FileTrace.log("run: ↵ 提前完成，共 \(frames.count) 帧"); break }   // ↵ 提前完成：保留已拼内容
-            // 自动模式才注入滚动；手动模式滚不滚、滚多快由用户决定
-            if mode == .auto {
-                let src = CGEventSource(stateID: .combinedSessionState)
-                if let ev = CGEvent(scrollWheelEvent2Source: src, units: .line, wheelCount: 1,
-                                    wheel1: -Int32(step), wheel2: 0, wheel3: 0) {
-                    ev.post(tap: .cghidEventTap)
-                }
-            }
-            try? await Task.sleep(nanoseconds: 450_000_000)
-        }
-
-        if cancelled { return .cancelled }
-        guard let first = frames.first else { return .failure("未采集到帧") }
-        guard frames.count > 1 else {
-            // 只有 1 帧：页面无滚动，退化为普通截图（保持 Retina 点尺寸）
-            let scale = CGFloat(first.image.width) / max(rect.width, 1)
-            return .success(NSImage(cgImage: first.image,
-                                    size: CGSize(width: CGFloat(first.image.width) / scale,
-                                                 height: CGFloat(first.image.height) / scale)))
-        }
-
-        let pw = first.image.width
-        let ph = first.image.height
-        let totalH = ph + offsets.reduce(0, +)
-        guard let ctx = CGContext(data: nil, width: pw, height: totalH,
-                                  bitsPerComponent: 8, bytesPerRow: pw * 4,
-                                  space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
-            return .failure("拼接画布创建失败")
-        }
-        ctx.interpolationQuality = .none
-        var shifted = 0
-        for (i, f) in frames.enumerated() {
-            if i > 0 { shifted += offsets[i - 1] }
-            // 吸顶行只在首帧保留；后续帧跳过顶部吸顶行，避免固定标题栏被贴进每个接缝
-            let skip = i == 0 ? 0 : min(stickyHeight, ph - 8)
-            let drawH = ph - skip
-            guard drawH > 0, let sub = f.image.cropping(to: CGRect(x: 0, y: skip, width: pw, height: drawH)) else { continue }
-            ctx.draw(sub, in: CGRect(x: 0, y: CGFloat(totalH - shifted - skip - drawH),
-                                     width: CGFloat(pw), height: CGFloat(drawH)))
-        }
-        guard let out = ctx.makeImage() else { return .failure("拼接输出失败") }
-        let scale = CGFloat(pw) / max(rect.width, 1)
-        return .success(NSImage(cgImage: out, size: CGSize(width: CGFloat(pw) / scale, height: CGFloat(totalH) / scale)))
     }
 }
