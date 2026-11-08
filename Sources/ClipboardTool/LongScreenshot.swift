@@ -215,6 +215,21 @@ enum StitchEngine {
         let width: Int
         let height: Int
         let bytesPerRow: Int
+        /// 每行平均亮度（0~255，惰性构建）：亚像素渲染下逐像素匹配会失败，剖面相关不受影响
+        private(set) var rowProfile: [Double] = []
+
+        mutating func buildProfile() {
+            guard rowProfile.isEmpty else { return }
+            var prof = [Double](repeating: 0, count: height)
+            let step = max(4, width / 200) * 4
+            for y in 0..<height {
+                let off = y * bytesPerRow
+                var sum = 0, n = 0, x = 0
+                while x + 2 < bytesPerRow { sum += Int(data[off + x]) + Int(data[off + x + 1]); n += 1; x += step }
+                prof[y] = n == 0 ? 0 : Double(sum) / Double(n * 2)
+            }
+            rowProfile = prof
+        }
 
     init?(image: CGImage) {
         let w = image.width, h = image.height
@@ -260,11 +275,12 @@ enum StitchEngine {
     /// 返回 next 相对 prev 的滚动行数。向下滚 s 行 ⟺ 内容上移，next 顶部锚 prev 下方：
     /// 关系为 next[r] == prev[r + s]。0 = 无滚动；nil = 对齐失败。
     static func scrollOffset(prev: Sampler, next: Sampler, maxSearch: Int = 600) -> Int? {
-        // 快速通道：全局采样差异 < 15% 视为未滚动（容忍光标闪烁等微动画，真实滚动差异 > 50%）
-        if frameDiffRatio(prev, next) < 0.15 { return 0 }
+        var p = prev, n = next
+        p.buildProfile(); n.buildProfile()
         let anchorRows = 30
         let anchorBase = 40
         let rowTolerance = max(3, min(prev.bytesPerRow / 4 / 11 / 8, 12))
+        // 主通道：像素级精确对齐（自动注入是整数行滚动，快且准）
         for s in 0...maxSearch {
             guard anchorBase + s + anchorRows < next.height,
                   anchorBase + s + anchorRows < prev.height else { break }
@@ -274,45 +290,39 @@ enum StitchEngine {
                 if next.rowEquals(r, in: prev, r + s, tolerance: rowTolerance) { matched += 1 }
                 r += 3
             }
-            // 10 个锚行里 ≥7 吻合即认为对齐（容忍滚动期间的小动画）
             if matched >= 7 { return s }
         }
-        // 反向扫描：向上滚 k px（内容下移）⟺ next[r] == prev[r - k]
-        for k in 1...maxSearch {
-            guard anchorBase + anchorRows < next.height else { break }
-            var matched = 0, tried = 0
-            var r = anchorBase + k
-            while r < anchorBase + k + anchorRows * 3, r < next.height {
-                if r - k >= 0, r - k < prev.height {
-                    if next.rowEquals(r, in: prev, r - k, tolerance: rowTolerance) { matched += 1 }
-                    tried += 1
-                }
-                r += 3
-            }
-            if tried >= 8, matched >= tried * 7 / 10 { return -k }
+        // 剖面方差过小（接近纯色）时剖面不可信，按未滚动处理
+        guard Self.variance(p.rowProfile) > 4, Self.variance(n.rowProfile) > 4 else { return 0 }
+        // 回退主通道：行亮度剖面相关（手动平滑滚动有亚像素重渲染，逐像素必失败；
+        // 文本页面的行亮度剖面结构极强，相关性匹配对亚像素免疫）。双向扫描。
+        func scan(_ shift: Int) -> Double? {
+            let lo = max(anchorBase, -shift)
+            let hi = min(anchorBase + anchorRows, min(n.rowProfile.count, p.rowProfile.count - shift))
+            guard hi - lo >= anchorRows / 2 else { return nil }
+            var err = 0.0
+            for y in lo..<hi { err += abs(n.rowProfile[y] - p.rowProfile[y + shift]) }
+            return err / Double(hi - lo)
         }
-        return nil
+        var best: (offset: Int, err: Double)?
+        var total = 0.0, count = 0
+        for s in (-maxSearch)...maxSearch where s != 0 {
+            if let e = scan(s) {
+                total += e; count += 1
+                if best == nil || e < best!.err { best = (s, e) }
+            }
+        }
+        // 显著性：最佳偏移的剖面误差需明显低于平均（真实对齐才有低误差峰）
+        guard count > 0, let best, best.err < (total / Double(count)) * 0.6, best.err < 24 else { return nil }
+        return best.offset
     }
 
-    /// 全局采样差异比例（RG 通道、质数步进），用于"画面没变"快速判定
-    static func frameDiffRatio(_ a: Sampler, _ b: Sampler) -> Double {
-        let step = 97
-        var diff = 0, total = 0
-        var y = 0
-        let height = min(a.height, b.height)
-        let rowBytes = min(a.bytesPerRow, b.bytesPerRow)
-        while y + 2 < height {
-            let rowA = y * a.bytesPerRow, rowB = y * b.bytesPerRow
-            var x = 0
-            while x + 2 < rowBytes {
-                if a.data[rowA + x] != b.data[rowB + x] || a.data[rowA + x + 1] != b.data[rowB + x + 1] { diff += 1 }
-                total += 1
-                x += step * 4
-            }
-            y += step
-        }
-        return total == 0 ? 1 : Double(diff) / Double(total)
+    private static func variance(_ v: [Double]) -> Double {
+        guard !v.isEmpty else { return 0 }
+        let mean = v.reduce(0, +) / Double(v.count)
+        return v.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(v.count)
     }
+
 }
 
 final class LongScreenshot {
@@ -478,7 +488,7 @@ final class LongScreenshot {
             }
             guard let full,
                   let cropped = cropToRect(full, rect: rect, screen: screen),
-                  let sampler = StitchEngine.Sampler(image: cropped) else {
+                  var sampler = StitchEngine.Sampler(image: cropped) else {
                 FileTrace.log("iter \(iteration): 采集失败 full=\(full != nil)")
                 return .failure("截屏失败（第 \(iteration) 轮）")
             }
