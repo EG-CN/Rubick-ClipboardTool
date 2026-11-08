@@ -14,6 +14,7 @@ final class HotkeyManager {
         case dragOCR = 6
         case longScreenshot = 7
         case delayedScreenshot = 8
+        case screenRecord = 9
     }
 
     static let shared = HotkeyManager()
@@ -52,6 +53,7 @@ final class HotkeyManager {
         hotkeys[.pinClipboard] = read(d, "hk.pinClipboard", keyCode: UInt32(kVK_ANSI_P), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧P")
         hotkeys[.dragOCR] = read(d, "hk.dragOCR", keyCode: UInt32(kVK_ANSI_X), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧X")
         hotkeys[.longScreenshot] = read(d, "hk.longShot", keyCode: UInt32(kVK_ANSI_L), mods: UInt32(cmdKey | shiftKey), display: "⌘⇧L")
+        hotkeys[.screenRecord] = read(d, "hk.screenRecord", keyCode: UInt32(kVK_ANSI_R), mods: UInt32(cmdKey | optionKey), display: "⌘⌥R")
         // 保留文件选择器的「前往文件夹」⌘⇧G，不注册为全局截图键。
         var delayed = read(d, "hk.delayShot", keyCode: UInt32(kVK_ANSI_G), mods: UInt32(cmdKey | optionKey | shiftKey), display: "⌘⌥⇧G")
         if delayed.keyCode == UInt32(kVK_ANSI_G), delayed.modifiers == UInt32(cmdKey | shiftKey) {
@@ -79,6 +81,7 @@ final class HotkeyManager {
         case .pinClipboard: return "hk.pinClipboard"
         case .dragOCR: return "hk.dragOCR"
         case .longScreenshot: return "hk.longShot"
+        case .screenRecord: return "hk.screenRecord"
         case .delayedScreenshot: return "hk.delayShot"
         }
     }
@@ -117,6 +120,8 @@ final class HotkeyManager {
             def = Hotkey(keyCode: UInt32(kVK_ANSI_X), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧X")
         case .longScreenshot:
             def = Hotkey(keyCode: UInt32(kVK_ANSI_L), modifiers: UInt32(cmdKey | shiftKey), display: "⌘⇧L")
+        case .screenRecord:
+            def = Hotkey(keyCode: UInt32(kVK_ANSI_R), modifiers: UInt32(cmdKey | optionKey), display: "⌘⌥R")
         case .delayedScreenshot:
             def = Hotkey(keyCode: UInt32(kVK_ANSI_G), modifiers: UInt32(cmdKey | optionKey | shiftKey), display: "⌘⌥⇧G")
         }

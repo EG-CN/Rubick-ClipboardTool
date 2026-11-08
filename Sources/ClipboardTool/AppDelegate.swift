@@ -279,6 +279,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .longScreenshot:
             hideOverlaysForCapture()
             CaptureController.shared.captureForLong()
+        case .screenRecord:
+            if RecordingController.shared.isRecording {
+                RecordingController.shared.stop(keepFile: true)
+            } else {
+                hideOverlaysForCapture()
+                CaptureController.shared.captureForRecord()
+            }
         case .delayedScreenshot:
             hideOverlaysForCapture()
             CaptureController.shared.captureDelayed()
@@ -341,6 +348,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         longShotItem.target = self
         menu.addItem(longShotItem)
 
+        let recordItem = NSMenuItem(title: "录屏", action: #selector(captureScreenRecord), keyEquivalent: "r")
+        recordItem.keyEquivalentModifierMask = [.command, .option]
+        recordItem.target = self
+        menu.addItem(recordItem)
+
         let dragOCRItem = NSMenuItem(title: "划图取字", action: #selector(startDragOCR), keyEquivalent: "x")
         dragOCRItem.keyEquivalentModifierMask = [.command, .shift]
         dragOCRItem.target = self
@@ -386,6 +398,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func captureLongShot() {
         panelController.close()
         CaptureController.shared.captureForLong()
+    }
+
+    @objc private func captureScreenRecord() {
+        panelController.close()
+        if RecordingController.shared.isRecording {
+            RecordingController.shared.stop(keepFile: true)
+        } else {
+            CaptureController.shared.captureForRecord()
+        }
     }
 
     @objc private func startDragOCR() {

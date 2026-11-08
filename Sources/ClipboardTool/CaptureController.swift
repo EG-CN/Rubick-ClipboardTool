@@ -109,7 +109,8 @@ final class CaptureController {
         case normal      // 普通截图（→ 标注编辑器）
         case translate   // 划图翻译（→ OCR + 自动翻译）
         case ocr         // 划图取字（→ OCR + 复制到剪贴板，Easydict 静默模式）
-        case long        // 长截图（→ 滚动采集 + 拼接，实验性）
+        case long        // 长截图（→ 滚动采集 + 拼接）
+        case record      // 录屏（→ 区域录制 MP4，导出 GIF/MP4）
     }
 
     private var pendingPurpose: CapturePurpose = .normal
@@ -153,6 +154,12 @@ final class CaptureController {
             pendingPurpose = .normal
             beginCapture()
         }
+    }
+
+    /// 录屏：框选区域 → 松手即开始录制（⌘⌥R / 菜单「录屏」）
+    func captureForRecord() {
+        pendingPurpose = .record
+        beginCapture()
     }
 
     /// 划图翻译（Bob 式）：滑选文字区域 → OCR → 自动翻译（功能清单 12.9）
@@ -353,8 +360,10 @@ final class CaptureController {
                    ? "拖选要取字的区域 · 识别后直接复制 · ⎋ 取消"
                    : (pendingPurpose == .long
                       ? "框选长截图区域 · 松手即自动滚动采集 · ⎋ 取消"
-                      : "拖拽框选 · 单击窗口直截 · ⌥ 禁吸附 · ⎋ 取消")),
-            longMode: pendingPurpose == .long,
+                      : (pendingPurpose == .record
+                         ? "框选录屏区域 · 松手即开始录制 · ⎋ 取消"
+                         : "拖拽框选 · 单击窗口直截 · ⌥ 禁吸附 · ⎋ 取消"))),
+            captureOnRelease: pendingPurpose == .long || pendingPurpose == .record,
             onCancel: { [weak self] in self?.teardown(restoreFocus: true) },
             onConfirm: { [weak self] rect in
                 self?.finish(rect: rect, composite: composite, unionRect: unionRect)
@@ -462,6 +471,11 @@ final class CaptureController {
         teardown(restoreFocus: false)
         // 取整到整点边界，避免半像素采样让成品边缘发虚
         let r = rect.integral
+        if pendingPurpose == .record {
+            teardown(restoreFocus: false)
+            RecordingController.shared.start(rect: r)
+            return
+        }
         if pendingPurpose == .long {
             longShotLog.notice("finish→LongShot rect=\(NSStringFromRect(r), privacy: .public)")
             // 长截图：首帧裁剪后交给滚动采集拼接（不经编辑器）
@@ -490,6 +504,11 @@ final class CaptureController {
             runOCRCopy(image)
         case .long:
             // 长截图在 finish 已分流，正常不应到达；兜底走普通编辑器
+            AnnotationController.shared.show(image: image, at: rect) { [weak self] result in
+                self?.onCaptured?(result)
+            }
+        case .record:
+            // 录屏在 finish 已分流，正常不应到达；兜底走普通编辑器
             AnnotationController.shared.show(image: image, at: rect) { [weak self] result in
                 self?.onCaptured?(result)
             }
@@ -577,7 +596,8 @@ struct CaptureOverlayView: View {
     var windowFrames: [CGRect] = []
     @ObservedObject var session: CaptureSessionState
     var hintText: String = "拖拽框选 · 手柄微调 · ⌥单击取色 · ↵/✓ 确认 · ⎋ 取消"
-    var longMode: Bool = false
+    /// 松手即确认（长截图/录屏模式）：跳过待确认态直接交给对应引擎
+    var captureOnRelease: Bool = false
     let onCancel: () -> Void
     let onConfirm: (CGRect) -> Void
 
@@ -790,9 +810,9 @@ struct CaptureOverlayView: View {
                         }
                         return
                     }
-                    // 拖拽落定：长截图模式松手即采（省一步确认，Shottr 同款）；
+                    // 拖拽落定：长截图/录屏模式松手即执行（省一步确认，Shottr 同款）；
                     // 其他模式进入待确认态（8 手柄微调，↵/✓ 确认）
-                    if longMode {
+                    if captureOnRelease {
                         let finalRect = selectionRect ?? raw
                         let g = globalRect(finalRect)
                         if let clamped = g.intersection(unionRect) as CGRect?,
