@@ -277,6 +277,20 @@ enum StitchEngine {
             // 10 个锚行里 ≥7 吻合即认为对齐（容忍滚动期间的小动画）
             if matched >= 7 { return s }
         }
+        // 反向扫描：向上滚 k px（内容下移）⟺ next[r] == prev[r - k]
+        for k in 1...maxSearch {
+            guard anchorBase + anchorRows < next.height else { break }
+            var matched = 0, tried = 0
+            var r = anchorBase + k
+            while r < anchorBase + k + anchorRows * 3, r < next.height {
+                if r - k >= 0, r - k < prev.height {
+                    if next.rowEquals(r, in: prev, r - k, tolerance: rowTolerance) { matched += 1 }
+                    tried += 1
+                }
+                r += 3
+            }
+            if tried >= 8, matched >= tried * 7 / 10 { return -k }
+        }
         return nil
     }
 
