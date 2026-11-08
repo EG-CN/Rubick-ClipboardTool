@@ -453,8 +453,8 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         toolbar.layer?.borderColor = NSColor(srgbRed: 0.063, green: 0.725, blue: 0.506, alpha: 0.2).cgColor
         toolbar.layer?.backgroundColor = NSColor(calibratedRed: 0.071, green: 0.075, blue: 0.094, alpha: 0.92).cgColor
         toolbar.layer?.shadowColor = NSColor.black.cgColor
-        toolbar.layer?.shadowOpacity = 0.6
-        toolbar.layer?.shadowRadius = 14
+        toolbar.layer?.shadowOpacity = 0.5
+        toolbar.layer?.shadowRadius = 12
         toolbar.layer?.shadowOffset = NSSize(width: 0, height: -6)
         let main = NSStackView()
         main.orientation = .horizontal
@@ -585,7 +585,7 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
     private func iconButton(_ symbol: String, title: String, action: Selector) -> NSButton {
         let raw = NSImage(systemSymbolName: symbol, accessibilityDescription: title) ?? NSImage()
         // 显式 pointSize 渲染：不配尺寸的 symbol 模板在非 layer 视图里会被按自然尺寸重采样发虚
-        let button = NSButton(image: raw.withSymbolConfiguration(.init(pointSize: 15, weight: .medium)) ?? raw,
+        let button = NSButton(image: raw.withSymbolConfiguration(.init(pointSize: 14, weight: .medium)) ?? raw,
                               target: self, action: action)
         button.isBordered = false
         button.imageScaling = .scaleProportionallyDown
@@ -593,9 +593,9 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         button.setAccessibilityLabel(title)
         button.contentTintColor = NSColor.white.withAlphaComponent(0.88)
         button.wantsLayer = true
-        button.layer?.cornerRadius = 10
-        button.widthAnchor.constraint(equalToConstant: 32).isActive = true
-        button.heightAnchor.constraint(equalToConstant: 32).isActive = true
+        button.layer?.cornerRadius = 9
+        button.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        button.heightAnchor.constraint(equalToConstant: 30).isActive = true
         return button
     }
 
@@ -624,10 +624,10 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         badge.translatesAutoresizingMaskIntoConstraints = false
         button.addSubview(badge)
         NSLayoutConstraint.activate([
-            badge.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: 3),
-            badge.bottomAnchor.constraint(equalTo: button.bottomAnchor, constant: 2),
-            badge.widthAnchor.constraint(equalToConstant: 16),
-            badge.heightAnchor.constraint(equalToConstant: 14),
+            badge.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: 2),
+            badge.bottomAnchor.constraint(equalTo: button.bottomAnchor, constant: 1),
+            badge.widthAnchor.constraint(equalToConstant: 15),
+            badge.heightAnchor.constraint(equalToConstant: 13),
         ])
     }
 
@@ -799,8 +799,8 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         let fit = toolbar.fittingSize
         // 稿：工具条吸附在选区正下方居中（left-1/2），越界时钳回屏内
         let x = min(max(s.midX - fit.width / 2, safe.minX), max(safe.minX, safe.maxX - fit.width))
-        var y = s.minY - fit.height - 10
-        if y < safe.minY { y = s.maxY + 10 }
+        var y = s.minY - fit.height - 14
+        if y < safe.minY { y = s.maxY + 14 }
         y = min(max(y, safe.minY), max(safe.minY, safe.maxY - fit.height))
         toolbar.setFrameOrigin(CGPoint(x: x, y: y)); toolbar.setFrameSize(fit)
         message = (tool == .note || tool == .text) ? "Enter换行 · 点击空白完成 · 点击文字继续编辑" : "Enter 完成 · Esc 逐层返回"
@@ -842,10 +842,10 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
             if let lens = magnifierPreview ?? remoteMagnifier { marks.append(.magnifier(lens)) }
             if let preview = drawing ?? remoteDrawing { marks.append(.drawing(preview)) }
             InlineScreenshotRenderer.drawMarks(marks, image: image, selection: selection, editingID: editingID ?? remoteEditingID)
-            // 选区：2pt 翡翠边 + 4pt 外辉光（Redesign 稿 border-2 + 0 0 0 4px ring），细线在浅色页面看不清
+            // 选区：2pt 翡翠边 + 收窄的外辉光（用户反馈绿框偏满，收小一档）
             NSColor(srgbRed: 0.063, green: 0.725, blue: 0.506, alpha: 0.16).setStroke()
-            NSBezierPath(rect: selection.insetBy(dx: -4, dy: -4)).lineWidth = 5
-            NSBezierPath(rect: selection.insetBy(dx: -4, dy: -4)).stroke()
+            NSBezierPath(rect: selection.insetBy(dx: -2, dy: -2)).lineWidth = 3
+            NSBezierPath(rect: selection.insetBy(dx: -2, dy: -2)).stroke()
             NSColor(srgbRed: 0.204, green: 0.827, blue: 0.6, alpha: 1).setStroke()
             let border = NSBezierPath(rect: selection); border.lineWidth = 2; border.stroke()
             if tool == .select {
