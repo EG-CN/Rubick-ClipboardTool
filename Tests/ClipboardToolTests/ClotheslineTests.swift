@@ -20,7 +20,7 @@ struct ClotheslineTests {
             #expect(visible.contains(frame))
             #expect(frame.maxY < visible.maxY)
             #expect(frame.midX == visible.midX)
-            #expect(frame.width == max(560, visible.width - 16))
+            #expect(abs(frame.width - max(560, visible.width * 0.6)) < 0.5)
         }
     }
     @Test func continuousRailKeepsOrderAndClampsScrollOffset() {
