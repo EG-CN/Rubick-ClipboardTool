@@ -46,7 +46,8 @@ final class RecordingController: NSObject, SCStreamDelegate {
             return
         }
         self.rect = rect
-        recordLog.notice("start rect=\(NSStringFromRect(rect), privacy: .public)")
+        recordLog.notice("start rect=\(NSStringFromRect(rect))")
+        FileTrace.log("record start rect=\(NSStringFromRect(rect))")
 
         let stamp = Self.stampFormatter.string(from: Date())
         let url = directory.appendingPathComponent("录屏 \(stamp).mp4")
@@ -60,7 +61,7 @@ final class RecordingController: NSObject, SCStreamDelegate {
             do {
                 try await beginRecording(rect: rect, screen: screen, displayID: CGDirectDisplayID(num.uint32Value), url: url)
             } catch {
-                recordLog.error("start failed: \(error.localizedDescription, privacy: .public)")
+                recordLog.error("start failed: \(error.localizedDescription)")
                 Toast.shared.showImportant("录屏启动失败：\(error.localizedDescription)")
                 stream = nil; recording = nil; isRecording = false
             }
@@ -107,7 +108,8 @@ final class RecordingController: NSObject, SCStreamDelegate {
             let secs = Int(Date().timeIntervalSince(startedAt))
             self.controlView?.seconds = secs
         }
-        recordLog.notice("recording started → \(url.lastPathComponent, privacy: .public)")
+        recordLog.notice("recording started → \(url.lastPathComponent)")
+        FileTrace.log("record started → \(url.lastPathComponent)")
     }
 
     func stop(keepFile: Bool = true) {
@@ -467,7 +469,7 @@ struct PlayerRepresentable: NSViewRepresentable {
 extension RecordingController: SCRecordingOutputDelegate {
     func recordingOutput(_ recordingOutput: SCRecordingOutput, didFinishRecordingWithError error: (any Error)?) {
         if let error {
-            recordLog.error("didFinish with error: \(error.localizedDescription, privacy: .public)")
+            recordLog.error("didFinish with error: \(error.localizedDescription)")
         } else {
             recordLog.notice("didFinish recording OK")
         }

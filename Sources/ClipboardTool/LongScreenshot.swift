@@ -1,12 +1,26 @@
 import AppKit
 import CoreGraphics
-import os
 import ScreenCaptureKit
 
 // MARK: - 长截图（⌘⇧L / 菜单「长截图」）
 // 流程：框选区域 → 程序滚动注入 → 分片截屏 → 行对齐拼接；过程 HUD 实时回报，↵ 提前完成，⎋ 取消。
 
-let longShotLog = Logger(subsystem: "local.rubick.screenshot-test", category: "LongShot")
+/// 文件落盘诊断：unified log 对 info/notice 级不可靠（不落盘），文件版一查一个准。
+/// 追加写 $TMPDIR/rubick-trace.txt，诊断后可整包带走。
+enum FileTrace {
+    static let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("rubick-trace.txt")
+    static func log(_ line: String) {
+        let stamped = Date().formatted(date: .omitted, time: .standard) + "  " + line + "\n"
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            handle.write(stamped.data(using: .utf8)!)
+        } else {
+            try? stamped.data(using: .utf8)?.write(to: url)
+        }
+    }
+}
+
 
 /// 长截图进度 HUD：区域下方进度胶囊 + 右侧实时拼接预览条。
 /// 面板都在选区矩形之外，不会被拍进帧里；非激活、不拦截鼠标。
@@ -284,11 +298,11 @@ final class LongScreenshot {
 
     /// rect：AppKit 全局坐标的框选区域
     func start(rect: CGRect) {
-        longShotLog.notice("start: rect=\(NSStringFromRect(rect), privacy: .public) enabled=\(self.enabled)")
-        guard !running else { longShotLog.notice("start: 已在运行中，忽略"); return }
+        FileTrace.log("start: rect=\(NSStringFromRect(rect)) enabled=\(self.enabled)")
+        guard !running else { FileTrace.log("start: 已在运行中，忽略"); return }
         defer { if !running { ClotheslineController.shared.resumeAfterCapture() } }
         guard enabled else {
-            longShotLog.notice("start: 功能未开启")
+            FileTrace.log("start: 功能未开启")
             Toast.shared.showImportant("长截图未开启：设置 → 截图")
             return
         }
@@ -324,12 +338,12 @@ final class LongScreenshot {
         // ⎋ 取消（丢弃） / ↵ 提前完成（保留已拼内容）：全局监听，采集期间本应用非激活
         cancelled = false; finishNow = false
         escMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 { longShotLog.notice("keydown: Esc → 取消"); self?.cancelled = true }
-            if event.keyCode == 36 || event.keyCode == 76 { longShotLog.notice("keydown: ↵ → 提前完成"); self?.finishNow = true }
+            if event.keyCode == 53 { FileTrace.log("keydown: Esc → 取消"); self?.cancelled = true }
+            if event.keyCode == 36 || event.keyCode == 76 { FileTrace.log("keydown: ↵ → 提前完成"); self?.finishNow = true }
             if event.keyCode == 49 {
                 self?.mode = self?.mode == .auto ? .manual : .auto
                 if let m = self?.mode {
-                    longShotLog.notice("mode → \(m == .auto ? "auto" : "manual")")
+                    FileTrace.log("mode → \(m == .auto ? "auto" : "manual")")
                     LongShotHUD.shared.setMode(m)
                 }
             }
@@ -418,40 +432,40 @@ final class LongScreenshot {
         var iteration = 0
         while frames.count < (mode == .auto ? 25 : 60) {
             iteration += 1
-            if cancelled { longShotLog.notice("run: 第 \(iteration) 轮前收到取消"); return .cancelled }
+            if cancelled { FileTrace.log("run: 第 \(iteration) 轮前收到取消"); return .cancelled }
             // 经典 API 优先，失败回退 SCScreenshotManager（macOS 26 上两者都偶发单边失效）
             var full = CGDisplayCreateImage(displayID)
             if full == nil {
-                longShotLog.error("iter \(iteration): CGDisplayCreateImage 失败，回退 ScreenCaptureKit")
+                FileTrace.log("iter \(iteration): CGDisplayCreateImage 失败，回退 ScreenCaptureKit")
                 full = try? await Self.screenKitCapture(displayID: displayID)
             }
             guard let full,
                   let cropped = cropToRect(full, rect: rect, screen: screen),
                   let sampler = StitchEngine.Sampler(image: cropped) else {
-                longShotLog.error("iter \(iteration): 采集失败 full=\(full != nil)")
+                FileTrace.log("iter \(iteration): 采集失败 full=\(full != nil)")
                 return .failure("截屏失败（第 \(iteration) 轮）")
             }
-            if frames.isEmpty { longShotLog.notice("首帧 OK \(cropped.width, privacy: .public)×\(cropped.height, privacy: .public)") }
+            if frames.isEmpty { FileTrace.log("首帧 OK \(cropped.width)×\(cropped.height)") }
             // 步长自适应上限须与对齐搜索窗联动（Retina 像素行），否则步长大会撞穿搜索窗
             let step = lastOffset.map { min(24, max(10, $0 / 8)) } ?? 12
             let searchWindow = max(maxSearch, step * 60)
             if let last = frames.last {
                 guard let offset = StitchEngine.scrollOffset(prev: last.sampler, next: sampler, maxSearch: searchWindow) else {
-                    longShotLog.notice("iter \(iteration): 对齐失败，以已采集 \(frames.count) 帧收尾")
+                    FileTrace.log("iter \(iteration): 对齐失败，以已采集 \(frames.count) 帧收尾")
                     break   // 对齐失败：以已采集内容收尾
                 }
                 if offset == 0 {
                     if mode == .auto {
-                        longShotLog.notice("iter \(iteration): 页面到底（offset=0）")
+                        FileTrace.log("iter \(iteration): 页面到底（offset=0）")
                         await MainActor.run { LongShotHUD.shared.markBottom() }
                         break     // 自动模式：到底即停
                     }
                     // 手动模式：用户还没滚，不追加帧继续等待
-                    if finishNow { longShotLog.notice("run: ↵ 提前完成，共 \(frames.count) 帧"); break }
+                    if finishNow { FileTrace.log("run: ↵ 提前完成，共 \(frames.count) 帧"); break }
                     try? await Task.sleep(nanoseconds: 450_000_000)
                     continue
                 }
-                longShotLog.notice("iter \(iteration): 新增 \(offset) px")
+                FileTrace.log("iter \(iteration): 新增 \(offset) px")
                 offsets.append(offset)
                 lastOffset = offset
             }
@@ -466,7 +480,7 @@ final class LongScreenshot {
             await MainActor.run {
                 LongShotHUD.shared.update(frames: frameCount, totalPx: totalPx, percent: percent, preview: preview)
             }
-            if finishNow { longShotLog.notice("run: ↵ 提前完成，共 \(frames.count) 帧"); break }   // ↵ 提前完成：保留已拼内容
+            if finishNow { FileTrace.log("run: ↵ 提前完成，共 \(frames.count) 帧"); break }   // ↵ 提前完成：保留已拼内容
             // 自动模式才注入滚动；手动模式滚不滚、滚多快由用户决定
             if mode == .auto {
                 let src = CGEventSource(stateID: .combinedSessionState)

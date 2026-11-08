@@ -116,6 +116,7 @@ final class CaptureController {
     private var pendingPurpose: CapturePurpose = .normal
 
     func captureInteractive() {
+        FileTrace.log("captureInteractive triggered (normal)")
         captureRequestID = UUID()
         if InlineScreenshotController.shared.isVisible {
             InlineScreenshotController.shared.close(restoreFocus: true)
@@ -127,6 +128,7 @@ final class CaptureController {
 
     /// 长截图：框选区域 → 滚动采集 → 行对齐拼接（⌘⇧L / 菜单「长截图」）
     func captureForLong() {
+        FileTrace.log("captureForLong triggered")
         pendingPurpose = .long
         beginCapture()
     }
@@ -158,6 +160,7 @@ final class CaptureController {
 
     /// 录屏：框选区域 → 松手即开始录制（⌘⌥R / 菜单「录屏」）
     func captureForRecord() {
+        FileTrace.log("captureForRecord triggered")
         pendingPurpose = .record
         beginCapture()
     }
@@ -468,6 +471,7 @@ final class CaptureController {
     }
 
     private func finish(rect: CGRect, composite: NSImage, unionRect: CGRect) {
+        FileTrace.log("finish purpose=\(pendingPurpose) rect=\(NSStringFromRect(rect))")
         teardown(restoreFocus: false)
         // 取整到整点边界，避免半像素采样让成品边缘发虚
         let r = rect.integral
@@ -477,7 +481,7 @@ final class CaptureController {
             return
         }
         if pendingPurpose == .long {
-            longShotLog.notice("finish→LongShot rect=\(NSStringFromRect(r), privacy: .public)")
+            FileTrace.log("finish→LongShot rect=\(NSStringFromRect(r))")
             // 长截图：首帧裁剪后交给滚动采集拼接（不经编辑器）
             LongScreenshot.shared.start(rect: r)
             return
