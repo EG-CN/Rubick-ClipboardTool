@@ -10,6 +10,9 @@ struct StatusMenuEntry {
     let style: Style
     var isOn: Bool = true
     var subtitle: String? = nil
+    /// 标题旁小徽章（如 OCR）；trailing 右侧弱标签（如 Clean）
+    var badge: String? = nil
+    var trailing: String? = nil
     let action: (() -> Void)?
 }
 
@@ -195,12 +198,20 @@ final class StatusMenuView: NSView {
 
     // ── 绘制 ──
     override func draw(_ dirtyRect: NSRect) {
-        // 深色玻璃底
-        NSColor(calibratedRed: 0.04, green: 0.045, blue: 0.055, alpha: 0.96).setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: 14, yRadius: 14).fill()
+        // 深色玻璃底（稿 #14161F/80）+ 白 10% 描边
+        NSColor(calibratedRed: 0.078, green: 0.086, blue: 0.122, alpha: 0.94).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 16, yRadius: 16).fill()
         NSColor.white.withAlphaComponent(0.1).setStroke()
-        let border = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 14, yRadius: 14)
+        let border = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 16, yRadius: 16)
         border.lineWidth = 1; border.stroke()
+        // 顶部镜面高光：1px 祖母绿渐变（稿 specular rim）
+        let rim = NSBezierPath(); rim.move(to: CGPoint(x: 14, y: 0.5)); rim.line(to: CGPoint(x: bounds.width - 14, y: 0.5))
+        rim.lineWidth = 1
+        NSGradient(colors: [.clear, NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.35), .clear])?
+            .draw(in: CGRect(x: 0, y: 0, width: bounds.width, height: 1.2), angle: 0)
+        // 祖母绿环境辉光（稿 shadow 0 0 30px rgba(78,222,163,0.12) → 内侧柔光替代）
+        let glow = NSGradient(colors: [NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.07), .clear])
+        glow?.draw(in: CGRect(x: 0, y: 0, width: bounds.width, height: 26), angle: -90)
 
         var y: CGFloat = 14
         for row in rows {
@@ -208,23 +219,25 @@ final class StatusMenuView: NSView {
             case .header:
                 if let si = row.sectionIndex {
                     let section = sections[si]
-                    // 翡翠点
-                    NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 1).setFill()
-                    NSBezierPath(ovalIn: CGRect(x: 18, y: y + 10, width: 6, height: 6)).fill()
-                    // 中文 + 英文
-                    let zh = section.zh as NSString
-                    zh.draw(at: CGPoint(x: 30, y: y + 6), withAttributes: [
-                        .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
-                        .foregroundColor: NSColor(calibratedWhite: 0.9, alpha: 1)
-                    ])
-                    let zhW = zh.size(withAttributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold)]).width
-                    (". " + section.en as NSString).draw(at: CGPoint(x: 34 + zhW, y: y + 8), withAttributes: [
+                    // 圆点：捕捉组祖母绿，其余灰（稿 bg-primary/70 与 bg-outline）
+                    (si == 0 ? NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.75)
+                             : NSColor.white.withAlphaComponent(0.28)).setFill()
+                    NSBezierPath(ovalIn: CGRect(x: 18, y: y + 11, width: 5.5, height: 5.5)).fill()
+                    // 分组头：统一 mono 大写小字（稿 10.5px mono uppercase tracking-wider）
+                    let header = (section.zh + " · " + section.en.uppercased()) as NSString
+                    let headerAttrs: [NSAttributedString.Key: Any] = [
                         .font: NSFont.systemFont(ofSize: 10.5, weight: .medium),
-                        .foregroundColor: NSColor(calibratedWhite: 0.45, alpha: 1)
-                    ])
+                        .kern: 1.0,
+                        .foregroundColor: NSColor.white.withAlphaComponent(0.5)
+                    ]
+                    header.draw(at: CGPoint(x: 29, y: y + 8), withAttributes: headerAttrs)
                     if let trailing = section.trailing {
+                        let attrs: [NSAttributedString.Key: Any] = [
+                            .font: NSFont.systemFont(ofSize: 10, weight: .medium),
+                            .foregroundColor: si == 0 ? NSColor.white.withAlphaComponent(0.35)
+                                                      : NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.8)
+                        ]
                         let t = trailing as NSString
-                        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 10.5, weight: .medium), .foregroundColor: NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.85)]
                         t.draw(at: CGPoint(x: bounds.width - 20 - t.size(withAttributes: attrs).width, y: y + 8), withAttributes: attrs)
                     }
                 }
@@ -251,26 +264,40 @@ final class StatusMenuView: NSView {
                             NSBezierPath(roundedRect: rowRect, xRadius: 9, yRadius: 9).fill()
                         }
                     }
-                    // 图标
+                    // 图标：featured 走祖母绿色块+深色符号（稿 w-5 h-5 bg-primary），其余裸图标
                     if let symbol = entry.symbol, let img = NSImage(systemSymbolName: symbol, accessibilityDescription: entry.title) {
-                        let tint: NSColor
-                        switch entry.style {
-                        case .featured: tint = NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 1)
-                        case .destructive: tint = NSColor(srgbRed: 1, green: 0.55, blue: 0.5, alpha: 1)
-                        default: tint = NSColor.white.withAlphaComponent(0.65)
-                        }
-                        let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium)
+                        let config = NSImage.SymbolConfiguration(pointSize: entry.style == .featured ? 11 : 15, weight: .medium)
                         let sized = img.withSymbolConfiguration(config) ?? img
                         let size = sized.size
-                        let ratio = min(16 / size.width, 16 / size.height)
-                        let w = size.width * ratio, h = size.height * ratio
-                        let tinted = NSImage(size: sized.size, flipped: false) { rect in
-                            sized.draw(in: rect)
-                            tint.set()
-                            rect.fill(using: .sourceAtop)
-                            return true
+                        if entry.style == .featured {
+                            let chip = CGRect(x: 18, y: y + row.height / 2 - 9, width: 18, height: 18)
+                            NSColor(calibratedRed: 0.063, green: 0.725, blue: 0.506, alpha: 1).setFill()
+                            NSBezierPath(roundedRect: chip, xRadius: 5, yRadius: 5).fill()
+                            let tinted = NSImage(size: sized.size, flipped: false) { rect in
+                                sized.draw(in: rect)
+                                NSColor(calibratedRed: 0.0, green: 0.22, blue: 0.14, alpha: 1).set()
+                                rect.fill(using: .sourceAtop)
+                                return true
+                            }
+                            let ratio = min(12 / size.width, 12 / size.height)
+                            tinted.draw(in: CGRect(x: chip.midX - size.width * ratio / 2, y: chip.midY - size.height * ratio / 2,
+                                                   width: size.width * ratio, height: size.height * ratio))
+                        } else {
+                            let tint: NSColor
+                            switch entry.style {
+                            case .destructive: tint = NSColor(srgbRed: 1, green: 0.55, blue: 0.5, alpha: 1)
+                            default: tint = NSColor.white.withAlphaComponent(0.65)
+                            }
+                            let ratio = min(16 / size.width, 16 / size.height)
+                            let w = size.width * ratio, h = size.height * ratio
+                            let tinted = NSImage(size: sized.size, flipped: false) { rect in
+                                sized.draw(in: rect)
+                                tint.set()
+                                rect.fill(using: .sourceAtop)
+                                return true
+                            }
+                            tinted.draw(in: CGRect(x: 19, y: y + row.height / 2 - h / 2, width: w, height: h))
                         }
-                        tinted.draw(in: CGRect(x: 18, y: y + row.height / 2 - h / 2, width: w, height: h))
                     }
                     // 标题
                     let titleColor: NSColor
@@ -279,21 +306,49 @@ final class StatusMenuView: NSView {
                     case .destructive: titleColor = NSColor(srgbRed: 1, green: 0.55, blue: 0.5, alpha: 1)
                     default: titleColor = NSColor(calibratedWhite: 0.9, alpha: 1)
                     }
-                    (entry.title as NSString).draw(at: CGPoint(x: 44, y: y + row.height / 2 - 8), withAttributes: [
+                    let titleAttrs: [NSAttributedString.Key: Any] = [
                         .font: NSFont.systemFont(ofSize: 13.5, weight: .medium),
                         .foregroundColor: titleColor
-                    ])
+                    ]
+                    let titleText = entry.title as NSString
+                    titleText.draw(at: CGPoint(x: 44, y: y + row.height / 2 - 8), withAttributes: titleAttrs)
+                    // 标题旁小徽章（稿 OCR chip：primary/10 底 + primary/20 边）
+                    if let badge = entry.badge {
+                        let badgeAttrs: [NSAttributedString.Key: Any] = [
+                            .font: NSFont.systemFont(ofSize: 9.5, weight: .semibold),
+                            .kern: 0.5,
+                            .foregroundColor: NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.85)
+                        ]
+                        let bSize = (badge as NSString).size(withAttributes: badgeAttrs)
+                        let chipX = 44 + titleText.size(withAttributes: titleAttrs).width + 6
+                        let chipRect = CGRect(x: chipX, y: y + row.height / 2 - 7, width: bSize.width + 8, height: 14)
+                        NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.1).setFill()
+                        NSBezierPath(roundedRect: chipRect, xRadius: 4, yRadius: 4).fill()
+                        NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.2).setStroke()
+                        NSBezierPath(roundedRect: chipRect, xRadius: 4, yRadius: 4).lineWidth = 0.8
+                        NSBezierPath(roundedRect: chipRect, xRadius: 4, yRadius: 4).stroke()
+                        (badge as NSString).draw(at: CGPoint(x: chipRect.minX + 4, y: y + row.height / 2 - 7 + 2.5), withAttributes: badgeAttrs)
+                    }
                     if let subtitle = entry.subtitle {
                         (subtitle as NSString).draw(at: CGPoint(x: 44, y: y + row.height / 2 + 6), withAttributes: [
                             .font: NSFont.systemFont(ofSize: 10.5),
                             .foregroundColor: NSColor(calibratedWhite: 0.45, alpha: 1)
                         ])
                     }
-                    // 快捷键（右对齐 mono）
+                    // 快捷键（右对齐 mono，稿 kbd 弱翡翠色）
                     if let shortcut = entry.shortcut, entry.style != .toggle {
-                        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: NSColor.white.withAlphaComponent(0.4)]
+                        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.5)]
                         let size = (shortcut as NSString).size(withAttributes: attrs)
                         (shortcut as NSString).draw(at: CGPoint(x: bounds.width - 24 - size.width, y: y + row.height / 2 - size.height / 2), withAttributes: attrs)
+                    }
+                    // 右侧弱标签（稿 Clean：error/60 mono）
+                    if let trailing = entry.trailing {
+                        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 10.5, weight: .medium),
+                                                                    .foregroundColor: entry.style == .destructive
+                                                                        ? NSColor(srgbRed: 1, green: 0.55, blue: 0.5, alpha: 0.55)
+                                                                        : NSColor.white.withAlphaComponent(0.35)]
+                        let size = (trailing as NSString).size(withAttributes: attrs)
+                        (trailing as NSString).draw(at: CGPoint(x: bounds.width - 24 - size.width, y: y + row.height / 2 - size.height / 2), withAttributes: attrs)
                     }
                     // 开关（toggle 行）
                     if entry.style == .toggle {
@@ -309,12 +364,16 @@ final class StatusMenuView: NSView {
                 }
             case .footer:
                 if let footer {
-                    NSColor(calibratedWhite: 1, alpha: 0.06).setStroke()
+                    NSColor(calibratedWhite: 1, alpha: 0.05).setStroke()
                     let line = NSBezierPath(); line.move(to: CGPoint(x: 14, y: y + 2)); line.line(to: CGPoint(x: bounds.width - 14, y: y + 2)); line.lineWidth = 0.5; line.stroke()
-                    let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 10.5, weight: .medium), .foregroundColor: NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.9)]
-                    (footer.left as NSString).draw(at: CGPoint(x: 18, y: y + 12), withAttributes: attrs)
+                    // 稿：绿点 + 弱色版本号 + 弱色系统名
+                    NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 1).setFill()
+                    NSBezierPath(ovalIn: CGRect(x: 18, y: y + 15, width: 5.5, height: 5.5)).fill()
+                    let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 10.5, weight: .medium), .foregroundColor: NSColor.white.withAlphaComponent(0.45)]
+                    (footer.left as NSString).draw(at: CGPoint(x: 29, y: y + 12), withAttributes: attrs)
+                    let rAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 10.5, weight: .medium), .foregroundColor: NSColor.white.withAlphaComponent(0.3)]
                     let r = footer.right as NSString
-                    r.draw(at: CGPoint(x: bounds.width - 18 - r.size(withAttributes: attrs).width, y: y + 12), withAttributes: attrs)
+                    r.draw(at: CGPoint(x: bounds.width - 18 - r.size(withAttributes: rAttrs).width, y: y + 12), withAttributes: rAttrs)
                 }
             }
             y += row.height

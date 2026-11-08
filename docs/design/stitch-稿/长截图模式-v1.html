@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Rubick 拉比克 - 长截图模式</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface-tint": "#4edea3",
+            "on-tertiary-fixed-variant": "#474744",
+            "on-tertiary-container": "#393937",
+            "on-secondary-container": "#00452e",
+            "tertiary-fixed-dim": "#c8c6c3",
+            "surface-variant": "#34343a",
+            "primary-container": "#10b981",
+            "primary-fixed": "#6ffbbe",
+            "background": "#121318",
+            "on-surface-variant": "#bbcabf",
+            "tertiary": "#c8c6c3",
+            "secondary-container": "#00bd85",
+            "on-background": "#e3e1e9",
+            "surface-container": "#1e1f25",
+            "on-primary-container": "#00422b",
+            "secondary-fixed": "#68fcbf",
+            "error-container": "#93000a",
+            "tertiary-fixed": "#e4e2de",
+            "inverse-on-surface": "#2f3036",
+            "on-surface": "#e3e1e9",
+            "primary": "#4edea3",
+            "surface-dim": "#121318",
+            "surface-container-high": "#292a2f",
+            "secondary": "#45dfa4",
+            "on-primary-fixed-variant": "#005236",
+            "on-error": "#690005",
+            "on-secondary-fixed": "#002114",
+            "on-error-container": "#ffdad6",
+            "surface-bright": "#38393f",
+            "surface": "#121318",
+            "secondary-fixed-dim": "#45dfa4",
+            "inverse-primary": "#006c49",
+            "tertiary-container": "#a4a39f",
+            "on-tertiary": "#30312e",
+            "on-primary-fixed": "#002113",
+            "outline-variant": "#3c4a42",
+            "error": "#ffb4ab",
+            "outline": "#86948a",
+            "surface-container-highest": "#34343a",
+            "inverse-surface": "#e3e1e9",
+            "on-secondary-fixed-variant": "#005137",
+            "primary-fixed-dim": "#4edea3",
+            "on-tertiary-fixed": "#1b1c1a",
+            "surface-container-low": "#1a1b21",
+            "surface-container-lowest": "#0d0e13",
+            "on-secondary": "#003825",
+            "on-primary": "#003824"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-md": "0.75rem",
+            "space-lg": "1.25rem",
+            "space-xs": "0.25rem",
+            "gutter": "1rem",
+            "space-xl": "2rem",
+            "space-sm": "0.5rem",
+            "margin": "1.5rem"
+          },
+          "fontFamily": {
+            "label-mono-md": ["JetBrains Mono"],
+            "headline-lg": ["Inter"],
+            "body-md": ["Inter"],
+            "headline-md": ["Inter"],
+            "system-menu": ["Inter"],
+            "headline-xl-mobile": ["Inter"],
+            "body-lg": ["Inter"],
+            "body-sm": ["Inter"],
+            "label-mono-sm": ["JetBrains Mono"],
+            "headline-xl": ["Inter"]
+          },
+          "fontSize": {
+            "label-mono-md": ["13px", {"lineHeight": "18px", "letterSpacing": "-0.02em", "fontWeight": "500"}],
+            "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600"}],
+            "body-md": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+            "headline-md": ["18px", {"lineHeight": "26px", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+            "system-menu": ["13.5px", {"lineHeight": "18px", "letterSpacing": "-0.005em", "fontWeight": "500"}],
+            "headline-xl-mobile": ["28px", {"lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+            "body-lg": ["15px", {"lineHeight": "22px", "fontWeight": "400"}],
+            "body-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+            "label-mono-sm": ["11px", {"lineHeight": "14px", "fontWeight": "400"}],
+            "headline-xl": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "600"}]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    @keyframes pulseScan {
+      0% { transform: translateY(0); opacity: 0.8; }
+      50% { opacity: 1; box-shadow: 0 0 16px rgba(16, 185, 129, 0.8); }
+      100% { transform: translateY(220px); opacity: 0.2; }
+    }
+    @keyframes scrollCueDown {
+      0% { transform: translateY(-4px); opacity: 0.3; }
+      50% { opacity: 1; }
+      100% { transform: translateY(4px); opacity: 0.3; }
+    }
+    .laser-line {
+      animation: pulseScan 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    .scroll-arrow-anim {
+      animation: scrollCueDown 1.4s ease-in-out infinite;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #3c4a42;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface antialiased overflow-hidden select-none w-screen h-screen">
+<!-- macOS Top Menu Bar (Shared Component Anchor) -->
+<header class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-margin h-[38px] w-full select-none bg-surface-container-lowest/75 dark:bg-surface-container-lowest/75 backdrop-blur-xl border-b border-outline-variant/30 shadow-sm">
+<!-- Left Cluster: System Branding & App Menus -->
+<div class="flex items-center gap-1">
+<span class="text-on-surface hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 cursor-pointer flex items-center justify-center">
+<svg class="w-3.5 h-3.5 fill-current" viewbox="0 0 170 170">
+<path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.04-7.58-7.71-11.65-14.01-6.1-9.46-10.87-20.08-14.32-31.87-3.45-11.79-5.18-23.01-5.18-33.66 0-16.14 4.2-29.35 12.61-39.63 8.4-10.28 18.9-15.52 31.48-15.74 4.8 0 10.11 1.25 15.94 3.76 5.83 2.5 9.77 3.86 11.83 4.08 1.63-.22 5.72-1.63 12.27-4.24 6.54-2.61 12.06-3.75 16.57-3.41 12.08.76 22.08 5.48 30.01 14.17-10.79 6.52-16.03 15.54-15.71 27.06.33 9.46 4.08 17.38 11.26 23.77 7.18 6.39 15.7 10.05 25.56 10.98-2.07 6.41-4.78 13.04-8.14 19.89zM119.22 31.81c0-7.39 2.66-14.39 7.98-21.01 5.32-6.63 11.95-10.8 19.89-12.51.22 1.41.33 2.83.33 4.24 0 7.39-2.77 14.4-8.31 21.03-5.54 6.63-12.24 10.7-20.1 12.21-.44-1.3-.79-2.62-1.79-3.96z"></path>
+</svg>
+</span>
+<span class="text-system-menu font-system-menu font-semibold text-on-surface dark:text-on-surface flex items-center gap-1.5 px-2 py-0.5">
+<span class="w-2 h-2 rounded-full bg-primary-container shadow-[0_0_8px_#10b981]"></span>
+        Rubick 拉比克
+      </span>
+<span class="text-on-surface dark:text-on-surface font-medium text-system-menu font-system-menu hover:bg-surface-container-highest/40 transition-colors duration-150 rounded px-2 py-0.5 cursor-pointer">File</span>
+<span class="text-on-surface-variant dark:text-on-surface-variant text-system-menu font-system-menu hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 cursor-pointer">Edit</span>
+<span class="text-on-surface-variant dark:text-on-surface-variant text-system-menu font-system-menu hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 cursor-pointer">View</span>
+<span class="text-on-surface-variant dark:text-on-surface-variant text-system-menu font-system-menu hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 cursor-pointer">Window</span>
+<span class="text-on-surface-variant dark:text-on-surface-variant text-system-menu font-system-menu hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 cursor-pointer">Help</span>
+</div>
+<!-- Center Status Pill: Current Capture State -->
+<div class="hidden lg:flex items-center gap-2 px-3 py-1 bg-surface-container-high/80 border border-outline-variant/40 rounded-full shadow-inner">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-primary-container"></span>
+</span>
+<span class="text-body-sm font-system-menu text-on-surface font-medium tracking-tight">长截图模式 (滚动捕获)</span>
+<span class="text-outline-variant">·</span>
+<span class="text-label-mono-sm font-label-mono-sm text-primary flex items-center gap-1">
+<span class="material-symbols-outlined text-sm animate-spin" data-icon="sync">sync</span>
+        自动向下滚动探测中
+      </span>
+</div>
+<!-- Trailing Action Icons -->
+<div class="flex items-center gap-1 text-on-surface-variant dark:text-on-surface-variant text-label-mono-sm font-label-mono-sm">
+<div class="flex items-center gap-1 hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-1.5 py-0.5 cursor-pointer">
+<span class="material-symbols-outlined text-[15px]" data-icon="wifi">wifi</span>
+</div>
+<div class="flex items-center gap-1 hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-1.5 py-0.5 cursor-pointer">
+<span class="material-symbols-outlined text-[15px] text-primary" data-icon="battery_charging_full">battery_charging_full</span>
+<span class="text-[11px] font-label-mono-sm">98%</span>
+</div>
+<div class="flex items-center gap-1 hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-1.5 py-0.5 cursor-pointer">
+<span class="material-symbols-outlined text-[15px]" data-icon="search">search</span>
+</div>
+<div class="flex items-center gap-1 hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-1.5 py-0.5 cursor-pointer">
+<span class="material-symbols-outlined text-[15px]" data-icon="control_point">control_point</span>
+</div>
+<div class="flex items-center gap-1 hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 cursor-pointer text-on-surface font-medium">
+<span class="text-system-menu font-system-menu">周四 22:42</span>
+</div>
+</div>
+</header>
+<!-- Full Desktop Obsidian Canvas -->
+<main class="relative w-full h-full pt-[38px] flex items-center justify-between overflow-hidden bg-surface-container-lowest">
+<!-- Dimmed Atmospheric Backdrop Overlay -->
+<div class="absolute inset-0 bg-[#07080b]/85 pointer-events-none backdrop-blur-[2px] z-10"></div>
+<div class="absolute -top-40 -left-40 w-96 h-96 bg-primary-container/10 rounded-full blur-[120px] pointer-events-none"></div>
+<!-- Active Capture Canvas Region (Center-Left) -->
+<section class="relative z-20 flex-1 h-[calc(100vh-38px)] flex flex-col items-center justify-center p-6 pl-10 pr-6">
+<!-- Top Scroll Motion Indicator Bar -->
+<div class="w-[960px] max-w-full flex items-center justify-between pb-2 px-3 text-on-surface-variant">
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 rounded bg-surface-container text-label-mono-sm font-label-mono-sm text-outline border border-outline-variant/40">
+            视口源：Safari Developer Docs
+          </span>
+<span class="text-label-mono-sm font-label-mono-sm text-outline">FPS: 60.0 · 智能帧对比使能</span>
+</div>
+<div class="flex items-center gap-1 text-primary text-body-sm font-system-menu">
+<span class="material-symbols-outlined text-sm" data-icon="arrow_upward">arrow_upward</span>
+<span>顶端边界已锁定 (0px)</span>
+</div>
+</div>
+<!-- Main Focus Window: Capture Region -->
+<div class="relative w-[960px] max-w-full h-[580px] bg-surface-container-low rounded-lg border-2 border-primary-container shadow-[0_0_35px_rgba(16,185,129,0.25)] flex flex-col overflow-hidden">
+<!-- Precision Corner Crosshair Brackets (L-shaped) -->
+<div class="absolute -top-1 -left-1 w-4 h-4 border-t-2 border-l-2 border-primary z-30 pointer-events-none"></div>
+<div class="absolute -top-1 -right-1 w-4 h-4 border-t-2 border-r-2 border-primary z-30 pointer-events-none"></div>
+<div class="absolute -bottom-1 -left-1 w-4 h-4 border-b-2 border-l-2 border-primary z-30 pointer-events-none"></div>
+<div class="absolute -bottom-1 -right-1 w-4 h-4 border-b-2 border-r-2 border-primary z-30 pointer-events-none"></div>
+<!-- Float Dimension Reticle Badge -->
+<div class="absolute top-3 left-3 z-30 flex items-center gap-2 px-2.5 py-1 rounded bg-surface-container-lowest/90 border border-primary/40 backdrop-blur-md shadow-lg">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+<span class="text-label-mono-sm font-label-mono-sm text-on-surface font-semibold">1280 × 800</span>
+<span class="text-outline-variant">|</span>
+<span class="text-label-mono-sm font-label-mono-sm text-primary">已拼接累计高度: 3840 px</span>
+</div>
+<!-- Window Titlebar Mockup (Target Browser window) -->
+<div class="h-9 w-full bg-surface-container-high/90 border-b border-outline-variant/30 px-3 flex items-center justify-between select-none">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-[#ff5f57]/80 inline-block"></span>
+<span class="w-3 h-3 rounded-full bg-[#febc2e]/80 inline-block"></span>
+<span class="w-3 h-3 rounded-full bg-[#28c840]/80 inline-block"></span>
+<span class="ml-3 text-body-sm font-system-menu text-on-surface-variant truncate">https://docs.rubick.io/core/architecture-pipeline</span>
+</div>
+<div class="flex items-center gap-2 text-outline text-label-mono-sm font-label-mono-sm">
+<span class="material-symbols-outlined text-sm" data-icon="lock">lock</span>
+<span>rubick-secure</span>
+</div>
+</div>
+<!-- Inside Window Document Content (Simulated Active Auto-Scrolling Webpage) -->
+<div class="relative flex-1 overflow-hidden bg-[#0d0f14] p-8 flex flex-col gap-6 font-body-md text-on-surface">
+<!-- Motion Indicator Seam Overlay Inside the Content Viewport -->
+<div class="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-primary-container/15 via-primary-container/5 to-transparent pointer-events-none flex flex-col items-center justify-end pb-3 z-20">
+<div class="scroll-arrow-anim flex flex-col items-center gap-0.5 text-primary">
+<span class="material-symbols-outlined text-base" data-icon="keyboard_double_arrow_down">keyboard_double_arrow_down</span>
+<span class="text-label-mono-sm font-label-mono-sm tracking-widest font-semibold">▼ 自动向下滚动探测中 (速度 1.5×)</span>
+</div>
+</div>
+<!-- Documentation Mock Article -->
+<div class="max-w-3xl mx-auto w-full flex flex-col gap-5">
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 rounded text-label-mono-sm font-label-mono-sm bg-primary-container/20 text-primary border border-primary-container/30">v3.4.0 Engine</span>
+<span class="text-body-sm font-system-menu text-on-surface-variant">Architecture Guide • Updated 2 hours ago</span>
+</div>
+<h1 class="text-headline-lg font-headline-lg text-on-surface tracking-tight">Rubick Engine Architecture &amp; Core Pipelines</h1>
+<p class="text-body-lg font-body-lg text-on-surface-variant leading-relaxed">
+              拉比克核心调度器采用轻量级无头事件循环机制，通过双向无缝图层映射与自适应内存池管理，支持高保真无缝全屏和长截图多帧重叠比对拼接。
+            </p>
+<!-- Code Block / Diagram Snippet -->
+<div class="rounded-lg bg-surface-container-lowest border border-outline-variant/40 p-4 font-label-mono-md text-label-mono-md shadow-md">
+<div class="flex items-center justify-between pb-2 mb-3 border-b border-outline-variant/30 text-outline text-label-mono-sm font-label-mono-sm">
+<span>pipeline_matcher.rs</span>
+<span class="text-primary">StitchConfidence: 99.8%</span>
+</div>
+<pre class="text-on-surface leading-5"><span class="text-primary">pub async fn</span> <span class="text-[#6ffbbe]">capture_viewport_slice</span>(ctx: &amp;Context) -&gt; Result&lt;FrameSlice&gt; {
+    <span class="text-on-surface-variant">// 1. 计算视口特征直方图哈希</span>
+    <span class="text-primary">let</span> feature_map = ctx.extract_orb_features(&amp;current_frame)?;
+    <span class="text-primary">let</span> seam_offset = <span class="text-[#c8c6c3]">calc_overlap_offset</span>(&amp;prev_slice, &amp;feature_map).<span class="text-primary">await</span>?;
+    
+    <span class="text-on-surface-variant">// 2. 执行自适应硬件加速矩阵像素对齐</span>
+    <span class="text-primary">let</span> stitched_plane = Compositor::<span class="text-secondary">fuse_vertical_strip</span>(seam_offset)?;
+    <span class="text-primary-container">Ok</span>(stitched_plane)
+}</pre>
+</div>
+<!-- Bento-style Feature Callouts -->
+<div class="grid grid-cols-2 gap-4 pt-2">
+<div class="p-3.5 rounded-lg bg-surface-container/60 border border-outline-variant/40">
+<div class="flex items-center gap-2 mb-1.5">
+<span class="material-symbols-outlined text-primary text-base" data-icon="auto_detect_voice">auto_detect_voice</span>
+<span class="text-system-menu font-system-menu font-semibold text-on-surface">智能重叠区域探测</span>
+</div>
+<p class="text-body-sm font-body-sm text-on-surface-variant">利用 ORB 图像特征点与单应性矩阵，毫米级无损对齐并消除滚动惯性抖动。</p>
+</div>
+<div class="p-3.5 rounded-lg bg-surface-container/60 border border-outline-variant/40">
+<div class="flex items-center gap-2 mb-1.5">
+<span class="material-symbols-outlined text-primary text-base" data-icon="speed">speed</span>
+<span class="text-system-menu font-system-menu font-semibold text-on-surface">GPU 视口平滑自驱</span>
+</div>
+<p class="text-body-sm font-body-sm text-on-surface-variant">虚拟滚动滚轮模拟技术，保持网页帧率恒定在 60FPS 进行亚像素步进采样。</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Frame Foot Info -->
+<div class="h-6 w-full bg-surface-container border-t border-outline-variant/30 px-3 flex items-center justify-between text-label-mono-sm font-label-mono-sm text-outline">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
+<span>Active WebKit Compositor Viewport</span>
+</div>
+<span>自动探测边界：正常 • 步进速度：48px/step</span>
+</div>
+</div>
+<!-- Floating Progress & Control Pill (Centered Below Capture Region) -->
+<div class="mt-5 z-40 backdrop-blur-xl bg-surface-container-lowest/90 border border-primary/30 shadow-[0_12px_40px_rgba(0,0,0,0.7)] rounded-full px-6 py-2.5 flex items-center gap-5 transition-all">
+<!-- Radar Spinner & Count Status -->
+<div class="flex items-center gap-3">
+<div class="relative flex items-center justify-center w-6 h-6">
+<div class="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+<div class="absolute w-2 h-2 rounded-full bg-primary"></div>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="text-body-md font-system-menu font-semibold text-on-surface">长截图中</span>
+<span class="text-label-mono-md font-label-mono-md font-bold text-primary">已拼接 3 屏</span>
+</div>
+<span class="text-[11px] font-system-menu text-on-surface-variant">页面触底或点击即可自动完成</span>
+</div>
+</div>
+<!-- Separator -->
+<div class="h-6 w-[1px] bg-outline-variant/50"></div>
+<!-- Speed Selector Controls -->
+<div class="flex items-center bg-surface-container-high rounded-full p-0.5 border border-outline-variant/40 text-label-mono-sm font-label-mono-sm">
+<button class="px-2 py-0.5 rounded-full text-on-surface-variant hover:text-on-surface transition-colors">1.0x</button>
+<button class="px-2 py-0.5 rounded-full bg-primary-container text-on-primary-container font-semibold shadow-sm">1.5x</button>
+<button class="px-2 py-0.5 rounded-full text-on-surface-variant hover:text-on-surface transition-colors">2.0x</button>
+</div>
+<!-- Separator -->
+<div class="h-6 w-[1px] bg-outline-variant/50"></div>
+<!-- Action Buttons with Keycaps -->
+<div class="flex items-center gap-2.5">
+<!-- Cancel Action -->
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/40 text-on-surface text-body-sm font-system-menu transition-all active:scale-95">
+<kbd class="px-1.5 py-0.5 text-label-mono-sm font-label-mono-sm rounded bg-surface-container-lowest border border-outline-variant/60 text-outline">Esc</kbd>
+<span>取消</span>
+</button>
+<!-- Complete & Finish Action -->
+<button class="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-primary-container hover:bg-primary text-on-primary-container font-semibold text-body-sm font-system-menu shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all active:scale-95">
+<span class="material-symbols-outlined text-base font-bold" data-icon="check">check</span>
+<span>完成并编辑</span>
+<kbd class="px-1.5 py-0.2 rounded bg-on-primary-container/20 text-on-primary-container text-label-mono-sm font-label-mono-sm">↵</kbd>
+</button>
+</div>
+</div>
+</section>
+<!-- Right Edge Live-Preview Strip (Docked Panel) -->
+<aside class="relative z-30 w-72 h-[calc(100vh-38px)] bg-surface-container-lowest/90 backdrop-blur-2xl border-l border-outline-variant/40 flex flex-col justify-between shadow-2xl">
+<!-- Panel Header -->
+<div class="px-4 py-3 border-b border-outline-variant/30 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="view_carousel">view_carousel</span>
+<span class="text-system-menu font-system-menu font-semibold text-on-surface">实时长图预览</span>
+</div>
+<!-- Zoom Pill -->
+<div class="flex items-center gap-1 text-[11px] font-label-mono-sm bg-surface-container px-2 py-0.5 rounded border border-outline-variant/40 text-on-surface-variant">
+<span class="cursor-pointer hover:text-on-surface">50%</span>
+<span class="text-outline-variant">/</span>
+<span class="text-primary font-medium cursor-pointer">自适应</span>
+</div>
+</div>
+<!-- Realtime Stitched Long Screenshot Viewport Track -->
+<div class="flex-1 overflow-y-auto custom-scroll p-4 flex flex-col items-center">
+<!-- Live Stitched Paper Preview -->
+<div class="relative w-48 bg-[#0a0b0e] rounded border border-outline-variant/50 shadow-2xl overflow-hidden flex flex-col">
+<!-- Stitched Slice #01: Hero Header -->
+<div class="relative border-b border-outline-variant/20 p-2.5 bg-surface-container-low">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[9px] font-label-mono-sm text-outline">#01 Hero &amp; Intro</span>
+<span class="material-symbols-outlined text-[11px] text-primary" data-icon="check_circle">check_circle</span>
+</div>
+<div class="w-full h-12 rounded bg-surface-container flex flex-col justify-center px-2 gap-1">
+<div class="w-3/4 h-2 rounded bg-surface-variant"></div>
+<div class="w-1/2 h-1.5 rounded bg-surface-variant/60"></div>
+</div>
+</div>
+<!-- Stitched Slice #02: Content Article Section -->
+<div class="relative border-b border-outline-variant/20 p-2.5 bg-surface-container-low">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[9px] font-label-mono-sm text-outline">#02 Architecture Specs</span>
+<span class="material-symbols-outlined text-[11px] text-primary" data-icon="check_circle">check_circle</span>
+</div>
+<div class="w-full h-16 rounded bg-surface-container-lowest p-1.5 flex flex-col gap-1 border border-outline-variant/30">
+<div class="w-full h-2 rounded bg-primary/20"></div>
+<div class="w-5/6 h-1.5 rounded bg-surface-variant"></div>
+<div class="w-4/6 h-1.5 rounded bg-surface-variant"></div>
+<div class="w-3/4 h-1.5 rounded bg-surface-variant"></div>
+</div>
+</div>
+<!-- Stitched Slice #03: Code Architecture Blocks -->
+<div class="relative border-b border-outline-variant/20 p-2.5 bg-surface-container-low">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[9px] font-label-mono-sm text-outline">#03 Pipeline Matcher</span>
+<span class="material-symbols-outlined text-[11px] text-primary" data-icon="check_circle">check_circle</span>
+</div>
+<div class="w-full h-14 rounded bg-[#07080a] p-1.5 flex flex-col gap-1 border border-outline-variant/40">
+<div class="w-2/3 h-1.5 rounded bg-[#4edea3]/50"></div>
+<div class="w-full h-1.5 rounded bg-surface-variant/70"></div>
+<div class="w-1/2 h-1.5 rounded bg-surface-variant/70"></div>
+</div>
+</div>
+<!-- Stitched Slice #04: Active Ingesting Boundary Slice with Animated Scanning Line -->
+<div class="relative p-2.5 bg-surface-container-low/70 overflow-hidden min-h-[140px] flex flex-col">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[9px] font-label-mono-sm text-primary font-bold">#04 动态接入切片...</span>
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+</span>
+</div>
+<div class="w-full h-24 rounded bg-surface-container p-2 flex flex-col gap-1.5 opacity-60">
+<div class="w-full h-2 bg-surface-variant rounded"></div>
+<div class="w-3/4 h-2 bg-surface-variant rounded"></div>
+<div class="w-5/6 h-2 bg-surface-variant rounded"></div>
+</div>
+<!-- Dynamic Stitch Scanning Laser Line -->
+<div class="laser-line absolute inset-x-0 h-[2px] bg-primary shadow-[0_0_12px_#10b981]"></div>
+<div class="mt-2 text-center text-[10px] font-label-mono-sm text-primary">
+              对齐比对中...
+            </div>
+</div>
+</div>
+</div>
+<!-- Panel Footer & Telemetry Stats -->
+<div class="p-3.5 border-t border-outline-variant/30 bg-surface-container-low flex flex-col gap-3">
+<!-- Telemetry Data -->
+<div class="space-y-1.5 text-label-mono-sm font-label-mono-sm">
+<div class="flex items-center justify-between text-on-surface-variant">
+<span>合成总高度</span>
+<span class="text-on-surface font-semibold">3,840 px</span>
+</div>
+<div class="flex items-center justify-between text-on-surface-variant">
+<span>拼接页数</span>
+<span class="text-on-surface font-semibold">3.5 屏</span>
+</div>
+<div class="flex items-center justify-between text-on-surface-variant">
+<span>对齐置信度</span>
+<span class="text-primary font-semibold">自适应无缝 100%</span>
+</div>
+</div>
+<!-- Quick Action Buttons -->
+<div class="flex flex-col gap-2 pt-1">
+<button class="w-full py-2 px-3 rounded bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/40 text-on-surface text-body-sm font-system-menu font-medium flex items-center justify-center gap-1.5 transition-colors">
+<span class="material-symbols-outlined text-base" data-icon="pause">pause</span>
+<span>暂停滚动</span>
+</button>
+<button class="w-full py-2 px-3 rounded bg-primary-container hover:bg-primary text-on-primary-container text-body-sm font-system-menu font-semibold flex items-center justify-center gap-1.5 shadow-md transition-all active:scale-98">
+<span class="material-symbols-outlined text-base" data-icon="draw">draw</span>
+<span>保存并进入标注</span>
+</button>
+</div>
+</div>
+</aside>
+</main>
+</body></html>

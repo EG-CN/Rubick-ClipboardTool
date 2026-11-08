@@ -333,7 +333,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         StatusMenuPanelController.shared.sections = [
             .init(zh: "捕捉", en: "CAPTURE", trailing: "Quick Tools", entries: [
                 .init(title: "区域截图", symbol: "camera", shortcut: "⌘⇧A", style: .normal, action: { [weak self] in self?.captureScreenshot() }),
-                .init(title: "划图取字", symbol: "text.viewfinder", shortcut: "⌘⇧X", style: .normal, action: { [weak self] in self?.startDragOCR() }),
+                .init(title: "划图取字", symbol: "text.viewfinder", shortcut: "⌘⇧X", style: .normal, badge: "OCR", action: { [weak self] in self?.startDragOCR() }),
                 .init(title: "延时截图", symbol: "timer", shortcut: "⌘⌥⇧G", style: .normal, action: { [weak self] in self?.captureDelayedAction() }),
                 .init(title: "长截图（实验）", symbol: "photo.on.rectangle.angled", shortcut: "⌘⇧L", style: .normal, action: { [weak self] in self?.captureLongShot() }),
                 .init(title: "录屏", symbol: "record.circle", shortcut: "⌘⌥R", style: .normal, action: { [weak self] in self?.captureScreenRecord() }),
@@ -348,7 +348,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ]),
             .init(zh: "管理", en: "MANAGEMENT", trailing: nil, entries: [
                 .init(title: "偏好设置…", symbol: "gearshape", shortcut: "⌘,", style: .normal, action: { [weak self] in self?.openSettings() }),
-                .init(title: "清空历史…", symbol: "trash", shortcut: nil, style: .destructive, action: { [weak self] in self?.clearHistory() }),
+                .init(title: "清空历史…", symbol: "trash", shortcut: nil, style: .destructive, trailing: "Clean", action: { [weak self] in self?.clearHistory() }),
                 .init(title: "退出拉比克", symbol: "power", shortcut: "⌘Q", style: .normal, action: { self.quit() }),
             ]),
         ]

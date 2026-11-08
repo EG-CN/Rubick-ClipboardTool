@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>录屏预览 - Rubick</title>
+<!-- Google Fonts: Inter & JetBrains Mono -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS v3 -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Theme Config strictly using specified tokens -->
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-tertiary-container": "#393937",
+            "outline-variant": "#3c4a42",
+            "on-tertiary-fixed": "#1b1c1a",
+            "inverse-on-surface": "#2f3036",
+            "tertiary": "#c8c6c3",
+            "tertiary-fixed": "#e4e2de",
+            "primary-fixed-dim": "#4edea3",
+            "outline": "#86948a",
+            "on-primary-container": "#00422b",
+            "surface-bright": "#38393f",
+            "surface-container": "#1e1f25",
+            "surface-tint": "#4edea3",
+            "tertiary-fixed-dim": "#c8c6c3",
+            "on-secondary-container": "#00452e",
+            "surface-container-lowest": "#0d0e13",
+            "secondary": "#45dfa4",
+            "inverse-surface": "#e3e1e9",
+            "inverse-primary": "#006c49",
+            "surface": "#121318",
+            "error": "#ffb4ab",
+            "surface-container-highest": "#34343a",
+            "on-secondary-fixed-variant": "#005137",
+            "on-secondary": "#003825",
+            "on-background": "#e3e1e9",
+            "on-error-container": "#ffdad6",
+            "on-surface-variant": "#bbcabf",
+            "on-secondary-fixed": "#002114",
+            "surface-dim": "#121318",
+            "on-primary-fixed": "#002113",
+            "secondary-container": "#00bd85",
+            "on-tertiary-fixed-variant": "#474744",
+            "on-primary-fixed-variant": "#005236",
+            "primary-fixed": "#6ffbbe",
+            "background": "#121318",
+            "on-surface": "#e3e1e9",
+            "surface-container-low": "#1a1b21",
+            "secondary-fixed-dim": "#45dfa4",
+            "primary-container": "#10b981",
+            "surface-variant": "#34343a",
+            "surface-container-high": "#292a2f",
+            "tertiary-container": "#a4a39f",
+            "on-tertiary": "#30312e",
+            "secondary-fixed": "#68fcbf",
+            "primary": "#4edea3",
+            "error-container": "#93000a",
+            "on-primary": "#003824",
+            "on-error": "#690005"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "2xl": "1rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-lg": "1.25rem",
+            "margin": "1.5rem",
+            "space-xl": "2rem",
+            "gutter": "1rem",
+            "space-xs": "0.25rem",
+            "space-md": "0.75rem",
+            "space-sm": "0.5rem"
+          },
+          "fontFamily": {
+            "body-lg": ["Inter"],
+            "headline-xl-mobile": ["Inter"],
+            "label-mono-sm": ["JetBrains Mono"],
+            "headline-md": ["Inter"],
+            "body-md": ["Inter"],
+            "headline-xl": ["Inter"],
+            "system-menu": ["Inter"],
+            "label-mono-md": ["JetBrains Mono"],
+            "headline-lg": ["Inter"],
+            "body-sm": ["Inter"]
+          },
+          "fontSize": {
+            "body-lg": ["15px", { "lineHeight": "22px", "fontWeight": "400" }],
+            "headline-xl-mobile": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "label-mono-sm": ["11px", { "lineHeight": "14px", "fontWeight": "400" }],
+            "headline-md": ["18px", { "lineHeight": "26px", "letterSpacing": "-0.01em", "fontWeight": "500" }],
+            "body-md": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+            "headline-xl": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "system-menu": ["13.5px", { "lineHeight": "18px", "letterSpacing": "-0.005em", "fontWeight": "500" }],
+            "label-mono-md": ["13px", { "lineHeight": "18px", "letterSpacing": "-0.02em", "fontWeight": "500" }],
+            "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    /* Material Symbols base styling */
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    
+    /* Native macOS glass and specular highlights */
+    .macos-specular {
+      box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+                  0 24px 68px -12px rgba(0, 0, 0, 0.85),
+                  0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+    
+    .macos-film-cell {
+      background-size: cover;
+      background-position: center;
+    }
+
+    /* Micro-emboss for trim handles */
+    .handle-grip {
+      background-image: repeating-linear-gradient(
+        to bottom,
+        rgba(0,0,0,0.5) 0px,
+        rgba(0,0,0,0.5) 2px,
+        transparent 2px,
+        transparent 5px
+      );
+    }
+  </style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface antialiased min-h-screen selection:bg-primary-container selection:text-on-primary-container flex flex-col overflow-x-hidden font-body-md text-body-md">
+<!-- macOS Top Menu Bar (Shared Component: TopNavBar strictly implemented from JSON) -->
+<header class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-space-md h-[38px] w-full bg-surface-container-lowest/90 backdrop-blur-md border-b border-outline-variant/30 select-none">
+<!-- Left Menu Cluster -->
+<div class="flex items-center space-x-space-sm h-full">
+<!-- Emerald Rubick Gem Apple Replacement -->
+<button class="flex items-center justify-center w-6 h-6 rounded-lg hover:bg-surface-container-high/60 transition-colors mr-1 group" title="Rubick System">
+<span class="w-3.5 h-3.5 rounded-sm bg-primary-container rotate-45 shadow-[0_0_10px_rgba(16,185,129,0.7)] group-hover:scale-110 transition-transform"></span>
+</button>
+<!-- App Name strictly as product_name in JSON -->
+<span class="font-system-menu text-system-menu font-semibold text-on-surface mr-2 flex items-center gap-1.5">
+        录屏预览
+      </span>
+<!-- System Menu Items -->
+<nav class="hidden sm:flex items-center space-x-1 h-full font-system-menu text-system-menu">
+<a class="px-2 py-0.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-colors active:scale-[0.98]" href="#file">File</a>
+<a class="px-2 py-0.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-colors active:scale-[0.98]" href="#edit">Edit</a>
+<a class="px-2 py-0.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-colors active:scale-[0.98]" href="#view">View</a>
+<a class="px-2 py-0.5 rounded text-primary font-medium hover:bg-surface-container-high/60 transition-colors active:scale-[0.98]" href="#trim">Trim</a>
+<a class="px-2 py-0.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-colors active:scale-[0.98]" href="#window">Window</a>
+<a class="px-2 py-0.5 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-colors active:scale-[0.98]" href="#help">Help</a>
+</nav>
+</div>
+<!-- Right Status Cluster with trailing actions from JSON -->
+<div class="flex items-center space-x-2">
+<!-- Resolution telemetry badge -->
+<div class="hidden md:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-container-high/40 border border-outline-variant/20 font-label-mono-sm text-label-mono-sm text-on-surface-variant">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+<span>1080p 60fps</span>
+</div>
+<!-- Icon: timer -->
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-colors flex items-center justify-center" title="录制时长">
+<span class="material-symbols-outlined text-[16px]" data-icon="timer">timer</span>
+</button>
+<!-- Icon: tune -->
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-colors flex items-center justify-center" title="图像校准">
+<span class="material-symbols-outlined text-[16px]" data-icon="tune">tune</span>
+</button>
+<!-- Icon: settings -->
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface transition-colors flex items-center justify-center" title="配置偏好">
+<span class="material-symbols-outlined text-[16px]" data-icon="settings">settings</span>
+</button>
+<div class="h-3 w-[1px] bg-outline-variant/40 mx-0.5"></div>
+<!-- Trailing Primary Action: Export -->
+<button class="flex items-center gap-1.5 px-2.5 py-1 rounded bg-primary-container text-on-primary-container font-system-menu text-system-menu font-medium hover:bg-primary transition-all active:scale-[0.98] shadow-sm">
+<span class="material-symbols-outlined text-[14px]" data-icon="ios_share">ios_share</span>
+<span>Export</span>
+</button>
+<!-- Profile indicator status alt badge -->
+<div class="flex items-center pl-1" title="Status indicator badge">
+<div class="w-5 h-5 rounded-full bg-surface-container-high border border-outline flex items-center justify-center text-[10px] font-label-mono-sm text-primary">
+          RK
+        </div>
+</div>
+</div>
+</header>
+<!-- Desktop Ambient Canvas Studio Workspace -->
+<main class="relative flex-1 pt-[64px] pb-10 px-margin flex items-center justify-center min-h-[calc(100vh-38px)]">
+<!-- Ambient Radial Emerald Caustic Blur & Studio Lights -->
+<div class="pointer-events-none absolute -top-24 left-1/4 w-[680px] h-[520px] bg-primary/10 rounded-full blur-[140px] -z-10"></div>
+<div class="pointer-events-none absolute bottom-0 right-1/4 w-[500px] h-[400px] bg-primary-container/5 rounded-full blur-[120px] -z-10"></div>
+<!-- Native macOS Utility Window ("录屏预览") Container -->
+<div class="w-full max-w-5xl bg-surface-container-low/95 rounded-2xl macos-specular flex flex-col overflow-hidden backdrop-blur-2xl transition-all duration-300">
+<!-- macOS Window Title Bar -->
+<div class="h-11 bg-surface-container-lowest/80 border-b border-outline-variant/30 flex items-center justify-between px-4 select-none">
+<!-- Left: Traffic Light Control Buttons -->
+<div class="flex items-center gap-2 group">
+<button class="w-3 h-3 rounded-full bg-[#ff5f57] border border-[#e0443e] flex items-center justify-center text-black/70 hover:opacity-100" title="关闭窗口">
+<span class="opacity-0 group-hover:opacity-100 text-[8px] font-bold leading-none">✕</span>
+</button>
+<button class="w-3 h-3 rounded-full bg-[#febc2e] border border-[#d89e24] flex items-center justify-center text-black/70 hover:opacity-100" title="最小化">
+<span class="opacity-0 group-hover:opacity-100 text-[8px] font-bold leading-none">−</span>
+</button>
+<button class="w-3 h-3 rounded-full bg-[#28c840] border border-[#1aab29] flex items-center justify-center text-black/70 hover:opacity-100" title="全屏">
+<span class="opacity-0 group-hover:opacity-100 text-[7px] font-bold leading-none">⤢</span>
+</button>
+</div>
+<!-- Center: Window Title & Status Badge -->
+<div class="flex items-center gap-2 text-on-surface">
+<span class="w-2 h-2 rounded-full bg-primary-container shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
+<span class="font-body-md text-body-md font-medium tracking-tight">录屏预览</span>
+<span class="font-label-mono-sm text-label-mono-sm text-on-surface-variant font-normal">2025-05-18_10-42.rec</span>
+<span class="material-symbols-outlined text-[14px] text-outline" data-icon="lock">lock</span>
+</div>
+<!-- Right: Utility Controls (Waveform, Zoom, Loop) -->
+<div class="flex items-center gap-1.5 text-on-surface-variant">
+<!-- Audio Waveform Button -->
+<button class="flex items-center justify-center w-7 h-7 rounded hover:bg-surface-container-high/60 transition-colors hover:text-on-surface" title="音频波形">
+<span class="material-symbols-outlined text-[16px]" data-icon="graphic_eq">graphic_eq</span>
+</button>
+<!-- Zoom Selector Pill -->
+<div class="flex items-center gap-0.5 px-2 py-1 rounded bg-surface-container border border-outline-variant/30 text-on-surface hover:border-outline transition-colors cursor-pointer text-xs font-label-mono-sm" title="缩放比例">
+<span>100%</span>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant" data-icon="unfold_more">unfold_more</span>
+</div>
+<!-- Loop Playback Toggle (Active in emerald) -->
+<button class="flex items-center justify-center w-7 h-7 rounded bg-primary-container/15 text-primary border border-primary/30 hover:bg-primary-container/25 transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)]" title="循环播放已开启">
+<span class="material-symbols-outlined text-[16px]" data-icon="repeat">repeat</span>
+</button>
+</div>
+</div>
+<!-- Main Video Playback Viewport Section -->
+<div class="relative w-full bg-surface-container-lowest aspect-video flex items-center justify-center overflow-hidden group">
+<!-- Rendered Screen Recording Footage using specified image -->
+<img alt="High fidelity screenshot of a web browser window displaying modern code and sleek web interface dashboard on a dark obsidian workstation desk, crisp UI layout, sharp typography, web tech demo, emerald accents" class="w-full h-full object-cover select-none pointer-events-none" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAgIkS3rkEVqH-8-t_ppNL6ZJVtDn4NJMIbQmYGPOU25S-BqUA7Q2q_Lg4a6TB4j5rGscaqe9OaEz-XACoQTj10H1pxVte3jjZ_CE-W9B1tQ1V3bZRQtx-tPxY2Oa56rD4Um4P6dJZLGe8BS_wCNu2HfmnToFaZtk99LBYQViAkaQvlMe4RiZwxTB9Ey06AptGK7icX9r9gtBe5-cfB9zcx_-ZeY7nrUdsSkTTQhbk-JhxTE3cj_KwH-F2jb2TRZKF0e39PUj6LigQ"/>
+<!-- Subtle Screen Surface Glare / Inner Vignette -->
+<div class="absolute inset-0 pointer-events-none shadow-[inset_0_0_120px_rgba(0,0,0,0.7)] border-b border-outline-variant/20"></div>
+<!-- Corner Dimension Tag Overlay (Top-Left) -->
+<div class="absolute top-3.5 left-4 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-lowest/80 backdrop-blur-md border border-outline-variant/30 font-label-mono-sm text-label-mono-sm text-on-surface-variant shadow-lg pointer-events-none">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span>1920 × 1080 · 60fps (源)</span>
+</div>
+<!-- Right Quick Preset Watermark Pill (Top-Right) -->
+<div class="absolute top-3.5 right-4 flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container-lowest/60 backdrop-blur-md border border-outline-variant/20 text-on-surface-variant font-label-mono-sm text-label-mono-sm pointer-events-none">
+<span class="material-symbols-outlined text-[13px] text-primary" data-icon="speed">speed</span>
+<span>ProRes RAW Cache</span>
+</div>
+<!-- Center Floating Playback HUD Button -->
+<button class="absolute z-10 w-16 h-16 rounded-full bg-surface-container-lowest/70 backdrop-blur-xl border border-white/20 text-on-surface flex items-center justify-center shadow-2xl hover:scale-110 hover:bg-surface-container-lowest/90 active:scale-95 transition-all duration-200 group-hover:opacity-100 opacity-90">
+<span class="material-symbols-outlined text-[32px] ml-1 text-primary-fixed" data-icon="play_arrow">play_arrow</span>
+</button>
+<!-- Video Timecode HUD Indicator Pill (Bottom Center) -->
+<div class="absolute bottom-4 flex items-center gap-3 px-3.5 py-1.5 rounded-full bg-surface-container-lowest/85 backdrop-blur-xl border border-outline-variant/40 shadow-xl font-label-mono-sm text-label-mono-sm text-on-surface">
+<span class="text-primary font-semibold">00:04.28</span>
+<span class="text-outline-variant">/</span>
+<span class="text-on-surface-variant">00:12.50</span>
+<span class="h-3 w-[1px] bg-outline-variant/40"></span>
+<span class="text-on-surface-variant">128 / 375 帧</span>
+</div>
+</div>
+<!-- Precision Filmstrip Trim Section (胶片剪辑轨 - Kap Inspired) -->
+<div class="bg-surface-container px-5 pt-3.5 pb-4 border-b border-outline-variant/30 select-none">
+<!-- Trim Track Header & Ruler Time Markers -->
+<div class="flex items-center justify-between text-outline font-label-mono-sm text-[10px] mb-1.5 px-1">
+<span>00:00</span>
+<span>00:02</span>
+<span>00:04</span>
+<span>00:06</span>
+<span>00:08</span>
+<span>00:10</span>
+<span>00:12.5</span>
+</div>
+<!-- The Filmstrip Scrubber Track Frame -->
+<div class="relative w-full h-16 rounded-lg bg-surface-container-lowest overflow-hidden border border-outline-variant/40 flex shadow-inner">
+<!-- Film Thumbnail Previews Array across the duration -->
+<div class="absolute inset-0 flex w-full h-full pointer-events-none opacity-85">
+<div class="flex-1 border-r border-black/40 bg-cover bg-center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAgIkS3rkEVqH-8-t_ppNL6ZJVtDn4NJMIbQmYGPOU25S-BqUA7Q2q_Lg4a6TB4j5rGscaqe9OaEz-XACoQTj10H1pxVte3jjZ_CE-W9B1tQ1V3bZRQtx-tPxY2Oa56rD4Um4P6dJZLGe8BS_wCNu2HfmnToFaZtk99LBYQViAkaQvlMe4RiZwxTB9Ey06AptGK7icX9r9gtBe5-cfB9zcx_-ZeY7nrUdsSkTTQhbk-JhxTE3cj_KwH-F2jb2TRZKF0e39PUj6LigQ');"></div>
+<div class="flex-1 border-r border-black/40 bg-cover bg-center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAgIkS3rkEVqH-8-t_ppNL6ZJVtDn4NJMIbQmYGPOU25S-BqUA7Q2q_Lg4a6TB4j5rGscaqe9OaEz-XACoQTj10H1pxVte3jjZ_CE-W9B1tQ1V3bZRQtx-tPxY2Oa56rD4Um4P6dJZLGe8BS_wCNu2HfmnToFaZtk99LBYQViAkaQvlMe4RiZwxTB9Ey06AptGK7icX9r9gtBe5-cfB9zcx_-ZeY7nrUdsSkTTQhbk-JhxTE3cj_KwH-F2jb2TRZKF0e39PUj6LigQ'); filter: brightness(0.95);"></div>
+<div class="flex-1 border-r border-black/40 bg-cover bg-center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAgIkS3rkEVqH-8-t_ppNL6ZJVtDn4NJMIbQmYGPOU25S-BqUA7Q2q_Lg4a6TB4j5rGscaqe9OaEz-XACoQTj10H1pxVte3jjZ_CE-W9B1tQ1V3bZRQtx-tPxY2Oa56rD4Um4P6dJZLGe8BS_wCNu2HfmnToFaZtk99LBYQViAkaQvlMe4RiZwxTB9Ey06AptGK7icX9r9gtBe5-cfB9zcx_-ZeY7nrUdsSkTTQhbk-JhxTE3cj_KwH-F2jb2TRZKF0e39PUj6LigQ'); filter: contrast(1.05);"></div>
+<div class="flex-1 border-r border-black/40 bg-cover bg-center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAgIkS3rkEVqH-8-t_ppNL6ZJVtDn4NJMIbQmYGPOU25S-BqUA7Q2q_Lg4a6TB4j5rGscaqe9OaEz-XACoQTj10H1pxVte3jjZ_CE-W9B1tQ1V3bZRQtx-tPxY2Oa56rD4Um4P6dJZLGe8BS_wCNu2HfmnToFaZtk99LBYQViAkaQvlMe4RiZwxTB9Ey06AptGK7icX9r9gtBe5-cfB9zcx_-ZeY7nrUdsSkTTQhbk-JhxTE3cj_KwH-F2jb2TRZKF0e39PUj6LigQ'); filter: brightness(0.9);"></div>
+<div class="flex-1 border-r border-black/40 bg-cover bg-center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAgIkS3rkEVqH-8-t_ppNL6ZJVtDn4NJMIbQmYGPOU25S-BqUA7Q2q_Lg4a6TB4j5rGscaqe9OaEz-XACoQTj10H1pxVte3jjZ_CE-W9B1tQ1V3bZRQtx-tPxY2Oa56rD4Um4P6dJZLGe8BS_wCNu2HfmnToFaZtk99LBYQViAkaQvlMe4RiZwxTB9Ey06AptGK7icX9r9gtBe5-cfB9zcx_-ZeY7nrUdsSkTTQhbk-JhxTE3cj_KwH-F2jb2TRZKF0e39PUj6LigQ'); filter: contrast(0.98);"></div>
+<div class="flex-1 border-r border-black/40 bg-cover bg-center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAgIkS3rkEVqH-8-t_ppNL6ZJVtDn4NJMIbQmYGPOU25S-BqUA7Q2q_Lg4a6TB4j5rGscaqe9OaEz-XACoQTj10H1pxVte3jjZ_CE-W9B1tQ1V3bZRQtx-tPxY2Oa56rD4Um4P6dJZLGe8BS_wCNu2HfmnToFaZtk99LBYQViAkaQvlMe4RiZwxTB9Ey06AptGK7icX9r9gtBe5-cfB9zcx_-ZeY7nrUdsSkTTQhbk-JhxTE3cj_KwH-F2jb2TRZKF0e39PUj6LigQ'); filter: brightness(1.02);"></div>
+<div class="flex-1 border-r border-black/40 bg-cover bg-center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAgIkS3rkEVqH-8-t_ppNL6ZJVtDn4NJMIbQmYGPOU25S-BqUA7Q2q_Lg4a6TB4j5rGscaqe9OaEz-XACoQTj10H1pxVte3jjZ_CE-W9B1tQ1V3bZRQtx-tPxY2Oa56rD4Um4P6dJZLGe8BS_wCNu2HfmnToFaZtk99LBYQViAkaQvlMe4RiZwxTB9Ey06AptGK7icX9r9gtBe5-cfB9zcx_-ZeY7nrUdsSkTTQhbk-JhxTE3cj_KwH-F2jb2TRZKF0e39PUj6LigQ'); filter: contrast(1.1);"></div>
+<div class="flex-1 bg-cover bg-center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAgIkS3rkEVqH-8-t_ppNL6ZJVtDn4NJMIbQmYGPOU25S-BqUA7Q2q_Lg4a6TB4j5rGscaqe9OaEz-XACoQTj10H1pxVte3jjZ_CE-W9B1tQ1V3bZRQtx-tPxY2Oa56rD4Um4P6dJZLGe8BS_wCNu2HfmnToFaZtk99LBYQViAkaQvlMe4RiZwxTB9Ey06AptGK7icX9r9gtBe5-cfB9zcx_-ZeY7nrUdsSkTTQhbk-JhxTE3cj_KwH-F2jb2TRZKF0e39PUj6LigQ');"></div>
+</div>
+<!-- Out-of-Bounds Dimming Overlay (Left: 00:00 to 00:01.80) -->
+<div class="absolute left-0 top-0 bottom-0 w-[14.4%] bg-black/75 backdrop-blur-[2px] z-10 border-r border-yellow-500/30"></div>
+<!-- Out-of-Bounds Dimming Overlay (Right: 00:08.40 to 00:12.50) -->
+<div class="absolute right-0 top-0 bottom-0 w-[32.8%] bg-black/75 backdrop-blur-[2px] z-10 border-l border-yellow-500/30"></div>
+<!-- Active Selection Window (Between Handles: 14.4% to 67.2%) -->
+<div class="absolute top-0 bottom-0 left-[14.4%] right-[32.8%] z-20 border-y-2 border-[#facc15] bg-[#facc15]/10 pointer-events-none shadow-[0_0_15px_rgba(250,204,21,0.25)]"></div>
+<!-- Left Yellow Trim Handle (Draggable Affordance) -->
+<div class="absolute top-0 bottom-0 left-[14.4%] -translate-x-full w-3.5 bg-[#facc15] hover:bg-[#fde047] z-30 cursor-ew-resize flex items-center justify-center rounded-l-md shadow-md group">
+<div class="w-1.5 h-6 handle-grip opacity-80"></div>
+</div>
+<!-- Right Yellow Trim Handle (Draggable Affordance) -->
+<div class="absolute top-0 bottom-0 left-[67.2%] w-3.5 bg-[#facc15] hover:bg-[#fde047] z-30 cursor-ew-resize flex items-center justify-center rounded-r-md shadow-md group">
+<div class="w-1.5 h-6 handle-grip opacity-80"></div>
+</div>
+<!-- Playhead Scrub Needle (At 00:04.28 ≈ 34.2%) -->
+<div class="absolute top-0 bottom-0 left-[34.2%] z-40 flex flex-col items-center pointer-events-none -translate-x-1/2">
+<!-- Needle Head Indicator -->
+<div class="w-2.5 h-2.5 bg-primary-container rotate-45 -mt-1 shadow-[0_0_8px_rgba(16,185,129,0.9)]"></div>
+<!-- Vertical Line -->
+<div class="w-[2px] h-full bg-white shadow-[0_0_4px_rgba(255,255,255,0.8)]"></div>
+<!-- Playhead Tooltip Tag -->
+<div class="absolute -bottom-6 px-1.5 py-0.5 rounded bg-surface-container-lowest border border-primary/40 font-label-mono-sm text-[10px] text-primary whitespace-nowrap shadow-md">
+              00:04.28
+            </div>
+</div>
+</div>
+<!-- Duration Readout & Trimming Telemetry Pill -->
+<div class="mt-4 flex items-center justify-between font-label-mono-sm text-label-mono-sm">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px] text-yellow-400" data-icon="content_cut">content_cut</span>
+<span>已选片段: <strong class="text-on-surface font-medium">00:01.80</strong> 至 <strong class="text-on-surface font-medium">00:08.40</strong></span>
+<span class="px-2 py-0.5 rounded bg-surface-container-high border border-outline-variant/30 text-primary">持续 6.6 秒</span>
+</div>
+<!-- Quick Trim Presets -->
+<div class="flex items-center gap-2 text-xs">
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">重置剪辑</button>
+<span class="text-outline-variant">·</span>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">对齐到关键帧</button>
+</div>
+</div>
+</div>
+<!-- Bottom Control & Export Action Row -->
+<div class="bg-surface-container-lowest p-5 flex flex-col gap-4">
+<!-- Controls Upper Sub-row: Format Picker & File Path -->
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+<!-- Format Switcher Segmented Control & Telemetry -->
+<div class="flex flex-wrap items-center gap-3">
+<div class="flex items-center p-0.5 rounded-lg bg-surface-container border border-outline-variant/30 shadow-inner">
+<!-- Active GIF Segment -->
+<button class="px-4 py-1.5 rounded-md bg-surface-container-high text-primary font-medium text-xs shadow-sm flex items-center gap-1.5 transition-all">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
+<span>GIF</span>
+</button>
+<!-- Inactive MP4 Segment -->
+<button class="px-4 py-1.5 rounded-md text-on-surface-variant hover:text-on-surface text-xs font-normal transition-all">
+<span>MP4</span>
+</button>
+<!-- Inactive WebM Segment -->
+<button class="px-3 py-1.5 rounded-md text-on-surface-variant hover:text-on-surface text-xs font-normal transition-all">
+<span>WebM</span>
+</button>
+</div>
+<!-- GIF Monospace Telemetry Details -->
+<div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container/70 border border-outline-variant/20 font-label-mono-sm text-label-mono-sm text-on-surface-variant">
+<span>15 fps</span>
+<span class="text-outline-variant">·</span>
+<span>宽 800px</span>
+<span class="text-outline-variant">·</span>
+<span class="text-on-surface font-medium">约 6.2 MB</span>
+</div>
+<!-- Quality Preset Badge -->
+<div class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-container/40 border border-outline-variant/20 text-xs text-on-surface-variant cursor-pointer hover:border-outline transition-colors">
+<span class="material-symbols-outlined text-[13px] text-primary" data-icon="tune">tune</span>
+<span>高质量 (Floyd-Steinberg)</span>
+<span class="material-symbols-outlined text-[12px]" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+<!-- Save Destination Row -->
+<div class="flex items-center gap-2 flex-1 max-w-lg">
+<div class="flex-1 flex items-center justify-between px-3 py-1.5 rounded-lg bg-surface-container border border-outline-variant/30 text-on-surface font-label-mono-sm text-label-mono-sm overflow-hidden">
+<div class="flex items-center gap-2 truncate">
+<span class="material-symbols-outlined text-[16px] text-primary" data-icon="folder">folder</span>
+<span class="truncate text-on-surface-variant">~/Desktop/Rubick-Clips/<strong class="text-on-surface font-normal">screen_0518.gif</strong></span>
+</div>
+<button class="ml-2 text-xs text-primary hover:underline whitespace-nowrap">更改...</button>
+</div>
+</div>
+</div>
+<!-- Controls Lower Sub-row: Actions & Primary CTA Button -->
+<div class="flex items-center justify-between pt-2 border-t border-outline-variant/20">
+<!-- Secondary Auxiliary Actions -->
+<div class="flex items-center gap-2">
+<!-- Re-record button -->
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface-variant hover:text-on-surface transition-all text-xs font-medium">
+<span class="material-symbols-outlined text-[15px]" data-icon="restart_alt">restart_alt</span>
+<span>重新录制</span>
+</button>
+<!-- Discard button -->
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-error-container/20 text-on-surface-variant hover:text-error transition-all text-xs font-medium">
+<span class="material-symbols-outlined text-[15px]" data-icon="delete">delete</span>
+<span>丢弃</span>
+</button>
+</div>
+<!-- Export Action Cluster -->
+<div class="flex items-center gap-3">
+<!-- Secondary: Copy to Clipboard -->
+<button class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface transition-all text-xs font-medium active:scale-[0.98]">
+<span class="material-symbols-outlined text-[15px]" data-icon="content_copy">content_copy</span>
+<span>复制到剪贴板</span>
+</button>
+<!-- Primary CTA: Export GIF (Emerald Obsidian Theme Anchor) -->
+<button class="flex items-center gap-2 px-5 py-2 rounded-lg bg-primary-container text-on-primary-container hover:bg-primary font-system-menu text-system-menu font-semibold shadow-lg shadow-primary-container/25 hover:shadow-primary-container/40 transition-all active:scale-[0.98]">
+<span class="material-symbols-outlined text-[18px]" data-icon="download">download</span>
+<span>导出 GIF</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Interactive script for macOS desktop micro-interactions -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Toggle play state on center HUD button click
+      const playBtn = document.querySelector('main button[title="关闭窗口"]');
+      const videoPlayHUD = document.querySelector('main .material-symbols-outlined[data-icon="play_arrow"]');
+      
+      if (videoPlayHUD) {
+        const hudContainer = videoPlayHUD.closest('button');
+        hudContainer.addEventListener('click', () => {
+          if (videoPlayHUD.textContent.trim() === 'play_arrow') {
+            videoPlayHUD.textContent = 'pause';
+            hudContainer.classList.add('opacity-40');
+          } else {
+            videoPlayHUD.textContent = 'play_arrow';
+            hudContainer.classList.remove('opacity-40');
+          }
+        });
+      }
+
+      // Format Selector state toggle
+      const formatButtons = document.querySelectorAll('button:has(span:contains("GIF")), button:has(span:contains("MP4"))');
+    });
+  </script>
+</body></html>

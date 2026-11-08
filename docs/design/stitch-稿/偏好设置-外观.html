@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rubick macOS 偏好设置 - 外观</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"PingFang SC"', '"Hiragino Sans GB"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace']
+          },
+          colors: {
+            primary: '#10b981',
+            'primary-dark': '#059669',
+            obsidian: {
+              950: '#0a0b0e',
+              900: '#101116',
+              850: '#14151b',
+              800: '#181a22',
+              750: '#1e202b',
+              700: '#262937',
+              600: '#34384b'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 350, 'GRAD' 0, 'opsz' 20;
+    }
+    .material-symbols-outlined.filled {
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+    }
+    /* macOS Range slider styling */
+    input[type=range] {
+      -webkit-appearance: none;
+      background: transparent;
+    }
+    input[type=range]:focus {
+      outline: none;
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 4px;
+      cursor: pointer;
+      background: #262937;
+      border-radius: 9999px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      height: 16px;
+      width: 16px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.2);
+      cursor: pointer;
+      -webkit-appearance: none;
+      margin-top: -6px;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.1);
+      box-shadow: 0 2px 6px rgba(16,185,129,0.35), 0 0 0 1px rgba(16,185,129,0.6);
+    }
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.08);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255,255,255,0.16);
+    }
+    .catenary-line {
+      stroke-dasharray: 4 2;
+    }
+  </style>
+</head>
+<body class="bg-obsidian-950 min-h-screen text-slate-200 antialiased font-sans flex items-center justify-center p-6 selection:bg-emerald-500/30 selection:text-emerald-200">
+
+  <!-- Desktop Context Background Hint -->
+  <div class="fixed inset-0 pointer-events-none opacity-40 bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(16,185,129,0.15),transparent)]"></div>
+
+  <!-- macOS Window Container (760pt / ~760px wide standard) -->
+  <main class="relative w-[760px] h-[640px] bg-obsidian-900/95 backdrop-blur-2xl rounded-xl border border-white/[0.09] shadow-[0_24px_70px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,255,255,0.05)] flex overflow-hidden select-none">
+    
+    <!-- LEFT SIDEBAR (~220px) -->
+    <aside class="w-[210px] bg-obsidian-950/80 border-r border-white/[0.07] flex flex-col justify-between flex-shrink-0 backdrop-blur-md">
+      <div>
+        <!-- Window Controls & Header Bar -->
+        <div class="h-12 px-4 flex items-center gap-2 border-b border-white/[0.04]">
+          <div class="flex items-center gap-2 group cursor-default">
+            <div class="w-3 h-3 rounded-full bg-[#ff5f57] border border-[#e0443e]/60 shadow-inner flex items-center justify-center text-[8px] text-black/70 opacity-90 group-hover:opacity-100 transition-opacity">
+              <span class="opacity-0 group-hover:opacity-100 leading-none font-bold">×</span>
+            </div>
+            <div class="w-3 h-3 rounded-full bg-[#febc2e] border border-[#d89e24]/60 shadow-inner flex items-center justify-center text-[8px] text-black/70 opacity-90 group-hover:opacity-100 transition-opacity">
+              <span class="opacity-0 group-hover:opacity-100 leading-none font-bold">-</span>
+            </div>
+            <div class="w-3 h-3 rounded-full bg-[#28c840] border border-[#1aab29]/60 shadow-inner flex items-center justify-center text-[8px] text-black/70 opacity-90 group-hover:opacity-100 transition-opacity">
+              <span class="opacity-0 group-hover:opacity-100 leading-none font-bold text-[7px]">+</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- App Brand Sub-header in Sidebar -->
+        <div class="px-3 pt-3 pb-2 flex items-center gap-2.5">
+          <div class="w-6 h-6 rounded-md bg-gradient-to-br from-emerald-400/20 to-emerald-600/30 border border-emerald-500/40 flex items-center justify-center shadow-sm">
+            <span class="text-xs text-emerald-400 font-mono font-bold leading-none">R</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-xs font-semibold text-slate-100 tracking-tight leading-none">Rubick 拉比克</span>
+            <span class="text-[10px] text-slate-500 font-mono mt-0.5">v2.8.4 Preferences</span>
+          </div>
+        </div>
+
+        <!-- Sidebar Navigation List -->
+        <nav class="px-2 py-2 space-y-0.5">
+          <!-- 1. 通用 -->
+          <a href="#" class="group flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] transition-all text-[13px] font-normal">
+            <span class="material-symbols-outlined text-[17px] text-slate-400 group-hover:text-slate-300">tune</span>
+            <span>通用</span>
+          </a>
+
+          <!-- 2. 外观 (Active State) -->
+          <a href="#" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-emerald-300 bg-emerald-500/15 border border-emerald-500/25 shadow-sm text-[13px] font-medium transition-all">
+            <div class="flex items-center gap-2.5">
+              <span class="material-symbols-outlined text-[17px] text-emerald-400 filled">palette</span>
+              <span>外观</span>
+            </div>
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.9)]"></span>
+          </a>
+
+          <!-- 3. 随手夹 -->
+          <a href="#" class="group flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] transition-all text-[13px] font-normal">
+            <span class="material-symbols-outlined text-[17px] text-slate-400 group-hover:text-slate-300">attach_file</span>
+            <span>随手夹</span>
+          </a>
+
+          <!-- 4. 快捷键 -->
+          <a href="#" class="group flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] transition-all text-[13px] font-normal">
+            <span class="material-symbols-outlined text-[17px] text-slate-400 group-hover:text-slate-300">keyboard</span>
+            <span>快捷键</span>
+          </a>
+
+          <!-- 5. 权限 -->
+          <a href="#" class="group flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] transition-all text-[13px] font-normal">
+            <span class="material-symbols-outlined text-[17px] text-slate-400 group-hover:text-slate-300">lock_outline</span>
+            <span>权限</span>
+          </a>
+
+          <!-- 6. 关于 -->
+          <a href="#" class="group flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] transition-all text-[13px] font-normal">
+            <span class="material-symbols-outlined text-[17px] text-slate-400 group-hover:text-slate-300">info</span>
+            <span>关于</span>
+          </a>
+        </nav>
+      </div>
+
+      <!-- Bottom Profile / Status Info in Sidebar -->
+      <div class="p-3 border-t border-white/[0.04] flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+          <span class="text-[11px] text-slate-400 font-mono">物理悬挂就绪</span>
+        </div>
+        <span class="text-[10px] text-slate-500 font-mono">macOS 15.3</span>
+      </div>
+    </aside>
+
+    <!-- RIGHT CONTENT PANE (~550px) -->
+    <section class="flex-1 flex flex-col bg-obsidian-900 overflow-y-auto">
+      
+      <!-- Top Title Bar -->
+      <header class="h-12 px-6 flex items-center justify-between border-b border-white/[0.06] bg-obsidian-900/60 sticky top-0 z-20 backdrop-blur-md">
+        <div class="flex items-center gap-2">
+          <h1 class="text-[14px] font-semibold text-slate-100 tracking-tight">外观设置</h1>
+          <span class="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono">Hanging Canvas</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="text-[11px] text-slate-400 hover:text-slate-200 transition-colors">重置为默认</button>
+        </div>
+      </header>
+
+      <!-- Scrollable Settings Body -->
+      <div class="p-6 space-y-6">
+
+        <!-- PREVIEW AREA: Hemp Rope Clothesline with Polaroid Cards Illustration -->
+        <div class="relative w-full h-[156px] rounded-xl bg-obsidian-950 border border-white/[0.08] overflow-hidden p-4 shadow-inner flex flex-col justify-between group">
+          <!-- Background Ambient Glow & Blueprint Grid -->
+          <div class="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_40%,rgba(16,185,129,0.08),transparent)] pointer-events-none"></div>
+          <div class="absolute inset-0 bg-[linear-gradient(to_right,#ffffff04_1px,transparent_1px),linear-gradient(to_bottom,#ffffff04_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none"></div>
+
+          <!-- Preview Header Tag -->
+          <div class="relative z-10 flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span class="text-[11px] font-mono uppercase tracking-wider text-slate-400">实时外观预览 (Live Preview)</span>
+            </div>
+            <span class="text-[10px] text-emerald-400/90 font-mono bg-emerald-950/70 border border-emerald-500/25 px-1.5 py-0.5 rounded">60% 宽度 · 3.0° 摇摆</span>
+          </div>
+
+          <!-- Hanging Twine Rope & Clothesline System SVG / Cards -->
+          <div class="relative z-10 w-full h-[98px] flex items-center justify-center">
+            
+            <!-- Left & Right Wooden/Metallic Anchor Pegs -->
+            <div class="absolute left-6 top-7 w-2.5 h-2.5 rounded-full bg-amber-700/80 border border-amber-500/60 shadow-[0_2px_4px_rgba(0,0,0,0.8)] z-20"></div>
+            <div class="absolute right-6 top-7 w-2.5 h-2.5 rounded-full bg-amber-700/80 border border-amber-500/60 shadow-[0_2px_4px_rgba(0,0,0,0.8)] z-20"></div>
+
+            <!-- Catenary Rope Curve (SVG) -->
+            <svg class="absolute inset-0 w-full h-full pointer-events-none overflow-visible" preserveAspectRatio="none" viewBox="0 0 500 90">
+              <path d="M 28 32 Q 250 56 472 32" fill="none" stroke="#8d6e46" stroke-width="2.5" stroke-linecap="round" />
+              <path d="M 28 32 Q 250 56 472 32" fill="none" stroke="#d4a373" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.6" />
+            </svg>
+
+            <!-- Suspended Polaroid Cards -->
+            <div class="relative flex items-center justify-center gap-6 mt-3">
+              
+              <!-- Card 1: Rotated -3deg -->
+              <div class="relative transform -rotate-3 transition-transform duration-300 hover:rotate-0 hover:scale-105 cursor-pointer">
+                <!-- Metallic / Plastic Clip -->
+                <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 w-3.5 h-4 bg-gradient-to-b from-slate-200 to-slate-400 rounded-[2px] shadow-md z-30 flex flex-col items-center justify-start border border-black/30">
+                  <div class="w-1.5 h-0.5 bg-black/60 rounded-full mt-0.5"></div>
+                </div>
+                <!-- Polaroid Frame -->
+                <div class="w-16 h-20 bg-[#f4f1ea] rounded-[3px] p-1.5 shadow-[0_8px_16px_rgba(0,0,0,0.6)] flex flex-col justify-between">
+                  <div class="w-full h-12 bg-slate-900 rounded-[2px] overflow-hidden flex flex-col p-1 border border-black/10">
+                    <div class="w-full h-1.5 bg-emerald-500/40 rounded-sm mb-1"></div>
+                    <div class="w-3/4 h-1 bg-slate-700 rounded-sm mb-0.5"></div>
+                    <div class="w-1/2 h-1 bg-slate-800 rounded-sm"></div>
+                  </div>
+                  <div class="text-[7px] text-slate-700 font-mono tracking-tight text-center truncate">Code.ts</div>
+                </div>
+              </div>
+
+              <!-- Card 2: Center Focus (Active / Emerald Clip) Rotated +2deg -->
+              <div class="relative transform rotate-2 transition-transform duration-300 hover:rotate-0 hover:scale-105 cursor-pointer">
+                <!-- Emerald Accent Clip -->
+                <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 w-3.5 h-4 bg-gradient-to-b from-emerald-400 to-emerald-600 rounded-[2px] shadow-md z-30 flex flex-col items-center justify-start border border-emerald-900/40">
+                  <div class="w-1.5 h-0.5 bg-emerald-950 rounded-full mt-0.5"></div>
+                </div>
+                <!-- Polaroid Frame with Emerald glow highlight -->
+                <div class="w-[72px] h-[88px] bg-[#faf8f5] rounded-[3px] p-1.5 shadow-[0_10px_22px_rgba(0,0,0,0.7),0_0_0_1px_rgba(16,185,129,0.3)] flex flex-col justify-between">
+                  <div class="w-full h-14 bg-[#12141a] rounded-[2px] overflow-hidden p-1 flex flex-col justify-between border border-black/10 relative">
+                    <div class="flex items-center justify-between">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      <span class="text-[6px] text-emerald-400 font-mono">LIVE</span>
+                    </div>
+                    <div class="space-y-0.5">
+                      <div class="w-full h-1.5 bg-emerald-500/60 rounded-xs"></div>
+                      <div class="w-4/5 h-1 bg-slate-600 rounded-xs"></div>
+                    </div>
+                  </div>
+                  <div class="text-[7px] text-slate-800 font-mono font-medium tracking-tight text-center truncate">Preview #1</div>
+                </div>
+              </div>
+
+              <!-- Card 3: Rotated -2.5deg -->
+              <div class="relative transform -rotate-[2.5deg] transition-transform duration-300 hover:rotate-0 hover:scale-105 cursor-pointer">
+                <!-- Gold Accent Clip -->
+                <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 w-3.5 h-4 bg-gradient-to-b from-amber-300 to-amber-500 rounded-[2px] shadow-md z-30 flex flex-col items-center justify-start border border-amber-900/40">
+                  <div class="w-1.5 h-0.5 bg-amber-950 rounded-full mt-0.5"></div>
+                </div>
+                <!-- Polaroid Frame -->
+                <div class="w-16 h-20 bg-[#f4f1ea] rounded-[3px] p-1.5 shadow-[0_8px_16px_rgba(0,0,0,0.6)] flex flex-col justify-between">
+                  <div class="w-full h-12 bg-slate-850 rounded-[2px] overflow-hidden p-1 flex items-center justify-center border border-black/10">
+                    <span class="material-symbols-outlined text-[16px] text-slate-400">image</span>
+                  </div>
+                  <div class="text-[7px] text-slate-700 font-mono tracking-tight text-center truncate">Asset.png</div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- SETTINGS SECTION: macOS HIG Style Clean Grouped List -->
+        <div class="space-y-4">
+          
+          <h2 class="text-[11px] font-semibold text-slate-400 tracking-wider uppercase px-1 font-mono">
+            悬挂画布交互 (Canvas Dynamics)
+          </h2>
+
+          <div class="bg-obsidian-850/80 rounded-xl border border-white/[0.07] divide-y divide-white/[0.05] overflow-hidden">
+            
+            <!-- Row 1: 触觉反馈 toggle (ON) -->
+            <div class="px-4 py-3.5 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
+              <div class="space-y-0.5 max-w-[340px]">
+                <div class="flex items-center gap-2">
+                  <span class="text-[13px] font-medium text-slate-200">触觉反馈</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-400 font-mono">Haptic</span>
+                </div>
+                <p class="text-[12px] text-slate-400 leading-normal">
+                  拖拽卡片卡入吊绳夹具或释放吸附时，通过触控板触发精准震动反馈。
+                </p>
+              </div>
+              
+              <!-- macOS Native Emerald Toggle Switch (ON) -->
+              <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input type="checkbox" checked class="sr-only peer" id="toggle-haptic">
+                <div class="w-10 h-6 bg-obsidian-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all after:shadow-md peer-checked:bg-emerald-500 peer-checked:shadow-[0_0_12px_rgba(16,185,129,0.45)]"></div>
+              </label>
+            </div>
+
+            <!-- Row 2: 取空自动收绳 toggle (ON) -->
+            <div class="px-4 py-3.5 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
+              <div class="space-y-0.5 max-w-[340px]">
+                <div class="flex items-center gap-2">
+                  <span class="text-[13px] font-medium text-slate-200">取空自动收绳</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-400 font-mono">Auto Retract</span>
+                </div>
+                <p class="text-[12px] text-slate-400 leading-normal">
+                  当最后一张截图卡片被移出或粘贴消费完毕后，自动收起麻绳并隐藏悬浮条。
+                </p>
+              </div>
+              
+              <!-- macOS Native Emerald Toggle Switch (ON) -->
+              <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input type="checkbox" checked class="sr-only peer" id="toggle-retract">
+                <div class="w-10 h-6 bg-obsidian-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all after:shadow-md peer-checked:bg-emerald-500 peer-checked:shadow-[0_0_12px_rgba(16,185,129,0.45)]"></div>
+              </label>
+            </div>
+
+            <!-- Row 3: 呼出快捷键 Keycap ⇧⌘Z -->
+            <div class="px-4 py-3.5 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
+              <div class="space-y-0.5 max-w-[340px]">
+                <div class="flex items-center gap-2">
+                  <span class="text-[13px] font-medium text-slate-200">呼出快捷键</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-400 font-mono">Global Hotkey</span>
+                </div>
+                <p class="text-[12px] text-slate-400 leading-normal">
+                  随时唤醒屏幕悬挂板以便拖放新剪贴内容或快速回溯。
+                </p>
+              </div>
+              
+              <!-- Monospace macOS Keycaps Button -->
+              <button class="flex items-center gap-1.5 px-3 py-1.5 bg-obsidian-950 hover:bg-obsidian-900 border border-white/[0.12] rounded-lg shadow-sm hover:border-emerald-500/50 transition-all group focus:ring-2 focus:ring-emerald-500/30">
+                <kbd class="px-1.5 py-0.5 bg-obsidian-800 border border-white/10 rounded font-mono text-[12px] text-slate-300 font-semibold group-hover:text-emerald-400 transition-colors shadow-inner">⇧</kbd>
+                <kbd class="px-1.5 py-0.5 bg-obsidian-800 border border-white/10 rounded font-mono text-[12px] text-slate-300 font-semibold group-hover:text-emerald-400 transition-colors shadow-inner">⌘</kbd>
+                <kbd class="px-2 py-0.5 bg-obsidian-800 border border-white/10 rounded font-mono text-[12px] text-slate-300 font-semibold group-hover:text-emerald-400 transition-colors shadow-inner">Z</kbd>
+                <span class="material-symbols-outlined text-[14px] text-slate-500 ml-1 group-hover:text-slate-300">edit</span>
+              </button>
+            </div>
+
+            <!-- Row 4: 绳子最大宽度 Slider 60% -->
+            <div class="px-4 py-3.5 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
+              <div class="space-y-0.5 max-w-[260px]">
+                <div class="flex items-center gap-2">
+                  <span class="text-[13px] font-medium text-slate-200">绳子最大宽度</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-400 font-mono">Max Span</span>
+                </div>
+                <p class="text-[12px] text-slate-400 leading-normal">
+                  悬挂绳横向跨度占当前屏幕分辨率宽度的百分比。
+                </p>
+              </div>
+              
+              <div class="flex items-center gap-3 w-[210px]">
+                <input type="range" min="30" max="95" value="60" id="slider-rope-width" class="w-full h-1 bg-obsidian-700 rounded-lg cursor-pointer accent-emerald-500">
+                <span id="label-rope-width" class="w-12 text-right font-mono text-[12px] font-semibold text-emerald-400 bg-obsidian-950 px-2 py-1 rounded border border-white/[0.08]">60%</span>
+              </div>
+            </div>
+
+            <!-- Row 5: 卡片倾斜幅度 Slider ±3° -->
+            <div class="px-4 py-3.5 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
+              <div class="space-y-0.5 max-w-[260px]">
+                <div class="flex items-center gap-2">
+                  <span class="text-[13px] font-medium text-slate-200">卡片倾斜幅度</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-400 font-mono">Tilt Randomness</span>
+                </div>
+                <p class="text-[12px] text-slate-400 leading-normal">
+                  拍立得相纸自然摆动的不规则倾角范围。
+                </p>
+              </div>
+              
+              <div class="flex items-center gap-3 w-[210px]">
+                <input type="range" min="0" max="10" value="3" id="slider-card-tilt" class="w-full h-1 bg-obsidian-700 rounded-lg cursor-pointer accent-emerald-500">
+                <span id="label-card-tilt" class="w-12 text-right font-mono text-[12px] font-semibold text-emerald-400 bg-obsidian-950 px-2 py-1 rounded border border-white/[0.08]">±3°</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Footnote Status -->
+        <div class="pt-2 pb-1 flex items-center justify-between text-[11px] text-slate-500 font-mono border-t border-white/[0.05]">
+          <div class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[14px] text-emerald-500">check_circle</span>
+            <span>外观改动已即时同步至 macOS 系统常驻托盘</span>
+          </div>
+          <span class="hover:text-slate-400 cursor-pointer">帮助文档 ↗</span>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Interactive script for range sliders and dynamic value binding -->
+  <script>
+    const widthSlider = document.getElementById('slider-rope-width');
+    const widthLabel = document.getElementById('label-rope-width');
+    const tiltSlider = document.getElementById('slider-card-tilt');
+    const tiltLabel = document.getElementById('label-card-tilt');
+
+    if (widthSlider && widthLabel) {
+      widthSlider.addEventListener('input', (e) => {
+        widthLabel.textContent = `${e.target.value}%`;
+      });
+    }
+
+    if (tiltSlider && tiltLabel) {
+      tiltSlider.addEventListener('input', (e) => {
+        tiltLabel.textContent = `±${e.target.value}°`;
+      });
+    }
+  </script>
+</body>
+</html>

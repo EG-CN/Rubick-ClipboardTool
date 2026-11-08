@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Rubick 拉比克 · Annotation Suite</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "inverse-on-surface": "#2f3036",
+            "secondary-container": "#00bd85",
+            "primary": "#4edea3",
+            "on-surface-variant": "#bbcabf",
+            "inverse-primary": "#006c49",
+            "inverse-surface": "#e3e1e9",
+            "tertiary-fixed-dim": "#c8c6c3",
+            "surface-container-lowest": "#0d0e13",
+            "on-surface": "#e3e1e9",
+            "on-tertiary-fixed-variant": "#474744",
+            "on-tertiary-container": "#393937",
+            "on-secondary-fixed": "#002114",
+            "secondary-fixed": "#68fcbf",
+            "on-primary-fixed-variant": "#005236",
+            "surface-container": "#1e1f25",
+            "secondary": "#45dfa4",
+            "tertiary-fixed": "#e4e2de",
+            "on-secondary-container": "#00452e",
+            "error-container": "#93000a",
+            "tertiary": "#c8c6c3",
+            "surface-dim": "#121318",
+            "background": "#121318",
+            "surface-container-highest": "#34343a",
+            "on-primary": "#003824",
+            "surface-container-low": "#1a1b21",
+            "secondary-fixed-dim": "#45dfa4",
+            "on-error": "#690005",
+            "surface-bright": "#38393f",
+            "on-tertiary": "#30312e",
+            "primary-fixed-dim": "#4edea3",
+            "on-secondary-fixed-variant": "#005137",
+            "surface": "#121318",
+            "on-primary-container": "#00422b",
+            "outline": "#86948a",
+            "on-tertiary-fixed": "#1b1c1a",
+            "tertiary-container": "#a4a39f",
+            "surface-container-high": "#292a2f",
+            "on-primary-fixed": "#002113",
+            "outline-variant": "#3c4a42",
+            "primary-container": "#10b981",
+            "surface-variant": "#34343a",
+            "surface-tint": "#4edea3",
+            "primary-fixed": "#6ffbbe",
+            "on-background": "#e3e1e9",
+            "on-secondary": "#003825",
+            "error": "#ffb4ab",
+            "on-error-container": "#ffdad6"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-xl": "2rem",
+            "space-lg": "1.25rem",
+            "space-xs": "0.25rem",
+            "space-sm": "0.5rem",
+            "space-md": "0.75rem",
+            "margin": "1.5rem",
+            "gutter": "1rem"
+          },
+          "fontFamily": {
+            "label-mono-md": ["JetBrains Mono"],
+            "body-lg": ["Inter"],
+            "headline-xl": ["Inter"],
+            "headline-lg": ["Inter"],
+            "label-mono-sm": ["JetBrains Mono"],
+            "headline-xl-mobile": ["Inter"],
+            "body-sm": ["Inter"],
+            "headline-md": ["Inter"],
+            "system-menu": ["Inter"],
+            "body-md": ["Inter"]
+          },
+          "fontSize": {
+            "label-mono-md": ["13px", { "lineHeight": "18px", "letterSpacing": "-0.02em", "fontWeight": "500" }],
+            "body-lg": ["15px", { "lineHeight": "22px", "fontWeight": "400" }],
+            "headline-xl": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "label-mono-sm": ["11px", { "lineHeight": "14px", "fontWeight": "400" }],
+            "headline-xl-mobile": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "headline-md": ["18px", { "lineHeight": "26px", "letterSpacing": "-0.01em", "fontWeight": "500" }],
+            "system-menu": ["13.5px", { "lineHeight": "18px", "letterSpacing": "-0.005em", "fontWeight": "500" }],
+            "body-md": ["13px", { "lineHeight": "18px", "fontWeight": "400" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 350, 'GRAD' 0, 'opsz' 20;
+      user-select: none;
+    }
+    .mosaic-pattern {
+      background-image: 
+        linear-gradient(45deg, #1f2937 25%, transparent 25%), 
+        linear-gradient(-45deg, #1f2937 25%, transparent 25%), 
+        linear-gradient(45deg, transparent 75%, #1f2937 75%), 
+        linear-gradient(-45deg, transparent 75%, #1f2937 75%);
+      background-size: 8px 8px;
+      background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+    }
+    .handle-anchor {
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      background-color: #ffffff;
+      border: 1.5px solid #10b981;
+      border-radius: 2px;
+      box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+      transform: translate(-50%, -50%);
+      z-index: 40;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface antialiased overflow-hidden select-none font-system-menu text-system-menu min-h-screen relative flex flex-col justify-between">
+<!-- macOS Top Native Menu Bar (from Shared Component JSON) -->
+<header class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-margin h-[38px] w-full select-none bg-surface-container-lowest/75 backdrop-blur-xl shadow-sm border-b border-outline-variant/30">
+<div class="flex items-center gap-1">
+<!-- Rubick Brand Logo -->
+<button class="text-system-menu font-system-menu font-semibold text-on-surface flex items-center gap-1.5 hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 active:scale-[0.98]">
+<span class="w-3.5 h-3.5 rounded-sm bg-primary-container flex items-center justify-center shadow-[0_0_8px_rgba(16,185,129,0.7)] text-[9px] font-black text-on-primary-container">
+<span class="material-symbols-outlined text-[13px] text-surface-container-lowest" style="font-variation-settings: 'FILL' 1;">widgets</span>
+</span>
+<span class="tracking-tight text-on-surface font-semibold">Rubick 拉比克</span>
+</button>
+<!-- App Menu Nav Links -->
+<nav class="flex items-center gap-0.5 ml-1">
+<button class="text-on-surface font-medium hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 text-system-menu font-system-menu">File</button>
+<button class="text-on-surface-variant hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 text-system-menu font-system-menu">Edit</button>
+<button class="text-on-surface-variant hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 text-system-menu font-system-menu">View</button>
+<button class="text-on-surface-variant hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 text-system-menu font-system-menu">Window</button>
+<button class="text-on-surface-variant hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 text-system-menu font-system-menu">Help</button>
+</nav>
+</div>
+<!-- macOS Trailing Status Cluster -->
+<div class="flex items-center gap-2 text-on-surface-variant">
+<div class="flex items-center gap-1 text-[13px]">
+<span class="px-1.5 py-0.5 text-label-mono-sm font-label-mono-sm bg-surface-container-high/60 rounded text-primary border border-primary/20">OCR Ready</span>
+</div>
+<button class="p-1 hover:bg-surface-container-highest/40 rounded text-on-surface hover:text-primary transition-colors flex items-center" title="Network">
+<span class="material-symbols-outlined text-[16px]">wifi</span>
+</button>
+<button class="p-1 hover:bg-surface-container-highest/40 rounded text-on-surface hover:text-primary transition-colors flex items-center" title="Battery 100%">
+<span class="material-symbols-outlined text-[16px]">battery_charging_full</span>
+</button>
+<button class="p-1 hover:bg-surface-container-highest/40 rounded text-on-surface hover:text-primary transition-colors flex items-center" title="Spotlight Search">
+<span class="material-symbols-outlined text-[16px]">search</span>
+</button>
+<button class="p-1 hover:bg-surface-container-highest/40 rounded text-on-surface hover:text-primary transition-colors flex items-center" title="Control Center">
+<span class="material-symbols-outlined text-[16px]">control_point</span>
+</button>
+<div class="h-3 w-[1px] bg-outline-variant/40 mx-0.5"></div>
+<button class="flex items-center gap-1 px-1.5 py-0.5 hover:bg-surface-container-highest/40 rounded text-on-surface text-[12.5px] font-medium transition-colors">
+<span class="material-symbols-outlined text-[15px] text-on-surface-variant">schedule</span>
+<span>Fri 10:42 AM</span>
+</button>
+</div>
+</header>
+<!-- Stage Bed (Dimmed desktop background behind selection screen overlay) -->
+<main class="relative w-full h-screen pt-[38px] flex flex-col items-center justify-center overflow-hidden">
+<!-- Ambient Radial Caustic Lighting -->
+<div class="absolute -top-32 -left-32 w-[680px] h-[680px] bg-primary/10 rounded-full blur-[140px] pointer-events-none"></div>
+<div class="absolute -bottom-40 right-10 w-[540px] h-[540px] bg-secondary-container/5 rounded-full blur-[160px] pointer-events-none"></div>
+<!-- Underlying Mock macOS IDE & Terminal Desktop Canvas (Simulating user screen being captured) -->
+<div class="absolute inset-0 pt-[38px] px-8 pb-10 grid grid-cols-12 gap-6 opacity-45 pointer-events-none filter blur-[1px]">
+<!-- Left sidebar IDE mock -->
+<div class="col-span-3 bg-surface-container-lowest/80 rounded-xl border border-white/5 p-4 flex flex-col gap-3 font-label-mono-sm text-label-mono-sm text-outline">
+<div class="flex items-center gap-2 mb-2">
+<div class="w-3 h-3 rounded-full bg-red-500/60"></div>
+<div class="w-3 h-3 rounded-full bg-yellow-500/60"></div>
+<div class="w-3 h-3 rounded-full bg-green-500/60"></div>
+<span class="ml-2 text-on-surface-variant font-system-menu text-body-sm">workspace-core</span>
+</div>
+<div class="space-y-1.5 text-on-surface-variant">
+<div class="flex items-center gap-1.5 text-primary"><span class="material-symbols-outlined text-[14px]">folder_open</span> rubick-desktop</div>
+<div class="pl-4 flex items-center gap-1.5"><span class="material-symbols-outlined text-[14px]">description</span> annotator.ts</div>
+<div class="pl-4 flex items-center gap-1.5"><span class="material-symbols-outlined text-[14px]">description</span> screen-capture.swift</div>
+<div class="pl-4 flex items-center gap-1.5"><span class="material-symbols-outlined text-[14px]">palette</span> theme-tokens.json</div>
+<div class="pl-4 flex items-center gap-1.5"><span class="material-symbols-outlined text-[14px]">tune</span> hotkey-router.rs</div>
+</div>
+</div>
+<!-- Center IDE Code Mock -->
+<div class="col-span-9 bg-surface-container-low/70 rounded-xl border border-white/5 p-6 font-label-mono-md text-label-mono-md text-on-surface-variant">
+<div class="text-tertiary-fixed-dim pb-4 border-b border-white/5 flex items-center justify-between">
+<span>// Rubick native screen annotation engine v3.8.4</span>
+<span class="text-primary-fixed-dim">Arcane Obsidian Kernel</span>
+</div>
+<pre class="pt-4 leading-relaxed font-label-mono-sm text-label-mono-sm"><span class="text-primary font-semibold">export async function</span> <span class="text-secondary-fixed">launchAnnotatorSession</span>(bounds: <span class="text-primary-fixed">RectBounds</span>) {
+  <span class="text-outline">// Initialize Retina backing buffer</span>
+  <span class="text-primary font-semibold">const</span> session = <span class="text-primary font-semibold">new</span> AnnotationOverlay({
+    renderTarget: <span class="text-secondary-fixed">'retina-2x'</span>,
+    hardwareAcceleration: <span class="text-primary font-semibold">true</span>,
+    colorProfile: <span class="text-secondary-fixed">'display-p3'</span>,
+    persistenceKey: <span class="text-secondary-fixed">'rubick.snapshot.temp'</span>
+  });
+  <span class="text-primary font-semibold">return await</span> session.mountFloatingToolbar({
+    defaultTool: <span class="text-secondary-fixed">'rectangle'</span>,
+    accentGlow: <span class="text-secondary-fixed">'#10b981'</span>
+  });
+}
+        </pre>
+</div>
+</div>
+<!-- Selection Screen Dim Mask Layer -->
+<div class="absolute inset-0 bg-[#090A0F]/65 backdrop-blur-[2px] pointer-events-none"></div>
+<!-- Active Region Container (Centered Screen Region with 8-Point Handles & Live Annotations) -->
+<div class="relative w-[960px] h-[520px] max-w-[92vw] z-30 flex flex-col justify-between">
+<!-- Emerald Active Selection Bounding Box -->
+<div class="relative w-full h-full rounded-lg border-2 border-primary-container shadow-[0_0_24px_rgba(16,185,129,0.35),inset_0_0_20px_rgba(16,185,129,0.06)] bg-surface-container-lowest/30 backdrop-blur-none transition-all">
+<!-- 8-Point Precision Resize Handles -->
+<div class="handle-anchor" style="top: 0%; left: 0%; cursor: nwse-resize;"></div>
+<div class="handle-anchor" style="top: 0%; left: 50%; cursor: ns-resize;"></div>
+<div class="handle-anchor" style="top: 0%; left: 100%; cursor: nesw-resize;"></div>
+<div class="handle-anchor" style="top: 50%; left: 0%; cursor: ew-resize;"></div>
+<div class="handle-anchor" style="top: 50%; left: 100%; cursor: ew-resize;"></div>
+<div class="handle-anchor" style="top: 100%; left: 0%; cursor: nesw-resize;"></div>
+<div class="handle-anchor" style="top: 100%; left: 50%; cursor: ns-resize;"></div>
+<div class="handle-anchor" style="top: 100%; left: 100%; cursor: nwse-resize;"></div>
+<!-- Top Dimension Pill & Color Magnifier Badge -->
+<div class="absolute -top-10 left-0 flex items-center gap-2">
+<div class="flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-container-lowest/90 border border-white/10 backdrop-blur-md shadow-lg text-on-surface">
+<span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span>
+<span class="font-label-mono-sm text-label-mono-sm font-medium tracking-wide">1240 × 780 px</span>
+<span class="text-outline text-[10px] font-label-mono-sm">· 2x Retina</span>
+</div>
+<!-- Color Picker Magnifier Badge -->
+<div class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-container-lowest/90 border border-white/10 backdrop-blur-md shadow-lg text-on-surface">
+<div class="w-3.5 h-3.5 rounded-full border border-white/40 shadow-sm" style="background-color: #10b981;"></div>
+<span class="font-label-mono-sm text-label-mono-sm text-primary font-medium tracking-tight">#10B981</span>
+<span class="text-[10px] text-on-surface-variant font-label-mono-sm">HEX</span>
+</div>
+</div>
+<!-- Inside Selected Area: Realistic Mock Content with Live Visual Annotations -->
+<div class="relative w-full h-full p-8 overflow-hidden">
+<!-- Code snippet block inside selection being captured -->
+<div class="w-full max-w-xl bg-surface-container-lowest/90 rounded-lg p-5 border border-white/10 shadow-2xl backdrop-blur-sm">
+<div class="flex items-center justify-between pb-3 mb-3 border-b border-white/5 font-label-mono-sm text-label-mono-sm text-on-surface-variant">
+<span class="flex items-center gap-1.5 text-primary">
+<span class="material-symbols-outlined text-[14px]">terminal</span> auth-handshake.ts
+              </span>
+<span class="text-[11px] text-tertiary">Lines 42 - 58</span>
+</div>
+<div class="space-y-1 font-label-mono-sm text-label-mono-sm leading-6">
+<div class="text-outline-variant text-[11px]">// Initialize client payload</div>
+<div><span class="text-primary font-medium">const</span> secretKey = <span class="text-secondary-fixed">"sk_live_994a8e03bc71"</span>;</div>
+<div><span class="text-primary font-medium">async function</span> verifySignature(token: <span class="text-secondary-fixed">string</span>) {</div>
+<div class="pl-4"><span class="text-tertiary">if</span> (!token.startsWith(<span class="text-secondary-fixed">"bearer_"</span>)) {</div>
+<div class="pl-8 text-error font-medium">throw new InvalidTokenError();</div>
+<div class="pl-4">}</div>
+<div class="pl-4"><span class="text-primary font-medium">return</span> crypto.subtle.digest(<span class="text-secondary-fixed">"SHA-256"</span>, token);</div>
+<div>}</div>
+</div>
+</div>
+<!-- Annotation 1: Active Emerald Rounded Callout Box with Step [1] Badge -->
+<div class="absolute top-14 right-16 w-64 p-3.5 rounded-xl border-2 border-primary bg-primary/10 backdrop-blur-sm shadow-[0_8px_24px_rgba(16,185,129,0.2)]">
+<div class="flex items-start gap-2.5">
+<!-- Step [1] Badge -->
+<div class="w-6 h-6 rounded-full bg-primary-container text-surface-container-lowest font-label-mono-md text-label-mono-md font-bold flex items-center justify-center shrink-0 shadow-md">
+                1
+              </div>
+<div>
+<h4 class="text-primary font-headline-md text-[13px] font-semibold leading-tight">Validate Authorization Header</h4>
+<p class="text-on-surface text-[11.5px] mt-1 leading-snug">Ensure token matches the bearer format before crypto digest execution.</p>
+</div>
+</div>
+</div>
+<!-- Annotation 2: Smooth Directional SVG Arrow pointing to function -->
+<div class="absolute top-[165px] right-[270px] pointer-events-none">
+<svg fill="none" height="90" viewbox="0 0 140 90" width="140" xmlns="http://www.w3.org/2000/svg">
+<path d="M130 15 C 80 15, 60 70, 15 72" fill="none" stroke="#10b981" stroke-dasharray="0" stroke-linecap="round" stroke-width="2.5"></path>
+<!-- Arrow head -->
+<polygon fill="#10b981" points="12,72 24,66 22,78"></polygon>
+</svg>
+</div>
+<!-- Annotation 3: Mosaic / Pixelated Blur Box (Hiding Sensitive secretKey) -->
+<div class="absolute top-[96px] left-[156px] w-[184px] h-[22px] rounded border border-white/20 mosaic-pattern overflow-hidden shadow-sm">
+<div class="w-full h-full backdrop-blur-md bg-surface-container-lowest/60 flex items-center justify-center">
+<span class="text-[9px] font-label-mono-sm tracking-widest text-outline uppercase font-semibold">REDACTED</span>
+</div>
+</div>
+<!-- Annotation 4: Inline Text Callout Note -->
+<div class="absolute bottom-10 left-12 px-3 py-1.5 rounded-lg bg-surface-container-lowest/90 border border-primary/30 shadow-lg flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="font-system-menu text-body-sm text-on-surface">Auto-saved to Rubick Clipboard ⚡️</span>
+</div>
+</div>
+</div>
+<!-- Floating Annotation Toolbar (Strictly Single Compact Row directly beneath selection box) -->
+<div class="absolute -bottom-16 left-1/2 -translate-x-1/2 z-50">
+<div class="flex items-center gap-1 px-3 py-1.5 rounded-2xl bg-[#121318]/92 backdrop-blur-2xl border border-white/10 shadow-[0_20px_40px_rgba(0,0,0,0.8),0_0_20px_rgba(16,185,129,0.15)] ring-1 ring-primary/20">
+<!-- SECTION 1: Main Drawing & Markup Tools with Hotkey Number Badges (1-8) -->
+<div class="flex items-center gap-1">
+<!-- Tool 1: Rectangle (ACTIVE / SELECTED STATE) -->
+<button class="relative group flex items-center justify-center w-8 h-8 rounded-xl bg-primary-container/20 text-primary border border-primary/40 shadow-[0_0_12px_rgba(16,185,129,0.3)] transition-all">
+<span class="material-symbols-outlined text-[18px]">check_box_outline_blank</span>
+<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded bg-primary-container text-surface-container-lowest font-label-mono-sm text-[9px] font-bold flex items-center justify-center leading-none">1</span>
+<div class="absolute -top-8 px-2 py-0.5 rounded bg-surface-container-lowest border border-white/10 text-on-surface text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Rectangle (1)</div>
+</button>
+<!-- Tool 2: Ellipse / Circle -->
+<button class="relative group flex items-center justify-center w-8 h-8 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all">
+<span class="material-symbols-outlined text-[18px]">radio_button_unchecked</span>
+<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded bg-surface-container-high text-on-surface-variant font-label-mono-sm text-[9px] font-medium flex items-center justify-center leading-none">2</span>
+<div class="absolute -top-8 px-2 py-0.5 rounded bg-surface-container-lowest border border-white/10 text-on-surface text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Circle (2)</div>
+</button>
+<!-- Tool 3: Arrow -->
+<button class="relative group flex items-center justify-center w-8 h-8 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all">
+<span class="material-symbols-outlined text-[18px]">north_east</span>
+<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded bg-surface-container-high text-on-surface-variant font-label-mono-sm text-[9px] font-medium flex items-center justify-center leading-none">3</span>
+<div class="absolute -top-8 px-2 py-0.5 rounded bg-surface-container-lowest border border-white/10 text-on-surface text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Arrow (3)</div>
+</button>
+<!-- Tool 4: Pen / Freehand -->
+<button class="relative group flex items-center justify-center w-8 h-8 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all">
+<span class="material-symbols-outlined text-[18px]">gesture</span>
+<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded bg-surface-container-high text-on-surface-variant font-label-mono-sm text-[9px] font-medium flex items-center justify-center leading-none">4</span>
+<div class="absolute -top-8 px-2 py-0.5 rounded bg-surface-container-lowest border border-white/10 text-on-surface text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Pen (4)</div>
+</button>
+<!-- Tool 5: Text -->
+<button class="relative group flex items-center justify-center w-8 h-8 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all">
+<span class="material-symbols-outlined text-[18px]">title</span>
+<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded bg-surface-container-high text-on-surface-variant font-label-mono-sm text-[9px] font-medium flex items-center justify-center leading-none">5</span>
+<div class="absolute -top-8 px-2 py-0.5 rounded bg-surface-container-lowest border border-white/10 text-on-surface text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Text (5)</div>
+</button>
+<!-- Tool 6: Step Number Badge -->
+<button class="relative group flex items-center justify-center w-8 h-8 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all">
+<span class="material-symbols-outlined text-[18px]">counter_1</span>
+<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded bg-surface-container-high text-on-surface-variant font-label-mono-sm text-[9px] font-medium flex items-center justify-center leading-none">6</span>
+<div class="absolute -top-8 px-2 py-0.5 rounded bg-surface-container-lowest border border-white/10 text-on-surface text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Step Counter (6)</div>
+</button>
+<!-- Tool 7: Mosaic / Pixelate -->
+<button class="relative group flex items-center justify-center w-8 h-8 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all">
+<span class="material-symbols-outlined text-[18px]">blur_on</span>
+<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded bg-surface-container-high text-on-surface-variant font-label-mono-sm text-[9px] font-medium flex items-center justify-center leading-none">7</span>
+<div class="absolute -top-8 px-2 py-0.5 rounded bg-surface-container-lowest border border-white/10 text-on-surface text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Mosaic Blur (7)</div>
+</button>
+<!-- Tool 8: Highlighter -->
+<button class="relative group flex items-center justify-center w-8 h-8 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all">
+<span class="material-symbols-outlined text-[18px]">ink_highlighter</span>
+<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded bg-surface-container-high text-on-surface-variant font-label-mono-sm text-[9px] font-medium flex items-center justify-center leading-none">8</span>
+<div class="absolute -top-8 px-2 py-0.5 rounded bg-surface-container-lowest border border-white/10 text-on-surface text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Highlighter (8)</div>
+</button>
+</div>
+<!-- Vertical Subtle Glass Divider -->
+<div class="h-5 w-[1px] bg-white/10 mx-1"></div>
+<!-- SECTION 2: Stroke Weight & Color Palette (Integrated Inline Selector) -->
+<div class="flex items-center gap-1.5 px-1">
+<!-- Stroke weights -->
+<div class="flex items-center gap-1 bg-surface-container-lowest/60 p-0.5 rounded-lg border border-white/5">
+<button class="w-5 h-6 rounded flex items-center justify-center hover:bg-white/10 text-on-surface-variant hover:text-on-surface">
+<span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+</button>
+<button class="w-5 h-6 rounded bg-primary/20 text-primary flex items-center justify-center">
+<span class="w-2.5 h-2.5 rounded-full bg-current"></span>
+</button>
+<button class="w-5 h-6 rounded flex items-center justify-center hover:bg-white/10 text-on-surface-variant hover:text-on-surface">
+<span class="w-3.5 h-3.5 rounded-full bg-current"></span>
+</button>
+</div>
+<!-- Color Palette Dots -->
+<div class="flex items-center gap-1 bg-surface-container-lowest/60 px-1.5 py-1 rounded-lg border border-white/5">
+<!-- Emerald (Active) -->
+<button class="w-3.5 h-3.5 rounded-full bg-[#10b981] ring-2 ring-primary ring-offset-1 ring-offset-surface-dim transition-transform scale-110 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></button>
+<!-- Coral Red -->
+<button class="w-3 h-3 rounded-full bg-[#ef4444] hover:scale-110 transition-transform"></button>
+<!-- Amber Yellow -->
+<button class="w-3 h-3 rounded-full bg-[#f59e0b] hover:scale-110 transition-transform"></button>
+<!-- Royal Blue -->
+<button class="w-3 h-3 rounded-full bg-[#3b82f6] hover:scale-110 transition-transform"></button>
+<!-- Pure White -->
+<button class="w-3 h-3 rounded-full bg-[#f8fafc] hover:scale-110 transition-transform"></button>
+</div>
+</div>
+<!-- Vertical Subtle Glass Divider -->
+<div class="h-5 w-[1px] bg-white/10 mx-1"></div>
+<!-- SECTION 3: Utility Tools (OCR & Instant Translate) -->
+<div class="flex items-center gap-1">
+<button class="relative group flex items-center justify-center w-8 h-8 rounded-xl text-on-surface-variant hover:text-primary hover:bg-white/5 transition-all" title="Extract Text (OCR)">
+<span class="material-symbols-outlined text-[18px]">document_scanner</span>
+<div class="absolute -top-8 px-2 py-0.5 rounded bg-surface-container-lowest border border-white/10 text-on-surface text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">OCR Text (O)</div>
+</button>
+<button class="relative group flex items-center justify-center w-8 h-8 rounded-xl text-on-surface-variant hover:text-primary hover:bg-white/5 transition-all" title="Instant Translate">
+<span class="material-symbols-outlined text-[18px]">translate</span>
+<div class="absolute -top-8 px-2 py-0.5 rounded bg-surface-container-lowest border border-white/10 text-on-surface text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Translate (T)</div>
+</button>
+</div>
+<!-- Vertical Subtle Glass Divider -->
+<div class="h-5 w-[1px] bg-white/10 mx-1"></div>
+<!-- SECTION 4: Action History (Undo / Redo with Tooltips) -->
+<div class="flex items-center gap-0.5">
+<button class="relative group flex items-center justify-center w-7 h-8 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all">
+<span class="material-symbols-outlined text-[17px]">undo</span>
+<div class="absolute -top-8 px-2 py-0.5 rounded bg-surface-container-lowest border border-white/10 text-on-surface text-[10px] font-label-mono-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Undo ⌘Z</div>
+</button>
+<button class="relative group flex items-center justify-center w-7 h-8 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-all opacity-40 cursor-not-allowed">
+<span class="material-symbols-outlined text-[17px]">redo</span>
+<div class="absolute -top-8 px-2 py-0.5 rounded bg-surface-container-lowest border border-white/10 text-on-surface text-[10px] font-label-mono-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Redo ⇧⌘Z</div>
+</button>
+</div>
+<!-- Vertical Subtle Glass Divider -->
+<div class="h-5 w-[1px] bg-white/10 mx-1"></div>
+<!-- SECTION 5: End Actions (Cancel & Primary Emerald Confirm Button) -->
+<div class="flex items-center gap-1.5 pl-0.5">
+<!-- Cancel Button -->
+<button class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-surface-container-high/60 hover:bg-surface-container-highest/60 text-on-surface-variant hover:text-on-surface border border-white/5 transition-all text-body-sm font-medium">
+<span class="material-symbols-outlined text-[15px]">close</span>
+<span class="text-[11px] font-label-mono-sm text-outline">Esc</span>
+</button>
+<!-- Primary Confirm Emerald Button -->
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-container text-surface-container-lowest font-medium hover:bg-secondary-container transition-all shadow-[0_0_16px_rgba(16,185,129,0.5)] active:scale-[0.98]">
+<span class="material-symbols-outlined text-[16px] font-bold" style="font-variation-settings: 'wght' 600;">check</span>
+<span class="font-semibold text-[12.5px] tracking-tight">完成</span>
+<span class="px-1 py-0.2 rounded bg-surface-container-lowest/20 font-label-mono-sm text-[10px] leading-tight font-bold">↵</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Secondary Info Status Pill (macOS CleanShot Inspired) -->
+<footer class="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-4 px-3 py-1 rounded-full bg-surface-container-lowest/80 border border-white/5 backdrop-blur-md text-on-surface-variant text-[11px] font-label-mono-sm">
+<span class="flex items-center gap-1">
+<kbd class="px-1.5 py-0.5 bg-surface-container rounded border border-white/10 text-on-surface">Space</kbd> Pan canvas
+      </span>
+<span class="text-white/20">|</span>
+<span class="flex items-center gap-1">
+<kbd class="px-1.5 py-0.5 bg-surface-container rounded border border-white/10 text-on-surface">⌥</kbd> Center resize
+      </span>
+<span class="text-white/20">|</span>
+<span class="flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-[13px]">content_copy</span> Auto-copy on save
+      </span>
+</footer>
+</main>
+<!-- Interactive Hotkey & Selection Micro-Interactions Script -->
+<script>
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const cancelBtn = document.querySelector('button[title*="Cancel"], button:has(span:contains("close"))');
+        console.log('Annotation session dismissed via ESC');
+      }
+    });
+  </script>
+</body></html>

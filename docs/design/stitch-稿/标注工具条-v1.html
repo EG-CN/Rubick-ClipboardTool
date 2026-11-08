@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Rubick 拉比克 - Screen Annotation Studio</title>
+<!-- Google Fonts: Inter & JetBrains Mono -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS with Forms and Container Queries -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface-variant": "#34343a",
+            "surface-container-highest": "#34343a",
+            "on-tertiary-container": "#393937",
+            "tertiary-container": "#a4a39f",
+            "inverse-on-surface": "#2f3036",
+            "outline-variant": "#3c4a42",
+            "error-container": "#93000a",
+            "background": "#121318",
+            "on-error": "#690005",
+            "inverse-surface": "#e3e1e9",
+            "surface-container": "#1e1f25",
+            "on-background": "#e3e1e9",
+            "tertiary": "#c8c6c3",
+            "primary-fixed": "#6ffbbe",
+            "on-secondary-container": "#00452e",
+            "tertiary-fixed-dim": "#c8c6c3",
+            "surface-container-lowest": "#0d0e13",
+            "secondary-fixed": "#68fcbf",
+            "on-primary": "#003824",
+            "tertiary-fixed": "#e4e2de",
+            "surface-bright": "#38393f",
+            "inverse-primary": "#006c49",
+            "secondary": "#45dfa4",
+            "on-primary-fixed": "#002113",
+            "primary": "#4edea3",
+            "secondary-fixed-dim": "#45dfa4",
+            "on-secondary-fixed-variant": "#005137",
+            "on-secondary": "#003825",
+            "on-primary-fixed-variant": "#005236",
+            "on-tertiary-fixed-variant": "#474744",
+            "error": "#ffb4ab",
+            "on-surface": "#e3e1e9",
+            "on-error-container": "#ffdad6",
+            "on-primary-container": "#00422b",
+            "surface-container-high": "#292a2f",
+            "secondary-container": "#00bd85",
+            "primary-fixed-dim": "#4edea3",
+            "outline": "#86948a",
+            "on-surface-variant": "#bbcabf",
+            "on-tertiary": "#30312e",
+            "surface": "#121318",
+            "on-tertiary-fixed": "#1b1c1a",
+            "surface-tint": "#4edea3",
+            "surface-dim": "#121318",
+            "surface-container-low": "#1a1b21",
+            "primary-container": "#10b981",
+            "on-secondary-fixed": "#002114"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-xl": "2rem",
+            "margin": "1.5rem",
+            "space-xs": "0.25rem",
+            "space-sm": "0.5rem",
+            "gutter": "1rem",
+            "space-lg": "1.25rem",
+            "space-md": "0.75rem"
+          },
+          "fontFamily": {
+            "label-mono-sm": ["JetBrains Mono"],
+            "system-menu": ["Inter"],
+            "body-lg": ["Inter"],
+            "headline-lg": ["Inter"],
+            "headline-xl-mobile": ["Inter"],
+            "headline-xl": ["Inter"],
+            "body-md": ["Inter"],
+            "label-mono-md": ["JetBrains Mono"],
+            "headline-md": ["Inter"],
+            "body-sm": ["Inter"]
+          },
+          "fontSize": {
+            "label-mono-sm": ["11px", { "lineHeight": "14px", "fontWeight": "400" }],
+            "system-menu": ["13.5px", { "lineHeight": "18px", "letterSpacing": "-0.005em", "fontWeight": "500" }],
+            "body-lg": ["15px", { "lineHeight": "22px", "fontWeight": "400" }],
+            "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "headline-xl-mobile": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "headline-xl": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "body-md": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+            "label-mono-md": ["13px", { "lineHeight": "18px", "letterSpacing": "-0.02em", "fontWeight": "500" }],
+            "headline-md": ["18px", { "lineHeight": "26px", "letterSpacing": "-0.01em", "fontWeight": "500" }],
+            "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-family: 'Material Symbols Outlined';
+      font-weight: normal;
+      font-style: normal;
+      font-size: 16px;
+      line-height: 1;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-feature-settings: 'liga';
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Subtle scanline and caustic grid backdrop */
+    .bg-workspace-texture {
+      background-image: 
+        radial-gradient(circle at 18% 30%, rgba(16, 185, 129, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 85% 75%, rgba(69, 223, 164, 0.05) 0%, transparent 40%),
+        linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+    }
+  </style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface antialiased select-none overflow-hidden h-screen w-screen flex flex-col font-system-menu text-system-menu">
+<!-- ========================================================================= -->
+<!-- TopNavBar (Shared Component: desktop_macos_menubar)                      -->
+<!-- ========================================================================= -->
+<header class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-margin h-[38px] w-full select-none bg-surface-container-lowest/75 dark:bg-surface-container-lowest/75 backdrop-blur-md backdrop-blur-xl shadow-sm border-b border-outline-variant/30">
+<!-- Left Navigation: Brand & System Links -->
+<div class="flex items-center gap-space-md">
+<!-- Brand Logo / Product Name Anchor -->
+<div class="text-system-menu font-system-menu font-semibold text-on-surface dark:text-on-surface flex items-center gap-1.5 cursor-pointer">
+<div class="w-3.5 h-3.5 rounded bg-primary-container flex items-center justify-center shadow-[0_0_10px_rgba(52,211,153,0.55)]">
+<span class="w-1.5 h-1.5 rounded-sm bg-on-primary"></span>
+</div>
+<span>Rubick 拉比克</span>
+</div>
+<!-- App Menu Navigation Links -->
+<nav class="flex items-center gap-1 pl-2">
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 active:scale-[0.98] text-on-surface dark:text-on-surface font-medium">File</button>
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 active:scale-[0.98] text-on-surface-variant dark:text-on-surface-variant">Edit</button>
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 active:scale-[0.98] text-on-surface-variant dark:text-on-surface-variant">View</button>
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 active:scale-[0.98] text-on-surface-variant dark:text-on-surface-variant">Window</button>
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 active:scale-[0.98] text-on-surface-variant dark:text-on-surface-variant">Help</button>
+</nav>
+</div>
+<!-- Right Trailing Icon Actions Cluster -->
+<div class="flex items-center gap-2 text-on-surface-variant">
+<!-- Battery / Status indicators -->
+<div class="flex items-center gap-1.5 text-xs text-on-surface-variant/80 font-label-mono-sm font-normal mr-1">
+<span>98%</span>
+<span class="material-symbols-outlined text-[15px]" data-icon="battery_charging_full">battery_charging_full</span>
+</div>
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-1.5 py-0.5 active:scale-[0.98] flex items-center" title="Wi-Fi">
+<span class="material-symbols-outlined text-[16px]" data-icon="wifi">wifi</span>
+</button>
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-1.5 py-0.5 active:scale-[0.98] flex items-center" title="Spotlight Search">
+<span class="material-symbols-outlined text-[16px]" data-icon="search">search</span>
+</button>
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-1.5 py-0.5 active:scale-[0.98] flex items-center" title="Control Center">
+<span class="material-symbols-outlined text-[16px]" data-icon="control_point">control_point</span>
+</button>
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-1.5 py-0.5 active:scale-[0.98] flex items-center gap-1 ml-1" title="Notification Clock">
+<span class="material-symbols-outlined text-[15px]" data-icon="schedule">schedule</span>
+<span class="font-system-menu text-body-sm text-on-surface">Wed 10:42 PM</span>
+</button>
+</div>
+</header>
+<!-- ========================================================================= -->
+<!-- Main Desktop Canvas Stage with Annotation Workspace                      -->
+<!-- ========================================================================= -->
+<main class="relative w-full h-full pt-[38px] flex items-center justify-center bg-workspace-texture overflow-hidden">
+<!-- Atmospheric Blurred Desktop Application (Context Underlay) -->
+<div class="absolute inset-0 pt-[38px] p-6 flex gap-6 opacity-35 filter blur-[2px] pointer-events-none scale-[0.99] transition-transform">
+<!-- Mock IDE / Editor Window in Background -->
+<div class="flex-1 bg-surface-container-lowest/90 rounded-xl border border-outline-variant/30 shadow-2xl p-5 flex flex-col font-label-mono-sm text-body-sm">
+<div class="flex items-center gap-2 mb-4 pb-3 border-b border-outline-variant/20">
+<span class="w-3 h-3 rounded-full bg-[#ff5f56]/80 inline-block"></span>
+<span class="w-3 h-3 rounded-full bg-[#ffbd2e]/80 inline-block"></span>
+<span class="w-3 h-3 rounded-full bg-[#27c93f]/80 inline-block"></span>
+<span class="ml-4 text-on-surface-variant font-system-menu text-xs">src/components/AtlasTelemetry.tsx</span>
+</div>
+<div class="space-y-1.5 text-on-surface-variant font-label-mono-sm">
+<p><span class="text-secondary">import</span> React, { useState, useEffect } <span class="text-secondary">from</span> 'react';</p>
+<p><span class="text-secondary">export const</span> TelemetryChart = () =&gt; {</p>
+<p class="pl-4"><span class="text-outline">const</span> [metrics, setMetrics] = useState&lt;DataPoint[]&gt;([]);</p>
+<p class="pl-4 text-primary">// Synchronized real-time buffer with WebGL pipeline</p>
+<p class="pl-4">useEffect(() =&gt; {</p>
+<p class="pl-8">const subscription = stream.listen((payload) =&gt; {</p>
+<p class="pl-12">if (payload.status === <span class="text-primary-fixed">'HEALTHY'</span>) {</p>
+<p class="pl-16">updateFrameBuffer(payload.vector);</p>
+<p class="pl-12">}</p>
+<p class="pl-8">});</p>
+<p class="pl-8"><span class="text-secondary">return</span> () =&gt; subscription.unsubscribe();</p>
+<p class="pl-4">}, []);</p>
+<p class="pl-4"><span class="text-secondary">return</span> &lt;div className="canvas-wrapper"&gt;{renderMesh()}&lt;/div&gt;;</p>
+<p>};</p>
+</div>
+</div>
+<!-- Mock Sidebar Dashboard preview -->
+<div class="w-80 bg-surface-container-low/90 rounded-xl border border-outline-variant/30 p-5 flex flex-col gap-4">
+<div class="h-4 w-32 bg-surface-variant rounded"></div>
+<div class="h-28 bg-surface-container-high/60 rounded-lg border border-outline-variant/20 p-3">
+<div class="h-3 w-20 bg-primary/40 rounded mb-2"></div>
+<div class="h-8 w-24 bg-primary/20 rounded"></div>
+</div>
+<div class="space-y-2">
+<div class="h-3 w-full bg-surface-variant/70 rounded"></div>
+<div class="h-3 w-4/5 bg-surface-variant/50 rounded"></div>
+<div class="h-3 w-2/3 bg-surface-variant/40 rounded"></div>
+</div>
+</div>
+</div>
+<!-- Darkened Vignette Overlay Outside Selection Bounds -->
+<div class="absolute inset-0 bg-background/60 backdrop-blur-[3px] pointer-events-none"></div>
+<!-- ======================================================================= -->
+<!-- ACTIVE SCREENSHOT CAPTURE REGION (980 x 550 px)                         -->
+<!-- ======================================================================= -->
+<div class="relative z-20 w-[960px] h-[520px] rounded-lg shadow-[0_0_0_9999px_rgba(9,10,15,0.72)] border-2 border-primary-container bg-surface-container-lowest/95 overflow-visible flex flex-col shadow-[0_20px_50px_rgba(0,0,0,0.8),0_0_35px_rgba(16,185,129,0.2)]">
+<!-- Dimension Badge Tag (Top Left of active crop) -->
+<div class="absolute -top-7 left-0 flex items-center gap-1.5 px-2.5 py-0.5 rounded-t bg-primary-container text-on-primary-container font-label-mono-sm text-label-mono-sm font-semibold tracking-wider shadow-md">
+<span class="material-symbols-outlined text-[13px]" data-icon="crop">crop</span>
+<span>960 × 520 px</span>
+<span class="text-on-primary-container/70 text-[10px] pl-1 font-system-menu font-normal">(100% Retina)</span>
+</div>
+<!-- Resizing Corner & Edge Anchor Handles -->
+<!-- Top Left -->
+<div class="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-on-primary border-2 border-primary rounded-sm shadow-md cursor-nwse-resize z-30 transition-transform hover:scale-125"></div>
+<!-- Top Center -->
+<div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-4 h-2 bg-on-primary border border-primary rounded-xs shadow-md cursor-ns-resize z-30 hover:scale-110"></div>
+<!-- Top Right -->
+<div class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-on-primary border-2 border-primary rounded-sm shadow-md cursor-nesw-resize z-30 transition-transform hover:scale-125"></div>
+<!-- Middle Left -->
+<div class="absolute top-1/2 -translate-y-1/2 -left-1 w-2 h-4 bg-on-primary border border-primary rounded-xs shadow-md cursor-ew-resize z-30 hover:scale-110"></div>
+<!-- Middle Right -->
+<div class="absolute top-1/2 -translate-y-1/2 -right-1 w-2 h-4 bg-on-primary border border-primary rounded-xs shadow-md cursor-ew-resize z-30 hover:scale-110"></div>
+<!-- Bottom Left -->
+<div class="absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 bg-on-primary border-2 border-primary rounded-sm shadow-md cursor-nesw-resize z-30 transition-transform hover:scale-125"></div>
+<!-- Bottom Center -->
+<div class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-4 h-2 bg-on-primary border border-primary rounded-xs shadow-md cursor-ns-resize z-30 hover:scale-110"></div>
+<!-- Bottom Right -->
+<div class="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-on-primary border-2 border-primary rounded-sm shadow-md cursor-nwse-resize z-30 transition-transform hover:scale-125"></div>
+<!-- Window Header Bar of the Captured Application Target -->
+<div class="h-9 px-4 bg-surface-container-low/95 border-b border-outline-variant/30 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-[#ff5f56]/90 shadow-sm cursor-pointer"></span>
+<span class="w-3 h-3 rounded-full bg-[#ffbd2e]/90 shadow-sm cursor-pointer"></span>
+<span class="w-3 h-3 rounded-full bg-[#27c93f]/90 shadow-sm cursor-pointer"></span>
+<div class="h-3.5 w-px bg-outline-variant/40 mx-2"></div>
+<span class="font-system-menu text-body-sm font-medium text-on-surface flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[15px]" data-icon="deployed_code">deployed_code</span>
+            Rubick Core Client • Telemetry Engine
+          </span>
+</div>
+<div class="flex items-center gap-3 text-label-mono-sm text-on-surface-variant">
+<span class="bg-surface-variant/60 px-2 py-0.5 rounded text-[10px] text-primary">master</span>
+<span>v2.8.4</span>
+</div>
+</div>
+<!-- Crisp Content Inside Crop Area (with realistic live annotations) -->
+<div class="relative flex-1 p-6 font-label-mono-sm text-body-md overflow-hidden bg-surface-container-lowest/80">
+<!-- Live Code View Being Inspected -->
+<div class="space-y-2 text-on-surface leading-relaxed">
+<div class="flex items-center gap-4 text-on-surface-variant/60 select-none">
+<span class="w-6 text-right font-label-mono-sm text-xs">12</span>
+<p><span class="text-primary font-semibold">async function</span> <span class="text-secondary-fixed">dispatchRenderLoop</span>(config: CanvasState): Promise&lt;boolean&gt; {</p>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant/60 select-none">
+<span class="w-6 text-right font-label-mono-sm text-xs">13</span>
+<p class="pl-6"><span class="text-secondary">const</span> hardwareProfile = <span class="text-primary">await</span> queryGpuCapabilities();</p>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant/60 select-none">
+<span class="w-6 text-right font-label-mono-sm text-xs">14</span>
+<p class="pl-6"><span class="text-outline">if</span> (!hardwareProfile.webgl2Enabled) {</p>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant/60 select-none">
+<span class="w-6 text-right font-label-mono-sm text-xs">15</span>
+<p class="pl-12 text-error">throw new Error('Hardware acceleration fallback required');</p>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant/60 select-none">
+<span class="w-6 text-right font-label-mono-sm text-xs">16</span>
+<p class="pl-6">}</p>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant/60 select-none">
+<span class="w-6 text-right font-label-mono-sm text-xs">17</span>
+<p class="pl-6"><span class="text-secondary">return</span> initializeRasterBuffer(config.matrix);</p>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant/60 select-none">
+<span class="w-6 text-right font-label-mono-sm text-xs">18</span>
+<p>}</p>
+</div>
+</div>
+<!-- =================================================================== -->
+<!-- Active Live Annotations inside the Capture View                     -->
+<!-- =================================================================== -->
+<!-- Annotation 1: Emerald Rounded Rectangle Selection Callout -->
+<div class="absolute top-[82px] left-[150px] w-[540px] h-[48px] rounded-lg border-2 border-primary bg-primary/10 shadow-[0_0_15px_rgba(78,222,163,0.25)] pointer-events-none flex items-center justify-between px-3">
+<span class="text-xs text-primary font-system-menu font-medium tracking-wide">Target Inspection Node</span>
+<span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+</div>
+<!-- Annotation 2: Step Badge Number '①' -->
+<div class="absolute top-[70px] left-[134px] w-6 h-6 rounded-full bg-primary-container text-on-primary-container font-headline-md font-bold text-xs flex items-center justify-center shadow-lg border border-on-primary-container/20">
+          1
+        </div>
+<!-- Annotation 3: Freehand Arrow / Pointer Indicator pointing to throw new Error -->
+<div class="absolute top-[148px] left-[560px] flex items-center gap-2 pointer-events-none">
+<svg class="w-24 h-12 overflow-visible" fill="none" viewbox="0 0 96 48">
+<path d="M 90 40 C 60 45, 30 20, 4 8" stroke="#4edea3" stroke-dasharray="3 0" stroke-linecap="round" stroke-width="2.5"></path>
+<polygon fill="#4edea3" points="2,8 10,2 10,14"></polygon>
+</svg>
+<div class="bg-surface-container-high/90 border border-outline-variant/60 px-2.5 py-1 rounded text-body-sm font-system-menu text-on-surface shadow-md -mt-4">
+            Critical Fallback Logic
+          </div>
+</div>
+<!-- Annotation 4: Step Badge Number '②' -->
+<div class="absolute top-[138px] left-[660px] w-6 h-6 rounded-full bg-primary-container text-on-primary-container font-headline-md font-bold text-xs flex items-center justify-center shadow-lg border border-on-primary-container/20">
+          2
+        </div>
+<!-- Annotation 5: Pixelated Mosaic Blur Effect Box Simulation -->
+<div class="absolute bottom-8 right-12 w-64 h-24 rounded-lg border border-outline-variant/40 bg-surface-container-highest/70 backdrop-blur-md overflow-hidden flex flex-col justify-center items-center gap-1 shadow-lg">
+<div class="grid grid-cols-8 gap-0.5 opacity-30 w-full h-full p-1">
+<div class="bg-primary"></div><div class="bg-surface-bright"></div><div class="bg-primary-container"></div><div class="bg-surface-variant"></div>
+<div class="bg-surface-dim"></div><div class="bg-primary"></div><div class="bg-surface-bright"></div><div class="bg-outline"></div>
+<div class="bg-primary-container"></div><div class="bg-surface-variant"></div><div class="bg-outline"></div><div class="bg-primary"></div>
+<div class="bg-surface-bright"></div><div class="bg-surface-dim"></div><div class="bg-primary"></div><div class="bg-surface-variant"></div>
+</div>
+<div class="absolute bg-surface-container-lowest/80 px-2 py-0.5 rounded text-[10px] text-on-surface-variant font-label-mono-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]" data-icon="blur_on">blur_on</span>
+<span>Sensitive Data Masked</span>
+</div>
+</div>
+</div>
+<!-- ===================================================================== -->
+<!-- TOOL PROPERTIES / QUICK SETTINGS SUB-BAR (Floating directly above HUD) -->
+<!-- ===================================================================== -->
+<div class="absolute -bottom-11 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-surface-container-high/90 backdrop-blur-xl border border-outline-variant/30 px-3.5 py-1 rounded-full shadow-lg text-body-sm z-30">
+<!-- Active Tool Label -->
+<span class="text-xs text-on-surface-variant font-system-menu font-medium flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+          Rectangle Tool
+        </span>
+<div class="w-px h-3 bg-outline-variant/40"></div>
+<!-- Stroke Width Adjuster -->
+<div class="flex items-center gap-1.5">
+<span class="text-[11px] text-on-surface-variant">Size:</span>
+<button class="w-5 h-5 rounded hover:bg-surface-container-highest flex items-center justify-center text-xs text-on-surface transition-colors">1px</button>
+<button class="w-5 h-5 rounded bg-surface-container-highest/90 border border-primary/50 flex items-center justify-center text-xs text-primary font-semibold">2px</button>
+<button class="w-5 h-5 rounded hover:bg-surface-container-highest flex items-center justify-center text-xs text-on-surface transition-colors">4px</button>
+</div>
+<div class="w-px h-3 bg-outline-variant/40"></div>
+<!-- Color Swatch Selection -->
+<div class="flex items-center gap-1.5">
+<button class="w-4 h-4 rounded-full bg-primary-container ring-2 ring-primary ring-offset-1 ring-offset-surface-container-high cursor-pointer shadow-sm" title="Arcane Emerald (#10b981)"></button>
+<button class="w-3.5 h-3.5 rounded-full bg-error hover:scale-110 transition-transform cursor-pointer" title="Signal Red"></button>
+<button class="w-3.5 h-3.5 rounded-full bg-[#facc15] hover:scale-110 transition-transform cursor-pointer" title="Warning Amber"></button>
+<button class="w-3.5 h-3.5 rounded-full bg-[#38bdf8] hover:scale-110 transition-transform cursor-pointer" title="Cyan Accent"></button>
+<button class="w-3.5 h-3.5 rounded-full bg-white hover:scale-110 transition-transform cursor-pointer" title="Pure White"></button>
+</div>
+</div>
+</div>
+<!-- ======================================================================= -->
+<!-- FLOATING ANNOTATION HUD TOOLBAR (Directly Below Crop View)               -->
+<!-- macOS Island Capsule: backdrop-blur-2xl, border-white/10, rounded-2xl  -->
+<!-- ======================================================================= -->
+<div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-40">
+<div class="flex items-center gap-1.5 px-3 py-2 bg-surface-container-lowest/85 backdrop-blur-2xl border border-outline-variant/40 rounded-2xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85),0_0_25px_rgba(16,185,129,0.1)] transition-all">
+<!-- Tool 1: Rectangle (Active State) -->
+<button class="relative group flex items-center justify-center w-9 h-9 rounded-xl bg-primary/15 text-primary border border-primary/40 shadow-[0_0_12px_rgba(78,222,163,0.3)] transition-all active:scale-95" title="Rectangle (Hotkey 1)">
+<span class="material-symbols-outlined text-[19px]" data-icon="crop_square">crop_square</span>
+<span class="absolute -bottom-1 -right-1 font-label-mono-sm text-[9px] font-semibold bg-surface-container-highest px-1 rounded-sm text-primary leading-tight shadow-sm">1</span>
+</button>
+<!-- Tool 2: Ellipse / Circle -->
+<button class="relative group flex items-center justify-center w-9 h-9 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/50 transition-all active:scale-95" title="Ellipse (Hotkey 2)">
+<span class="material-symbols-outlined text-[19px]" data-icon="radio_button_unchecked">radio_button_unchecked</span>
+<span class="absolute -bottom-1 -right-1 font-label-mono-sm text-[9px] font-semibold bg-surface-container-highest px-1 rounded-sm text-on-surface-variant leading-tight shadow-sm">2</span>
+</button>
+<!-- Tool 3: Arrow -->
+<button class="relative group flex items-center justify-center w-9 h-9 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/50 transition-all active:scale-95" title="Arrow (Hotkey 3)">
+<span class="material-symbols-outlined text-[19px]" data-icon="trending_flat">trending_flat</span>
+<span class="absolute -bottom-1 -right-1 font-label-mono-sm text-[9px] font-semibold bg-surface-container-highest px-1 rounded-sm text-on-surface-variant leading-tight shadow-sm">3</span>
+</button>
+<!-- Tool 4: Pen / Freehand -->
+<button class="relative group flex items-center justify-center w-9 h-9 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/50 transition-all active:scale-95" title="Pen (Hotkey 4)">
+<span class="material-symbols-outlined text-[19px]" data-icon="edit">edit</span>
+<span class="absolute -bottom-1 -right-1 font-label-mono-sm text-[9px] font-semibold bg-surface-container-highest px-1 rounded-sm text-on-surface-variant leading-tight shadow-sm">4</span>
+</button>
+<!-- Tool 5: Typography / Text -->
+<button class="relative group flex items-center justify-center w-9 h-9 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/50 transition-all active:scale-95" title="Text (Hotkey 5)">
+<span class="material-symbols-outlined text-[19px]" data-icon="title">title</span>
+<span class="absolute -bottom-1 -right-1 font-label-mono-sm text-[9px] font-semibold bg-surface-container-highest px-1 rounded-sm text-on-surface-variant leading-tight shadow-sm">5</span>
+</button>
+<!-- Tool 6: Step Counter Badge -->
+<button class="relative group flex items-center justify-center w-9 h-9 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/50 transition-all active:scale-95" title="Step Counter (Hotkey 6)">
+<span class="material-symbols-outlined text-[19px]" data-icon="counter_1">counter_1</span>
+<span class="absolute -bottom-1 -right-1 font-label-mono-sm text-[9px] font-semibold bg-surface-container-highest px-1 rounded-sm text-on-surface-variant leading-tight shadow-sm">6</span>
+</button>
+<!-- Tool 7: Mosaic / Pixelate Blur -->
+<button class="relative group flex items-center justify-center w-9 h-9 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/50 transition-all active:scale-95" title="Blur / Pixelate (Hotkey 7)">
+<span class="material-symbols-outlined text-[19px]" data-icon="grain">grain</span>
+<span class="absolute -bottom-1 -right-1 font-label-mono-sm text-[9px] font-semibold bg-surface-container-highest px-1 rounded-sm text-on-surface-variant leading-tight shadow-sm">7</span>
+</button>
+<!-- Tool 8: Highlighter Marker -->
+<button class="relative group flex items-center justify-center w-9 h-9 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/50 transition-all active:scale-95" title="Highlighter (Hotkey 8)">
+<span class="material-symbols-outlined text-[19px]" data-icon="ink_highlighter">ink_highlighter</span>
+<span class="absolute -bottom-1 -right-1 font-label-mono-sm text-[9px] font-semibold bg-surface-container-highest px-1 rounded-sm text-on-surface-variant leading-tight shadow-sm">8</span>
+</button>
+<!-- Vertical Divider -->
+<div class="h-6 w-px bg-outline-variant/30 mx-1"></div>
+<!-- Advanced Action 1: OCR Text Scan -->
+<button class="flex items-center justify-center w-9 h-9 rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container-highest/50 transition-all active:scale-95 group" title="OCR Text Recognition (Scan)">
+<span class="material-symbols-outlined text-[19px]" data-icon="document_scanner">document_scanner</span>
+</button>
+<!-- Advanced Action 2: Translation -->
+<button class="flex items-center justify-center w-9 h-9 rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container-highest/50 transition-all active:scale-95 group" title="Instant Translate">
+<span class="material-symbols-outlined text-[19px]" data-icon="translate">translate</span>
+</button>
+<!-- Vertical Divider -->
+<div class="h-6 w-px bg-outline-variant/30 mx-1"></div>
+<!-- History: Undo -->
+<button class="flex items-center justify-center w-8 h-8 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/50 transition-all active:scale-95" title="Undo (⌘Z)">
+<span class="material-symbols-outlined text-[18px]" data-icon="undo">undo</span>
+</button>
+<!-- History: Redo -->
+<button class="flex items-center justify-center w-8 h-8 rounded-lg text-on-surface-variant/40 hover:text-on-surface-variant hover:bg-surface-container-highest/50 transition-all active:scale-95" title="Redo (⌘⇧Z)">
+<span class="material-symbols-outlined text-[18px]" data-icon="redo">redo</span>
+</button>
+<!-- Vertical Divider -->
+<div class="h-6 w-px bg-outline-variant/30 mx-1.5"></div>
+<!-- Cancel / Dismiss Action Button -->
+<button class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-surface-variant/40 hover:bg-surface-variant text-on-surface-variant hover:text-on-surface border border-outline-variant/30 transition-all active:scale-95 text-system-menu font-medium" title="Cancel (Esc)">
+<span class="material-symbols-outlined text-[16px]" data-icon="close">close</span>
+<span class="text-xs font-label-mono-sm text-on-surface-variant/70">Esc</span>
+</button>
+<!-- Emerald Confirm / Copy & Save Primary Button -->
+<button class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary-container hover:bg-secondary text-on-primary-container font-semibold shadow-lg shadow-primary-container/25 transition-all duration-150 active:scale-95" title="Copy to Clipboard &amp; Save (Enter)">
+<span class="material-symbols-outlined text-[17px] font-bold" data-icon="check">check</span>
+<span class="font-system-menu text-body-sm font-semibold tracking-tight">Save &amp; Copy</span>
+<span class="text-[10px] font-label-mono-sm bg-on-primary-container/15 px-1 py-0.5 rounded text-on-primary-container ml-0.5">↵</span>
+</button>
+</div>
+</div>
+<!-- Quick Tooltip / Contextual Status Pill (Bottom Right Corner) -->
+<aside class="absolute bottom-4 right-6 flex items-center gap-2 text-label-mono-sm text-on-surface-variant/70 bg-surface-container-lowest/70 backdrop-blur-md px-3 py-1 rounded-full border border-outline-variant/20 pointer-events-none">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
+<span>Color profile: Display P3</span>
+<span class="text-outline-variant/60">•</span>
+<span>Press Space to Pan</span>
+</aside>
+</main>
+<!-- Interactive Hotkey & Visual Feedback Scripts -->
+<script>
+    document.addEventListener('keydown', (e) => {
+      // Allow testing key visual states
+      if (['1', '2', '3', '4', '5', '6', '7', '8'].includes(e.key)) {
+        const buttons = document.querySelectorAll('button[title*="Hotkey"]');
+        buttons.forEach((btn, index) => {
+          if (index + 1 === parseInt(e.key)) {
+            buttons.forEach(b => {
+              b.className = "relative group flex items-center justify-center w-9 h-9 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/50 transition-all active:scale-95";
+              const bSub = b.querySelector('span:last-child');
+              if (bSub) bSub.className = "absolute -bottom-1 -right-1 font-label-mono-sm text-[9px] font-semibold bg-surface-container-highest px-1 rounded-sm text-on-surface-variant leading-tight shadow-sm";
+            });
+            btn.className = "relative group flex items-center justify-center w-9 h-9 rounded-xl bg-primary/15 text-primary border border-primary/40 shadow-[0_0_12px_rgba(78,222,163,0.3)] transition-all active:scale-95";
+            const sub = btn.querySelector('span:last-child');
+            if (sub) sub.className = "absolute -bottom-1 -right-1 font-label-mono-sm text-[9px] font-semibold bg-surface-container-highest px-1 rounded-sm text-primary leading-tight shadow-sm";
+          }
+        });
+      }
+    });
+  </script>
+</body></html>

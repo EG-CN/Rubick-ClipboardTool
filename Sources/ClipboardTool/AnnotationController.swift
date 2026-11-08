@@ -1106,10 +1106,22 @@ struct AnnotateEditorView: View {
 
     private var toolbar: some View {
         VStack(spacing: 7) {
-            // 主药丸行：工具(带键帽) | 识图·翻译 | 撤销·重做 | 取消·确认
+            // 主药丸行（Redesign 稿 1:1）：工具(角标键帽) | 线宽·色板 | 识图·翻译 | 撤销·重做 | 取消·确认
             HStack(spacing: 4) {
                 ForEach(visibleTools, id: \.self) { t in
                     toolButton(t)
+                }
+                divider
+                Picker("", selection: $model.lineWidth) {
+                    Text("细").tag(CGFloat(2))
+                    Text("中").tag(CGFloat(4))
+                    Text("粗").tag(CGFloat(6))
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 88)
+                .fixedSize()
+                ForEach(0..<AnnotationController.palette.count, id: \.self) { i in
+                    colorDot(i)
                 }
                 divider
                 pillAction("text.viewfinder", tag: "ocr", help: "识图当前画面（\(keyDisplay(.ocr))）") {
@@ -1126,14 +1138,14 @@ struct AnnotateEditorView: View {
                     model.redo()
                 }
                 divider
-                // 取消：灰块 ×；确认：祖母绿块 ✓（效果图② 38×34 方块）
+                // 取消：灰块 ×；确认：祖母绿块 ✓（Redesign 稿 SECTION 5）
                 Button {
                     onCancel()
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 38, height: 34)
-                        .background(RoundedRectangle(cornerRadius: 9).fill(.white.opacity(0.07)))
+                        .frame(width: 36, height: 32)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(.white.opacity(0.07)))
                         .foregroundStyle(Color(red: 0.545, green: 0.584, blue: 0.631))
                 }
                 .buttonStyle(.plain)
@@ -1146,8 +1158,8 @@ struct AnnotateEditorView: View {
                 } label: {
                     Image(systemName: "checkmark")
                         .font(.system(size: 12, weight: .bold))
-                        .frame(width: 38, height: 34)
-                        .background(RoundedRectangle(cornerRadius: 9).fill(Color(red: 0.063, green: 0.725, blue: 0.506)))
+                        .frame(width: 36, height: 32)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Color(red: 0.063, green: 0.725, blue: 0.506)))
                         .foregroundStyle(Color(red: 0.0, green: 0.22, blue: 0.14))
                 }
                 .buttonStyle(.plain)
@@ -1157,38 +1169,39 @@ struct AnnotateEditorView: View {
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 13).fill(Color(red: 0.051, green: 0.063, blue: 0.078).opacity(0.94)))
-            .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(.white.opacity(0.12), lineWidth: 1))
-            .shadow(color: .black.opacity(0.55), radius: 16, y: 7)
-            // 属性细条：颜色 + 线宽 + 当前工具属性（固定槽位不抖动）
-            HStack(spacing: 8) {
-                ForEach(0..<AnnotationController.palette.count, id: \.self) { i in
-                    colorDot(i)
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 16).fill(Color(red: 0.071, green: 0.075, blue: 0.094).opacity(0.92)))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(RubickTheme.emerald.opacity(0.2), lineWidth: 1))
+            .shadow(color: .black.opacity(0.6), radius: 16, y: 8)
+            .shadow(color: RubickTheme.emerald.opacity(0.15), radius: 10)
+            // 工具上下文属性（仅需要参数的工具显示，固定槽位不抖动）
+            if toolNeedsContextual {
+                HStack(spacing: 8) {
+                    contextualControls
+                    Spacer()
+                    Text(hoveredHelp ?? "")
+                        .font(.system(size: 10))
+                        .foregroundStyle(RubickTheme.emeraldBright)
+                        .lineLimit(1)
                 }
-                Picker("", selection: $model.lineWidth) {
-                    Text("细").tag(CGFloat(2))
-                    Text("中").tag(CGFloat(4))
-                    Text("粗").tag(CGFloat(6))
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 104)
-                .fixedSize()
-                contextualControls
-                Spacer()
-                Text(hoveredHelp ?? "")
-                    .font(.system(size: 10))
-                    .foregroundStyle(RubickTheme.emeraldBright)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(RoundedRectangle(cornerRadius: 10).fill(.black.opacity(0.42)))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.08), lineWidth: 0.8))
+            } else {
+                hintLine
+                    .font(.system(size: 11))
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .lineLimit(1)
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .background(RoundedRectangle(cornerRadius: 10).fill(.black.opacity(0.42)))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.08), lineWidth: 0.8))
-            // 提示行（效果图② 底部文案样式）
-            hintLine
-                .font(.system(size: 11))
-                .lineLimit(1)
+        }
+    }
+
+    /// 圆角/字号/马赛克等参数仅这几类工具需要；其余工具单行即完整（Redesign 稿）
+    private var toolNeedsContextual: Bool {
+        switch model.tool {
+        case .rect, .text, .step, .mosaic, .highlight: return true
+        default: return false
         }
     }
 
@@ -1219,8 +1232,8 @@ struct AnnotateEditorView: View {
     private func pillAction(_ symbol: String, tag: String, help: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 14))
-                .frame(width: 36, height: 36)
+                .font(.system(size: 13))
+                .frame(width: 32, height: 32)
                 .background(pillButtonFrame(false, hovered: hoveredButton == tag))
                 .foregroundStyle(enabled ? Color(red: 0.765, green: 0.796, blue: 0.831) : .white.opacity(0.28))
         }
@@ -1323,7 +1336,7 @@ struct AnnotateEditorView: View {
             Group {
                 if t == .text {
                     Text("T")
-                        .font(.system(size: 15, weight: .heavy))
+                        .font(.system(size: 14, weight: .heavy))
                 } else if t == .step {
                     // 与落笔样式一致的白底黑字圆号（SF Symbol number.circle 观感差）
                     ZStack {
@@ -1331,23 +1344,40 @@ struct AnnotateEditorView: View {
                         Circle().strokeBorder(Color.black.opacity(0.75), lineWidth: 1)
                         Text("1").font(.system(size: 10, weight: .bold)).foregroundColor(.black)
                     }
-                    .frame(width: 17, height: 17)
+                    .frame(width: 16, height: 16)
                 } else {
                     Image(systemName: t.symbol)
                         .font(.system(size: 13))
                 }
             }
-            .frame(width: 36, height: 36)
+            .frame(width: 32, height: 32)
             .background(pillButtonFrame(active, hovered: hoveredButton == t.symbol))
             .foregroundStyle(active ? RubickTheme.emeraldBright : Color(red: 0.765, green: 0.796, blue: 0.831))
             .overlay(alignment: .bottomTrailing) {
-                // 右下角键帽徽章（效果图② .n 样式）
+                // 右下角键帽小方块（Redesign 稿 -bottom-1 -right-1 w-3.5 h-3.5）
                 if let key = keyForTool(t) {
                     Text(key)
-                        .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(active ? RubickTheme.emeraldBright : Color(red: 0.408, green: 0.451, blue: 0.494))
-                        .padding(.trailing, 3)
-                        .padding(.bottom, 2)
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundStyle(active ? Color(red: 0.0, green: 0.22, blue: 0.14) : Color.white.opacity(0.55))
+                        .frame(width: 14, height: 14)
+                        .background(RoundedRectangle(cornerRadius: 4)
+                            .fill(active ? RubickTheme.emerald : Color(red: 0.2, green: 0.22, blue: 0.26)))
+                        .offset(x: 4, y: 4)
+                }
+            }
+            .overlay(alignment: .top) {
+                // 悬停 tooltip（稿 -top-8 上方浮层）
+                if hoveredButton == t.symbol {
+                    Text("\(t.label)（\(keyForTool(t) ?? "点击")）")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.white.opacity(0.92))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(Color(red: 0.05, green: 0.06, blue: 0.08)))
+                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
+                        .fixedSize()
+                        .offset(y: -26)
+                        .zIndex(40)
                 }
             }
         }

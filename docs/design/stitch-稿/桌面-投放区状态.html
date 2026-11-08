@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Rubick 拉比克 - Desktop Canvas Drop Target</title>
+<!-- Fonts & Icons -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "secondary-fixed": "#68fcbf",
+            "tertiary-fixed-dim": "#c8c6c3",
+            "on-error": "#690005",
+            "surface-container-lowest": "#0d0e13",
+            "surface-variant": "#34343a",
+            "surface-container-low": "#1a1b21",
+            "on-surface": "#e3e1e9",
+            "on-primary-fixed": "#002113",
+            "on-tertiary": "#30312e",
+            "error-container": "#93000a",
+            "secondary-container": "#00bd85",
+            "tertiary-container": "#a4a39f",
+            "inverse-surface": "#e3e1e9",
+            "surface": "#121318",
+            "on-secondary-fixed": "#002114",
+            "primary-fixed": "#6ffbbe",
+            "inverse-on-surface": "#2f3036",
+            "on-primary-container": "#00422b",
+            "on-error-container": "#ffdad6",
+            "tertiary": "#c8c6c3",
+            "on-tertiary-fixed": "#1b1c1a",
+            "primary-container": "#10b981",
+            "on-tertiary-container": "#393937",
+            "on-primary-fixed-variant": "#005236",
+            "surface-bright": "#38393f",
+            "primary-fixed-dim": "#4edea3",
+            "outline-variant": "#3c4a42",
+            "error": "#ffb4ab",
+            "on-background": "#e3e1e9",
+            "outline": "#86948a",
+            "surface-dim": "#121318",
+            "background": "#121318",
+            "primary": "#4edea3",
+            "surface-container-high": "#292a2f",
+            "secondary-fixed-dim": "#45dfa4",
+            "tertiary-fixed": "#e4e2de",
+            "on-secondary": "#003825",
+            "on-secondary-container": "#00452e",
+            "secondary": "#45dfa4",
+            "on-secondary-fixed-variant": "#005137",
+            "surface-container-highest": "#34343a",
+            "surface-tint": "#4edea3",
+            "on-surface-variant": "#bbcabf",
+            "surface-container": "#1e1f25",
+            "inverse-primary": "#006c49",
+            "on-primary": "#003824",
+            "on-tertiary-fixed-variant": "#474744"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "gutter": "1rem",
+            "space-sm": "0.5rem",
+            "space-xs": "0.25rem",
+            "margin": "1.5rem",
+            "space-md": "0.75rem",
+            "space-lg": "1.25rem",
+            "space-xl": "2rem"
+          },
+          "fontFamily": {
+            "label-mono-sm": ["JetBrains Mono"],
+            "body-sm": ["Inter"],
+            "headline-xl-mobile": ["Inter"],
+            "body-lg": ["Inter"],
+            "headline-lg": ["Inter"],
+            "label-mono-md": ["JetBrains Mono"],
+            "headline-xl": ["Inter"],
+            "body-md": ["Inter"],
+            "system-menu": ["Inter"],
+            "headline-md": ["Inter"]
+          },
+          "fontSize": {
+            "label-mono-sm": ["11px", { "lineHeight": "14px", "fontWeight": "400" }],
+            "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "headline-xl-mobile": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "body-lg": ["15px", { "lineHeight": "22px", "fontWeight": "400" }],
+            "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "label-mono-md": ["13px", { "lineHeight": "18px", "letterSpacing": "-0.02em", "fontWeight": "500" }],
+            "headline-xl": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "body-md": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+            "system-menu": ["13.5px", { "lineHeight": "18px", "letterSpacing": "-0.005em", "fontWeight": "500" }],
+            "headline-md": ["18px", { "lineHeight": "26px", "letterSpacing": "-0.01em", "fontWeight": "500" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 16px;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .material-symbols-outlined[data-weight="fill"] {
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+    }
+    
+    /* Tactile Drop Shadows */
+    .polaroid-shadow {
+      box-shadow: 
+        0 4px 6px -1px rgba(0, 0, 0, 0.5),
+        0 20px 35px -5px rgba(0, 0, 0, 0.65),
+        0 0 40px -10px rgba(16, 185, 129, 0.08);
+    }
+    .ghost-shadow {
+      box-shadow: 
+        0 10px 25px -5px rgba(0, 0, 0, 0.75),
+        0 25px 45px -10px rgba(0, 0, 0, 0.8),
+        0 0 30px 2px rgba(78, 222, 163, 0.25);
+    }
+    .clip-shadow {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.7);
+    }
+    .torn-edge {
+      clip-path: polygon(
+        0% 0%, 100% 0%, 
+        100% 98%, 97% 96.5%, 94% 99%, 91% 97%, 87% 99.5%, 83% 97.5%, 79% 99%, 75% 97%, 
+        70% 99.5%, 66% 97.5%, 62% 99%, 57% 96.5%, 52% 99%, 47% 97%, 42% 99.5%, 37% 97%, 
+        32% 99%, 28% 97%, 23% 99.5%, 19% 97%, 14% 99%, 10% 97%, 6% 99.5%, 0% 97.5%
+      );
+    }
+    @keyframes drop-pulse {
+      0%, 100% {
+        opacity: 0.95;
+        border-color: rgba(52, 211, 153, 0.85);
+        box-shadow: 0 0 30px rgba(16, 185, 129, 0.35);
+      }
+      50% {
+        opacity: 0.7;
+        border-color: rgba(52, 211, 153, 0.45);
+        box-shadow: 0 0 15px rgba(16, 185, 129, 0.15);
+      }
+    }
+    .animate-drop-pulse {
+      animation: drop-pulse 2s ease-in-out infinite;
+    }
+    @keyframes ghost-float {
+      0%, 100% {
+        transform: translateY(0px) rotate(-3deg);
+      }
+      50% {
+        transform: translateY(-6px) rotate(-2deg);
+      }
+    }
+    .animate-ghost-float {
+      animation: ghost-float 3s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen overflow-x-hidden font-body-md relative selection:bg-primary-container selection:text-on-primary-container">
+<!-- ==================== macOS Menu Bar (Shared Component TopNavBar) ==================== -->
+<header class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-margin h-[38px] w-full select-none bg-surface-container-lowest/75 dark:bg-surface-container-lowest/75 backdrop-blur-md backdrop-blur-xl shadow-sm border-b border-outline-variant/30">
+<!-- Left Cluster: Apple Logo + Rubick Name + System Menu Links -->
+<div class="flex items-center gap-space-md">
+<!-- Apple Glyph -->
+<span class="text-on-surface opacity-90 cursor-default hover:opacity-100 transition-opacity">
+<svg class="w-3.5 h-3.5 fill-current" viewbox="0 0 170 170">
+<path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.69-3.08-7.7-7.98-12.04-14.7-6.08-9.43-10.74-20.17-13.98-32.22-3.24-12.06-4.86-23.47-4.86-34.24 0-14.33 3.5-26.04 10.5-35.11 7-9.08 15.84-13.68 26.53-13.8 4.9.12 10.3 1.34 16.2 3.65 5.9 2.31 9.77 3.53 11.61 3.65 1.56 0 5.65-1.33 12.27-3.99 6.62-2.66 12.33-3.8 17.13-3.41 12.5.95 22.42 5.68 29.74 14.18-10.98 6.68-16.37 15.82-16.17 27.42.24 9.17 3.73 16.92 10.47 23.23 6.74 6.32 14.79 9.94 24.15 10.87-2.18 6.74-4.89 13.78-8.14 21.13zm-32.55-103.54c0-5.89 2.1-11.53 6.31-16.91 4.21-5.38 9.5-9.35 15.87-11.91.24 1.3.36 2.47.36 3.53 0 5.76-2.22 11.47-6.65 17.12-4.44 5.65-9.92 9.47-16.44 11.47-.48-1.06-.72-2.16-.72-3.3z"></path>
+</svg>
+</span>
+<!-- Brand Logo / Active App -->
+<div class="text-system-menu font-system-menu font-semibold text-on-surface dark:text-on-surface flex items-center gap-1.5 cursor-default hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 active:scale-[0.98]">
+<span>Rubick 拉比克</span>
+<!-- Glowing Gem Glyphs -->
+<span class="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(78,222,163,0.8)]"></span>
+</div>
+<!-- Navigation Links -->
+<nav class="hidden md:flex items-center gap-0.5 text-system-menu font-system-menu">
+<span class="text-on-surface dark:text-on-surface font-medium hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 cursor-default">File</span>
+<span class="text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 cursor-default">Edit</span>
+<span class="text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 cursor-default">View</span>
+<span class="text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 cursor-default">Window</span>
+<span class="text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 cursor-default">Help</span>
+</nav>
+</div>
+<!-- Right Cluster: Status Indicators & Tray Icons -->
+<div class="flex items-center gap-1 sm:gap-2 text-system-menu font-system-menu text-on-surface-variant">
+<!-- Rubick Active Menu Item Gem Indicator -->
+<div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container-high/60 border border-outline-variant/50 text-primary cursor-pointer hover:bg-surface-container-highest/60 transition-colors">
+<span class="w-2 h-2 rounded-sm bg-primary rotate-45 shadow-[0_0_6px_rgba(78,222,163,0.9)]"></span>
+<span class="font-label-mono-sm text-label-mono-sm tracking-tight text-on-surface font-medium">PINNED (5)</span>
+</div>
+<!-- System Icons directly transcribed from JSON -->
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded p-1 flex items-center justify-center">
+<span class="material-symbols-outlined text-[15px]" data-icon="wifi">wifi</span>
+</button>
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded p-1 flex items-center justify-center">
+<span class="material-symbols-outlined text-[15px]" data-icon="battery_charging_full">battery_charging_full</span>
+</button>
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded p-1 flex items-center justify-center">
+<span class="material-symbols-outlined text-[15px]" data-icon="search">search</span>
+</button>
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded p-1 flex items-center justify-center">
+<span class="material-symbols-outlined text-[15px]" data-icon="control_point">control_point</span>
+</button>
+<!-- Date / Clock -->
+<div class="flex items-center gap-1.5 px-1.5 py-0.5 hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded cursor-default ml-1">
+<span class="text-system-menu font-system-menu text-on-surface">Sun May 18</span>
+<span class="text-system-menu font-system-menu font-medium text-on-surface">10:42 AM</span>
+</div>
+</div>
+</header>
+<!-- ==================== Background Atmosphere ==================== -->
+<!-- Obsidian Base Canvas with Emerald Aurora Light Source -->
+<div class="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#06070a]">
+<!-- Radial Emerald Caustic Flare Top-Center -->
+<div class="absolute -top-[15%] left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-primary/10 rounded-full blur-[140px]"></div>
+<!-- Secondary Soft Teal Caustic Bottom Left -->
+<div class="absolute -bottom-[20%] left-[10%] w-[600px] h-[600px] bg-secondary-container/10 rounded-full blur-[160px]"></div>
+<!-- Softly Blurred macOS VS Code Code Editor Backdrop Window (Depth Layer) -->
+<div class="absolute top-[160px] left-1/2 -translate-x-1/2 w-[92%] max-w-5xl h-[520px] rounded-xl bg-surface-container-lowest/65 border border-white/5 backdrop-blur-[32px] opacity-40 shadow-2xl flex flex-col overflow-hidden select-none pointer-events-none">
+<!-- VS Code Window Header -->
+<div class="h-9 bg-surface-container-low/70 border-b border-outline-variant/20 flex items-center px-4 justify-between">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-error/70"></span>
+<span class="w-3 h-3 rounded-full bg-[#f59e0b]/70"></span>
+<span class="w-3 h-3 rounded-full bg-primary/70"></span>
+<span class="ml-4 font-label-mono-sm text-label-mono-sm text-outline">rubick-orchestrator.ts — workspace</span>
+</div>
+<div class="flex items-center gap-3 text-outline">
+<span class="font-label-mono-sm text-label-mono-sm">UTF-8</span>
+<span class="font-label-mono-sm text-label-mono-sm">TypeScript</span>
+</div>
+</div>
+<!-- VS Code Mock Code Lines -->
+<div class="p-6 font-label-mono-sm text-label-mono-sm space-y-2 opacity-60">
+<div class="flex gap-4"><span class="text-outline w-6 text-right">1</span><span class="text-primary-fixed-dim">import</span> <span class="text-tertiary-fixed"> { CatenaryEngine, PhysicalAnchor } </span> <span class="text-primary-fixed-dim">from</span> <span class="text-secondary-fixed">"@rubick/physics-mesh"</span>;</div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">2</span><span class="text-primary-fixed-dim">import</span> <span class="text-tertiary-fixed"> { ScreenshotManager, OpticalHaptic } </span> <span class="text-primary-fixed-dim">from</span> <span class="text-secondary-fixed">"@rubick/core"</span>;</div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">3</span><span class="text-outline-variant">// Initialize physical rope tension array and clipboard stack</span></div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">4</span><span class="text-primary">export const</span> <span class="text-tertiary-fixed">desktopHangingCanvas</span> = <span class="text-primary">new</span> <span class="text-secondary-fixed">CatenaryEngine</span>({</div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">5</span><span class="text-outline w-6"></span> <span class="text-outline">sagFactor:</span> <span class="text-[#f59e0b]">48.25</span>,</div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">6</span><span class="text-outline w-6"></span> <span class="text-outline">pinnedArtifactsCount:</span> <span class="text-[#f59e0b]">5</span>,</div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">7</span><span class="text-outline w-6"></span> <span class="text-outline">autoSynchronizeClipboard:</span> <span class="text-primary">true</span></div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">8</span>});</div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">9</span><span class="text-primary">await</span> desktopHangingCanvas.<span class="text-secondary-fixed">renderSuspendedPlanes</span>();</div>
+</div>
+</div>
+</div>
+<!-- ==================== Main Spatial Stage ==================== -->
+<main class="relative z-10 pt-[50px] pb-16 min-h-screen flex flex-col items-center justify-start cursor-default">
+<!-- Ambient App Subhead & Physical Control Capsule -->
+<div class="mt-4 mb-8 flex items-center justify-between w-full max-w-6xl px-margin">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container-high/90 border border-outline-variant/40 flex items-center justify-center shadow-lg">
+<span class="w-3.5 h-3.5 rounded-sm bg-primary rotate-45 shadow-[0_0_10px_rgba(78,222,163,0.8)]"></span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md text-on-surface font-semibold tracking-tight flex items-center gap-2">
+            Hanging Board
+            <span class="font-label-mono-sm text-label-mono-sm px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">DROP READY</span>
+</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Hover cards to inspect clip telemetry or release file to hang on line</p>
+</div>
+</div>
+<!-- Toolbar Glass Pills -->
+<div class="hidden sm:flex items-center gap-2 bg-surface-container-lowest/80 backdrop-blur-xl border border-white/10 px-2 py-1.5 rounded-full shadow-lg">
+<button class="flex items-center gap-1.5 px-3 py-1 rounded-full text-system-menu font-system-menu text-on-surface hover:bg-surface-container-highest/60 transition-colors">
+<span class="material-symbols-outlined text-[15px]" data-icon="sort">sort</span>
+<span>By Time</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1 rounded-full text-system-menu font-system-menu text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/60 transition-colors">
+<span class="material-symbols-outlined text-[15px]" data-icon="filter_alt">filter_alt</span>
+<span>Screenshots</span>
+</button>
+<div class="w-[1px] h-4 bg-outline-variant/40 mx-0.5"></div>
+<button class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-container text-on-primary-container font-system-menu text-system-menu font-medium hover:bg-primary transition-colors shadow-[0_0_12px_rgba(16,185,129,0.4)]">
+<span class="material-symbols-outlined text-[15px]" data-icon="add">add</span>
+<span>New Pin</span>
+</button>
+</div>
+</div>
+<!-- ==================== The Hanging Laundry Line Stage ==================== -->
+<section class="relative w-full max-w-[1240px] h-[580px] mx-auto select-none mt-2">
+<!-- Anchors at Left and Right -->
+<div class="absolute left-4 sm:left-12 top-6 z-30 flex items-center gap-1">
+<!-- Cast Brass Wall Peg -->
+<div class="w-5 h-5 rounded-full bg-gradient-to-br from-[#d4af37] via-[#997a15] to-[#423405] shadow-[0_4px_8px_rgba(0,0,0,0.8),inset_0_1px_2px_rgba(255,255,255,0.6)] border border-[#fef08a]/30 flex items-center justify-center">
+<div class="w-1.5 h-1.5 rounded-full bg-[#201802]"></div>
+</div>
+</div>
+<div class="absolute right-4 sm:right-12 top-6 z-30 flex items-center gap-1">
+<!-- Cast Brass Wall Peg -->
+<div class="w-5 h-5 rounded-full bg-gradient-to-br from-[#d4af37] via-[#997a15] to-[#423405] shadow-[0_4px_8px_rgba(0,0,0,0.8),inset_0_1px_2px_rgba(255,255,255,0.6)] border border-[#fef08a]/30 flex items-center justify-center">
+<div class="w-1.5 h-1.5 rounded-full bg-[#201802]"></div>
+</div>
+</div>
+<!-- Natural Hemp Twine / Rope (SVG Catenary Hyperbolic Curve with textured pattern) -->
+<svg class="absolute top-4 left-0 w-full h-32 pointer-events-none z-10 overflow-visible" preserveaspectratio="none" viewbox="0 0 1200 120">
+<defs>
+<!-- Rope Drop Shadow -->
+<filter height="200%" id="rope-shadow" width="110%" x="-5%" y="-20%">
+<fedropshadow dx="0" dy="4" flood-color="#000000" flood-opacity="0.8" stddeviation="3"></fedropshadow>
+</filter>
+<!-- Braided Texture Linear Pattern -->
+<lineargradient id="hemp-braid" x1="0%" x2="100%" y1="0%" y2="0%">
+<stop offset="0%" stop-color="#8b7355"></stop>
+<stop offset="25%" stop-color="#c4a47c"></stop>
+<stop offset="50%" stop-color="#6e573d"></stop>
+<stop offset="75%" stop-color="#b8976e"></stop>
+<stop offset="100%" stop-color="#8b7355"></stop>
+</lineargradient>
+</defs>
+<!-- The Catenary Sagging Path: dips 48px at center (from y=20 to y=68) -->
+<path d="M 50,22 Q 600,74 1150,22" fill="none" filter="url(#rope-shadow)" stroke="#090a0f" stroke-linecap="round" stroke-width="5"></path>
+<path d="M 50,22 Q 600,74 1150,22" fill="none" stroke="url(#hemp-braid)" stroke-dasharray="7,2" stroke-linecap="round" stroke-width="3.5"></path>
+</svg>
+<!-- ==================== Clipped Cards Array ==================== -->
+<div class="relative w-full h-full">
+<!-- CARD 1: Wide 16:9 Web App Polaroid (Position ~5% from left, tilt +2.5deg) -->
+<div class="absolute left-[2%] sm:left-[4%] top-[34px] z-20 group transform origin-top rotate-[2.5deg] hover:rotate-0 hover:scale-105 hover:z-40 transition-all duration-300">
+<!-- Fastener: Chrome Spring Wire Bulldog Clip -->
+<div class="absolute -top-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center">
+<!-- Chrome Wire Loop -->
+<div class="w-6 h-5 border-2 border-slate-300 rounded-t-full bg-gradient-to-b from-white/80 to-slate-400 shadow-sm"></div>
+<!-- Clip Clamp Body -->
+<div class="w-8 h-3.5 -mt-1 bg-gradient-to-r from-slate-200 via-white to-slate-300 rounded-sm border border-slate-400/80 shadow-md clip-shadow flex items-center justify-center">
+<div class="w-6 h-0.5 bg-slate-500/40"></div>
+</div>
+<!-- Small Occluding Shadow on Card -->
+<div class="w-7 h-1.5 bg-black/40 blur-[1px] -mt-0.5"></div>
+</div>
+<!-- Polaroid Shell -->
+<div class="w-[240px] sm:w-[265px] bg-[#FAF8F5] pt-3 px-3 pb-8 rounded-[3px] polaroid-shadow border border-[#EBE6DF]">
+<!-- 16:9 Preview Frame -->
+<div class="relative w-full aspect-[16/9] rounded-[2px] overflow-hidden bg-surface-container-lowest border border-black/10">
+<img class="w-full h-full object-cover" data-alt="A modern web dashboard user interface showing sleek dark-mode analytics, emerald green interactive data charts, refined minimalist metric cards, and clean typography. The atmosphere is sophisticated and technological with ambient emerald backlighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB_rOtH-MaL_4yq9ufs1t-CCdEUiT3NBbgsrFOsXlXAPJJr8vD_0T3jZRb0yNjD_ZK5gvR9CMpR8bZ6K4iisMs5qQkFkghUoLF7AtEygYgdxd_HXQ7FDOoklkvEOjo8XEMVEmKp98LgOyARFbAUMc5l6V4XmgP1WDDC44LcJwFelaxtWFvpDteoU50riY_GlY57Z0qGDpIaWIJwQbFhpfg1QgFCGGiqiiYKHy_rlxRd9xILrsWQ6BLspUCzj2jw8fOMXica6ei29NE"/>
+<div class="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/15 pointer-events-none"></div>
+</div>
+<!-- Polaroid Caption Area -->
+<div class="mt-3 flex items-center justify-between px-1">
+<div>
+<p class="font-body-sm text-body-sm font-semibold text-[#2A2B2E] tracking-tight">Rubick Analytics v2</p>
+<p class="font-label-mono-sm text-label-mono-sm text-[#7D7F85]">1920 × 1080 • Web Canvas</p>
+</div>
+<span class="w-2 h-2 rounded-full bg-primary shadow-[0_0_6px_rgba(78,222,163,0.8)]"></span>
+</div>
+</div>
+</div>
+<!-- CARD 2: Tall Portrait Phone-Screenshot Polaroid (9:16) (Nudged leftward to make room for drop target, reactive tilt -8deg) -->
+<div class="absolute left-[20%] sm:left-[22%] top-[52px] z-20 group transform origin-top -rotate-[8deg] hover:rotate-0 hover:scale-105 hover:z-40 transition-all duration-500 ease-out">
+<!-- Fastener: Polished Vintage Brass Clamp -->
+<div class="absolute -top-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center">
+<div class="w-5 h-4 border-2 border-[#fef08a]/80 rounded-t-sm bg-gradient-to-b from-[#eab308] to-[#ca8a04] shadow-sm"></div>
+<div class="w-7 h-3.5 -mt-1 bg-gradient-to-r from-[#d4af37] via-[#fef08a] to-[#a16207] rounded-sm border border-[#78350f]/60 shadow-md clip-shadow flex items-center justify-center">
+<div class="w-5 h-0.5 bg-[#451a03]/40"></div>
+</div>
+<div class="w-6 h-1.5 bg-black/40 blur-[1px] -mt-0.5"></div>
+</div>
+<!-- Polaroid Shell -->
+<div class="w-[175px] sm:w-[195px] bg-[#FAF8F5] pt-3 px-3 pb-8 rounded-[3px] polaroid-shadow border border-[#EBE6DF]">
+<!-- 9:16 Mobile Frame -->
+<div class="relative w-full aspect-[9/16] rounded-[4px] overflow-hidden bg-surface-container-lowest border border-black/10">
+<img class="w-full h-full object-cover" data-alt="An iOS mobile smartphone application interface displaying an emerald-tinted dark design system, modern card widgets with fluid glassy blur, rounded action buttons, and refined digital typography. The composition is intimate, elegant, and nocturnal." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBU-5BJXkUD9hcZh5EhXxmdyrUIfH4g_P8iVpwapctdoC6Qzxcjs2o6adUl6Pj9_iuCyMsNvKdLgykRqBXkkm3NA6YjQb2M0VxOj8FDH6Y8cEkLSwQrvucNU_KQP-JCAML8vyoC0YBo0OkcK6lNEtXytTz3MAR8x8zrvmfs4L4ZRIAeyRWEn7JBHbRdgMtOmvYYsmUL4bBjEnfxGDkL-5vPn27vIxVt8zfC9r0y-sHjAFiV8bhoJiG4Z8Y-Uf7iFE5P1xsewvXa_-c"/>
+<div class="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 pointer-events-none"></div>
+</div>
+<!-- Polaroid Caption Area -->
+<div class="mt-3 flex items-center justify-between px-1">
+<div>
+<p class="font-body-sm text-body-sm font-semibold text-[#2A2B2E] tracking-tight">Rubick Mobile</p>
+<p class="font-label-mono-sm text-label-mono-sm text-[#7D7F85]">iOS 18 • 1170 × 2532</p>
+</div>
+<span class="material-symbols-outlined text-[13px] text-[#7D7F85]" data-icon="smartphone">smartphone</span>
+</div>
+</div>
+</div>
+<!-- ==================== INSERTION SLOT / DROP TARGET ZONE ==================== -->
+<!-- Opened slot on the rope between Card 2 and Card 3 -->
+<div class="absolute left-[38.5%] sm:left-[39.5%] top-[64px] z-25 pointer-events-none">
+<!-- Ghost Spring Clip Ready on the Line -->
+<div class="absolute -top-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center opacity-85">
+<div class="w-5 h-4 border-2 border-emerald-300/80 rounded-t-sm bg-gradient-to-b from-emerald-400/50 to-emerald-600/40 shadow-sm"></div>
+<div class="w-7 h-3.5 -mt-1 bg-gradient-to-r from-emerald-300/90 via-emerald-100 to-emerald-400/90 rounded-sm border border-emerald-300/60 shadow-md flex items-center justify-center">
+<div class="w-5 h-0.5 bg-emerald-700/50"></div>
+</div>
+<div class="w-6 h-1.5 bg-emerald-500/20 blur-[2px] -mt-0.5"></div>
+</div>
+<!-- Pulsing Glowing Insertion Ghost Silhouette -->
+<div class="w-[185px] sm:w-[200px] h-[260px] sm:h-[275px] rounded-lg border-2 border-dashed border-emerald-400/90 bg-emerald-500/10 backdrop-blur-md shadow-[0_0_35px_rgba(16,185,129,0.35)] animate-drop-pulse flex flex-col items-center justify-center p-4 text-center transition-all duration-300">
+<!-- Center Target Indicator -->
+<div class="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center shadow-[0_0_20px_rgba(52,211,153,0.4)] mb-3">
+<span class="material-symbols-outlined text-primary text-[24px] font-bold" data-icon="download">download</span>
+</div>
+<p class="font-headline-md text-body-md font-semibold text-primary tracking-tight">+ Drop to Pin</p>
+<p class="font-label-mono-sm text-[11px] text-on-surface-variant/90 mt-1">Insert into laundry twine</p>
+<div class="mt-3 px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-400/30 text-[10px] font-label-mono-sm text-primary-fixed">
+      Slot #3 of 6
+    </div>
+</div>
+</div>
+<!-- ==================== DRAGGED ITEM GHOST + MACOS CURSOR ==================== -->
+<!-- Floating PDF Drag Preview lifted above the drop target -->
+<div class="absolute left-[42%] sm:left-[43%] top-[95px] z-50 pointer-events-none transform -rotate-[3deg] animate-ghost-float">
+<!-- macOS System Drag Cursor with Green Plus Badge -->
+<div class="absolute -top-7 -left-7 z-60 filter drop-shadow-[0_4px_6px_rgba(0,0,0,0.6)]">
+<!-- Realistic macOS Arrow Pointer SVG -->
+<svg class="w-7 h-7" fill="none" viewbox="0 0 24 24">
+<path d="M4 2L4 20L8.8 15.6L12.4 23L15.6 21.4L12 14L18.4 14L4 2Z" fill="#1e1e1e" stroke="#ffffff" stroke-linejoin="round" stroke-width="1.6"></path>
+</svg>
+<!-- Green '+' Badge for Add/Copy Operation -->
+<div class="absolute top-2.5 left-4 w-4 h-4 rounded-full bg-[#10b981] border border-white text-white flex items-center justify-center font-bold text-[11px] leading-none shadow-md">
+      +
+    </div>
+</div>
+<!-- Translucent PDF Preview Card Shell -->
+<div class="w-[215px] sm:w-[230px] bg-white/95 dark:bg-[#FAF8F5]/95 backdrop-blur-md p-3.5 pb-4 rounded-xl ghost-shadow border-2 border-emerald-400/80 ring-2 ring-emerald-500/30 opacity-90 transition-all select-none">
+<!-- Header with PDF Badge & Red Document Tab -->
+<div class="flex items-center gap-2 mb-2.5">
+<div class="w-7 h-7 rounded-md bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white shadow-sm flex-shrink-0">
+<span class="font-label-mono-sm font-bold text-[10px] tracking-tighter">PDF</span>
+</div>
+<div class="overflow-hidden">
+<p class="font-body-sm text-[12px] font-semibold text-[#1e1e1e] truncate leading-tight">Q1_Strategy_Overview.pdf</p>
+<p class="font-label-mono-sm text-[10px] text-[#71717a]">14.8 MB • 32 Pages</p>
+</div>
+</div>
+<!-- Embedded Rich Document Thumbnail Preview -->
+<div class="relative w-full h-[125px] rounded-lg overflow-hidden bg-slate-900 border border-slate-700/60 shadow-inner flex flex-col justify-between p-2.5">
+<!-- Miniature Document Layout Wireframe -->
+<div class="space-y-1.5 opacity-90">
+<div class="h-2 w-3/4 bg-primary/70 rounded-xs"></div>
+<div class="h-1.5 w-full bg-slate-500/50 rounded-xs"></div>
+<div class="h-1.5 w-5/6 bg-slate-500/40 rounded-xs"></div>
+<!-- Miniature Graph Bars -->
+<div class="pt-2 flex items-end gap-1.5 h-10">
+<div class="w-3 h-4 bg-primary/50 rounded-t-xs"></div>
+<div class="w-3 h-8 bg-primary/80 rounded-t-xs"></div>
+<div class="w-3 h-6 bg-primary/60 rounded-t-xs"></div>
+<div class="w-3 h-9 bg-emerald-400 rounded-t-xs shadow-[0_0_8px_rgba(52,211,153,0.7)]"></div>
+<div class="w-3 h-7 bg-primary/70 rounded-t-xs"></div>
+<div class="w-3 h-5 bg-primary/40 rounded-t-xs"></div>
+</div>
+</div>
+<!-- Subtle PDF Footer Chip -->
+<div class="flex items-center justify-between border-t border-slate-700/80 pt-1 text-[9px] font-label-mono-sm text-slate-400">
+<span>Confidential</span>
+<span class="text-primary-fixed-dim">RUBICK CORE</span>
+</div>
+<div class="absolute inset-0 bg-gradient-to-tr from-emerald-500/10 via-transparent to-white/10 pointer-events-none"></div>
+</div>
+<!-- Bottom Status Indicator -->
+<div class="mt-2.5 flex items-center justify-between text-[11px] font-label-mono-sm px-0.5">
+<span class="flex items-center gap-1 text-emerald-700 dark:text-emerald-600 font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+        Ready to pin
+      </span>
+<span class="text-slate-400 text-[10px]">⌥ Copy</span>
+</div>
+</div>
+</div>
+<!-- CARD 3: Small Square 1:1 Macro Photo Polaroid (Nudged rightward, reactive tilt +6deg) -->
+<div class="absolute left-[56%] sm:left-[57.5%] top-[60px] z-20 group transform origin-top rotate-[6deg] hover:rotate-0 hover:scale-105 hover:z-40 transition-all duration-500 ease-out">
+<!-- Fastener: Chrome Spring Wire Clip -->
+<div class="absolute -top-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center">
+<div class="w-5 h-4 border-2 border-slate-300 rounded-t-full bg-gradient-to-b from-white to-slate-400 shadow-sm"></div>
+<div class="w-7 h-3.5 -mt-1 bg-gradient-to-r from-slate-200 via-white to-slate-300 rounded-sm border border-slate-400/80 shadow-md clip-shadow flex items-center justify-center">
+<div class="w-5 h-0.5 bg-slate-500/40"></div>
+</div>
+<div class="w-6 h-1.5 bg-black/40 blur-[1px] -mt-0.5"></div>
+</div>
+<!-- Polaroid Shell -->
+<div class="w-[180px] sm:w-[200px] bg-[#FAF8F5] pt-3 px-3 pb-8 rounded-[3px] polaroid-shadow border border-[#EBE6DF]">
+<!-- 1:1 Aspect Ratio Photo -->
+<div class="relative w-full aspect-square rounded-[2px] overflow-hidden bg-surface-container-lowest border border-black/10">
+<img class="w-full h-full object-cover" data-alt="A detailed macro photograph of an illuminated emerald green gemstone with crisp optic crystal facets, resting on a dark anodized aluminum workspace under soft directional studio lighting. Cosmic dark ambiance with ethereal reflections and refractions." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAtCxrmKHQm6oBJJ5kBhvPqVoa-1GVdRC5-ZbXggD9n-7I7-c3Dp1AZTgJKKlf5Nyg_WlFEyjaQ8cyBzZH529LfHrjKo4gYK3LL8TXiI4McN5Qd_scADNs6kA8t5bIHZgxHjrxA6qRDYPzOK4br_tMUvLRxkicfxsGtQqIpqrLgsQLIvGWzVD2Mn0r0LDeHaUvQYqAqVnZ0RZ3mOd1mRPhbiWyR0_IWT0m-daZcQvfSEasG08-7_d2cw6hf_Y1mthQc4MDTVikwJ1I"/>
+<div class="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/20 pointer-events-none"></div>
+</div>
+<!-- Polaroid Caption Area -->
+<div class="mt-3 flex items-center justify-between px-1">
+<div>
+<p class="font-body-sm text-body-sm font-semibold text-[#2A2B2E] tracking-tight">Rubick Crystal</p>
+<p class="font-label-mono-sm text-label-mono-sm text-[#7D7F85]">Asset #48 • 1080 × 1080</p>
+</div>
+<span class="material-symbols-outlined text-[13px] text-[#7D7F85]" data-icon="photo">photo</span>
+</div>
+</div>
+</div>
+<!-- CARD 4: Narrow Vertical Scrolling Strip Polaroid (Position ~73% from left, tilt -1.0deg, clamped with Emerald Clothespin) -->
+<div class="absolute left-[72%] sm:left-[74%] top-[48px] z-20 group transform origin-top -rotate-[1deg] hover:rotate-0 hover:scale-105 hover:z-40 transition-all duration-300">
+<!-- Fastener: Signature Emerald-Green Enameled Wooden Clothespin Accent -->
+<div class="absolute -top-6 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center">
+<!-- Top pinch arms of clothespin -->
+<div class="flex gap-1">
+<div class="w-1.5 h-4 bg-gradient-to-b from-primary-container to-secondary-container rounded-t-sm shadow-sm"></div>
+<div class="w-1.5 h-4 bg-gradient-to-b from-primary-container to-secondary-container rounded-t-sm shadow-sm"></div>
+</div>
+<!-- Silver Spring Coil Band -->
+<div class="w-5 h-2 -my-0.5 bg-gradient-to-r from-slate-300 via-slate-100 to-slate-400 rounded-sm border border-slate-400/80 shadow-inner z-10 flex items-center justify-center">
+<div class="w-3 h-0.5 bg-slate-500"></div>
+</div>
+<!-- Bottom gripping jaw clamping paper -->
+<div class="w-4 h-4 bg-gradient-to-b from-secondary-container to-on-primary-container rounded-b-sm shadow-md clip-shadow border-t border-white/20"></div>
+<div class="w-5 h-1.5 bg-black/50 blur-[1px] -mt-0.5"></div>
+</div>
+<!-- Polaroid Strip Shell -->
+<div class="w-[140px] sm:w-[155px] bg-[#FAF8F5] pt-3 px-2.5 pb-6 rounded-[3px] polaroid-shadow border border-[#EBE6DF]">
+<!-- Vertical Long Scrolling Aspect Strip -->
+<div class="relative w-full h-[240px] rounded-[2px] overflow-hidden bg-surface-container-lowest border border-black/10">
+<img class="w-full h-full object-cover" data-alt="A vertical scrolling interface capture of a minimalist documentation portal with code snippets, navigation drawers, and emerald green syntax highlighting against deep slate panels. Photorealistic digital screen capture aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCSNW3lHfFGkxu7qf3cKJUBslrtTxASlLPoTJkMb6Q9YdZ62LB3xs46_KMLHC-cGH6BXFUMiijiqRn5fk1yvwK5ORUSfQ5yWIc_CyFTEXcJtrXxjfLNgpJ9mTGgPSbAja1k83Y79hZJQxjNKyrikzXgv3Q8VrCa89EvP23SLwLactA66mgBv2UeJq4S0CMLOooKgVpeeA4qykgwmj2O7Zj4K3K-IZVJgSAZIlPKz0jfb8Ic-Cel-4jQSnvwjzXQQ5Ut-3rmRobbI1w"/>
+<!-- Scroll indicator hint -->
+<div class="absolute bottom-1 right-1 bg-black/75 px-1 rounded text-[9px] font-label-mono-sm text-primary">SCROLL</div>
+</div>
+<!-- Polaroid Caption Area -->
+<div class="mt-2.5 px-0.5">
+<p class="font-body-sm text-body-sm font-semibold text-[#2A2B2E] tracking-tight truncate">Docs Long Page</p>
+<p class="font-label-mono-sm text-label-mono-sm text-[#7D7F85]">840 × 3200 Full</p>
+</div>
+</div>
+</div>
+<!-- CARD 5: Torn-Paper Code Snippet Note Card (Position ~86% from left, tilt +3.2deg) -->
+<div class="absolute left-[85%] sm:left-[87%] top-[30px] z-20 group transform origin-top rotate-[3.2deg] hover:rotate-0 hover:scale-105 hover:z-40 transition-all duration-300">
+<!-- Fastener: Miniature Brass Binder Clip -->
+<div class="absolute -top-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center">
+<div class="w-5 h-5 border-2 border-[#d4af37] rounded-t-md bg-transparent shadow-sm"></div>
+<div class="w-7 h-3.5 -mt-1.5 bg-gradient-to-r from-[#b45309] via-[#d4af37] to-[#78350f] rounded-xs shadow-md clip-shadow flex items-center justify-center border-t border-[#fef08a]/50">
+<div class="w-4 h-0.5 bg-[#451a03]"></div>
+</div>
+<div class="w-6 h-1.5 bg-black/40 blur-[1px] -mt-0.5"></div>
+</div>
+<!-- Realistic Kraft / Parchment Note with Torn Bottom Edge -->
+<div class="w-[170px] sm:w-[190px] bg-[#F4EFE6] p-4 pb-8 polaroid-shadow border-t border-l border-r border-[#DECDBB] torn-edge relative">
+<!-- Subtle ruled lines background effect -->
+<div class="space-y-2">
+<div class="flex items-center justify-between border-b border-[#D5C2AB]/60 pb-1.5">
+<span class="font-label-mono-sm text-label-mono-sm font-semibold text-[#4A3E31] uppercase tracking-wider">Quick Note</span>
+<span class="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span>
+</div>
+<!-- Monospace Code / Keybindings Content -->
+<div class="font-label-mono-sm text-label-mono-sm text-[#3E342B] space-y-1.5 leading-tight pt-1">
+<p class="font-medium text-[#1e1b18]"><span class="bg-[#e7dcce] px-1 py-0.5 rounded text-[#111]">⌘ + ⌥ + R</span></p>
+<p class="text-[#57493c]">Pin active screenshot to catenary twine</p>
+<p class="text-primary-container font-semibold pt-1">✓ saved to clipboard</p>
+<p class="text-[#786756] text-[10px] pt-1">2025-05-18 10:42</p>
+</div>
+</div>
+<!-- Tape Accent on Top Right -->
+<div class="absolute -top-1 -right-2 w-7 h-3 bg-white/40 rotate-12 backdrop-blur-xs border border-white/20 pointer-events-none"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- ==================== Floating Interactive Dock Console (macOS Utility Palette) ==================== -->
+<div class="relative z-30 mt-6 max-w-xl w-full px-margin">
+<div class="bg-surface-container-lowest/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-3 shadow-2xl flex items-center justify-between gap-4 ring-1 ring-primary/30">
+<!-- Left: Quick Status (Active Drop Target Feedback) -->
+<div class="flex items-center gap-3 pl-2">
+<div class="w-9 h-9 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-400/40 text-primary">
+<span class="material-symbols-outlined text-[20px] animate-bounce" data-icon="file_download">file_download</span>
+</div>
+<div>
+<div class="font-system-menu text-system-menu text-on-surface font-semibold flex items-center gap-1.5">
+<span>Drop Target Active</span>
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-ping"></span>
+</div>
+<p class="font-label-mono-sm text-label-mono-sm text-primary">Release to hang "Q1_Strategy_Overview.pdf"</p>
+</div>
+</div>
+<!-- Right: Actions -->
+<div class="flex items-center gap-2">
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-system-menu text-system-menu transition-colors border border-outline-variant/30 flex items-center gap-1.5 active:scale-95">
+<span class="material-symbols-outlined text-[15px]" data-icon="close">close</span>
+<span>Cancel</span>
+</button>
+<button class="px-3.5 py-1.5 rounded-lg bg-primary text-on-primary font-system-menu text-system-menu font-medium transition-colors shadow-[0_0_20px_rgba(16,185,129,0.5)] flex items-center gap-1.5 active:scale-95 animate-pulse">
+<span class="material-symbols-outlined text-[15px] font-bold" data-icon="check">check</span>
+<span>Snap into Slot</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Micro-interaction script for cards physics hover tension -->
+<script>
+    document.querySelectorAll('.group').forEach((card) => {
+      card.addEventListener('mouseenter', () => {
+        card.style.transition = 'transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+      });
+      card.addEventListener('mouseleave', () => {
+        card.style.transition = 'transform 0.4s ease';
+      });
+    });
+  </script>
+</body></html>

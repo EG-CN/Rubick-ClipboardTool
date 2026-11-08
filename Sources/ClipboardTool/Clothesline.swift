@@ -109,6 +109,8 @@ final class ClotheslineDragCatcherView: NSView {
     static var dragSessionActive = false
     private var pulseTimer: Timer?
     private var dashPhase: CGFloat = 0
+    /// 拖拽中的文件名（draggingEntered 抓取，用于「松手挂上 "文件名"」提示）
+    var pendingFilenames: [String] = []
     deinit { pulseTimer?.invalidate() }
 
     /// 引导框呼吸动画：仅拖拽会话进行时运转，会话结束自动停表
@@ -135,7 +137,7 @@ final class ClotheslineDragCatcherView: NSView {
         let pill = bounds.insetBy(dx: 10, dy: 6)
         let path = NSBezierPath(roundedRect: pill, xRadius: 13, yRadius: 13)
         NSColor(calibratedWhite: 0.05, alpha: 0.88).setFill(); path.fill()
-        // 呼吸辉光：外圈柔光随相位起伏
+        // 呼吸辉光：外圈柔光随相位起伏（稿 drop-pulse 2s 呼吸）
         let breathe = 0.5 + 0.5 * sin(dashPhase * 0.18)
         NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.08 + 0.10 * CGFloat(breathe)).setStroke()
         let glow = NSBezierPath(roundedRect: pill.insetBy(dx: -2.5, dy: -2.5), xRadius: 15, yRadius: 15)
@@ -144,26 +146,49 @@ final class ClotheslineDragCatcherView: NSView {
         let dash = NSBezierPath(roundedRect: pill.insetBy(dx: 1.5, dy: 1.5), xRadius: 12, yRadius: 12)
         NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.9).setStroke()
         dash.lineWidth = 1.2; dash.setLineDash([4, 3], count: 2, phase: dashPhase); dash.stroke()
-        let text = "松手把文件挂到绳上" as NSString
-        let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 14, weight: .semibold),
-                                                         .foregroundColor: NSColor(calibratedRed: 0.45, green: 0.93, blue: 0.71, alpha: 1)]
-        let size = text.size(withAttributes: attributes)
-        let textY = pill.midY - size.height / 2 + 4
-        text.draw(at: CGPoint(x: pill.midX - size.width / 2, y: textY), withAttributes: attributes)
-        // 文案上方下落箭头，亮度随呼吸
-        let arrow = NSBezierPath()
-        let ax = pill.midX, ay = textY - 14
-        arrow.move(to: CGPoint(x: ax - 5, y: ay + 4))
-        arrow.line(to: CGPoint(x: ax, y: ay + 8))
-        arrow.line(to: CGPoint(x: ax + 5, y: ay + 4))
-        arrow.lineWidth = 1.6; arrow.lineCapStyle = .round
-        NSColor(calibratedRed: 0.45, green: 0.93, blue: 0.71, alpha: 0.7 + 0.3 * CGFloat(breathe)).setStroke()
-        arrow.stroke()
+        // 左：翡翠图标块（稿 console 的 file_download 徽块）
+        let box = CGRect(x: pill.minX + 20, y: pill.midY - 15, width: 30, height: 30)
+        NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.16).setFill()
+        NSBezierPath(roundedRect: box, xRadius: 8, yRadius: 8).fill()
+        NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.4).setStroke()
+        NSBezierPath(roundedRect: box, xRadius: 8, yRadius: 8).lineWidth = 1; NSBezierPath(roundedRect: box, xRadius: 8, yRadius: 8).stroke()
+        if let icon = NSImage(systemSymbolName: "arrow.down.to.line", accessibilityDescription: "投放")?
+            .withSymbolConfiguration(.init(pointSize: 14, weight: .medium)) {
+            let tinted = NSImage(size: icon.size, flipped: false) { rect in
+                icon.draw(in: rect)
+                NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 1).set()
+                rect.fill(using: .sourceAtop)
+                return true
+            }
+            let ratio = min(16 / icon.size.width, 16 / icon.size.height)
+            tinted.draw(in: CGRect(x: box.midX - icon.size.width * ratio / 2, y: box.midY - icon.size.height * ratio / 2,
+                                   width: icon.size.width * ratio, height: icon.size.height * ratio))
+        }
+        // 右：标题 + 文件名行（稿 Release to hang "文件名"）
+        let title = "投放区已就绪" as NSString
+        title.draw(at: CGPoint(x: box.maxX + 12, y: pill.midY - 14), withAttributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+            .foregroundColor: NSColor(calibratedWhite: 0.92, alpha: 1)
+        ])
+        let mono: String
+        if pendingFilenames.count == 1 {
+            mono = "松手挂上 \"\(pendingFilenames[0])\""
+        } else if pendingFilenames.count > 1 {
+            mono = "松手挂上 \(pendingFilenames.count) 个文件"
+        } else {
+            mono = "松手把文件挂到绳上"
+        }
+        (mono as NSString).draw(at: CGPoint(x: box.maxX + 12, y: pill.midY + 3), withAttributes: [
+            .font: NSFont.systemFont(ofSize: 10.5, weight: .medium),
+            .foregroundColor: NSColor(calibratedRed: 0.45, green: 0.93, blue: 0.71, alpha: 0.95)
+        ])
     }
     private var receptive: Bool { Self.dragSessionActive && !(isRopeVisible?() ?? false) }
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         guard receptive, !(sender.draggingSource is ClotheslineView), !FileTransfer.files(from: sender.draggingPasteboard).isEmpty else { return [] }
         // 拖拽中只亮引导框，不弹绳：松手后绳子才带着新文件出现
+        let names = FileTransfer.files(from: sender.draggingPasteboard).map { $0.lastPathComponent }
+        pendingFilenames = Array(names.prefix(3))
         needsDisplay = true
         return .copy
     }

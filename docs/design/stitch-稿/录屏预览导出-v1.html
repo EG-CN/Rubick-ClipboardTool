@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>录屏预览 - 导出控制台</title>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Inter & JetBrains Mono Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-primary": "#003824",
+            "inverse-on-surface": "#2f3036",
+            "secondary-fixed-dim": "#45dfa4",
+            "error-container": "#93000a",
+            "surface-tint": "#4edea3",
+            "outline": "#86948a",
+            "inverse-primary": "#006c49",
+            "primary": "#4edea3",
+            "surface-container-highest": "#34343a",
+            "secondary-fixed": "#68fcbf",
+            "outline-variant": "#3c4a42",
+            "on-error-container": "#ffdad6",
+            "on-background": "#e3e1e9",
+            "surface-variant": "#34343a",
+            "on-secondary-fixed": "#002114",
+            "on-primary-fixed": "#002113",
+            "primary-container": "#10b981",
+            "on-tertiary-container": "#393937",
+            "on-surface": "#e3e1e9",
+            "on-secondary-container": "#00452e",
+            "tertiary": "#c8c6c3",
+            "tertiary-fixed": "#e4e2de",
+            "tertiary-container": "#a4a39f",
+            "on-primary-fixed-variant": "#005236",
+            "background": "#121318",
+            "surface": "#121318",
+            "on-secondary": "#003825",
+            "error": "#ffb4ab",
+            "on-tertiary-fixed-variant": "#474744",
+            "secondary": "#45dfa4",
+            "surface-container-low": "#1a1b21",
+            "surface-container-lowest": "#0d0e13",
+            "on-tertiary-fixed": "#1b1c1a",
+            "on-error": "#690005",
+            "on-primary-container": "#00422b",
+            "on-secondary-fixed-variant": "#005137",
+            "on-surface-variant": "#bbcabf",
+            "inverse-surface": "#e3e1e9",
+            "surface-container-high": "#292a2f",
+            "secondary-container": "#00bd85",
+            "primary-fixed": "#6ffbbe",
+            "surface-bright": "#38393f",
+            "tertiary-fixed-dim": "#c8c6c3",
+            "primary-fixed-dim": "#4edea3",
+            "surface-container": "#1e1f25",
+            "surface-dim": "#121318",
+            "on-tertiary": "#30312e"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-lg": "1.25rem",
+            "space-md": "0.75rem",
+            "margin": "1.5rem",
+            "space-xs": "0.25rem",
+            "space-xl": "2rem",
+            "gutter": "1rem",
+            "space-sm": "0.5rem"
+          },
+          "fontFamily": {
+            "body-sm": ["Inter"],
+            "headline-md": ["Inter"],
+            "body-md": ["Inter"],
+            "headline-xl-mobile": ["Inter"],
+            "body-lg": ["Inter"],
+            "headline-lg": ["Inter"],
+            "label-mono-sm": ["JetBrains Mono"],
+            "label-mono-md": ["JetBrains Mono"],
+            "headline-xl": ["Inter"],
+            "system-menu": ["Inter"]
+          },
+          "fontSize": {
+            "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "headline-md": ["18px", { "lineHeight": "26px", "letterSpacing": "-0.01em", "fontWeight": "500" }],
+            "body-md": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+            "headline-xl-mobile": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "body-lg": ["15px", { "lineHeight": "22px", "fontWeight": "400" }],
+            "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "label-mono-sm": ["11px", { "lineHeight": "14px", "fontWeight": "400" }],
+            "label-mono-md": ["13px", { "lineHeight": "18px", "letterSpacing": "-0.02em", "fontWeight": "500" }],
+            "headline-xl": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "system-menu": ["13.5px", { "lineHeight": "18px", "letterSpacing": "-0.005em", "fontWeight": "500" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    /* Custom optical effects for obsidian skeuomorphism */
+    .optic-border {
+      box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    }
+    .skeuo-window-shadow {
+      box-shadow: 
+        0 4px 6px -1px rgba(0, 0, 0, 0.6),
+        0 25px 50px -12px rgba(0, 0, 0, 0.85),
+        0 0 50px -10px rgba(16, 185, 129, 0.12);
+    }
+    .skeuo-handle-yellow {
+      background: linear-gradient(180deg, #FDE047 0%, #EAB308 60%, #CA8A04 100%);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.6);
+    }
+    .filmstrip-texture {
+      background-size: 80px 100%;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface antialiased select-none min-h-screen overflow-x-hidden relative flex flex-col font-body-md text-body-md">
+<!-- Ambient Caustic Blur Background -->
+<div class="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+<div class="absolute -top-40 left-1/4 w-[650px] h-[650px] rounded-full bg-primary/10 blur-[140px] opacity-25"></div>
+<div class="absolute bottom-10 right-1/4 w-[500px] h-[500px] rounded-full bg-secondary-container/10 blur-[130px] opacity-20"></div>
+</div>
+<!-- Shared Component: TopNavBar (macOS Menu Bar) -->
+<header class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-space-md h-[38px] w-full bg-surface-container-lowest dark:bg-surface-container-lowest border-b border-outline-variant/30 backdrop-blur-md">
+<!-- Left: Brand / App Name & Menu Links -->
+<div class="flex items-center space-x-space-md">
+<!-- Gem Indicator & Product Name -->
+<div class="flex items-center space-x-1.5 pr-2">
+<div class="w-3.5 h-3.5 rounded-sm bg-primary flex items-center justify-center shadow-[0_0_10px_rgba(78,222,163,0.5)]">
+<span class="w-1.5 h-1.5 rounded-full bg-on-primary"></span>
+</div>
+<span class="font-system-menu text-system-menu font-semibold text-on-surface dark:text-on-surface tracking-tight">录屏预览</span>
+</div>
+<!-- Navigation Links -->
+<nav class="hidden md:flex items-center space-x-space-xs font-system-menu text-system-menu">
+<button class="px-2 py-0.5 rounded text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface dark:hover:text-on-surface transition-colors">File</button>
+<button class="px-2 py-0.5 rounded text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface dark:hover:text-on-surface transition-colors">Edit</button>
+<button class="px-2 py-0.5 rounded text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface dark:hover:text-on-surface transition-colors">View</button>
+<button class="px-2 py-0.5 rounded text-primary dark:text-primary font-medium hover:bg-surface-container-high/60 transition-colors">Trim</button>
+<button class="px-2 py-0.5 rounded text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface dark:hover:text-on-surface transition-colors">Window</button>
+<button class="px-2 py-0.5 rounded text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high/60 hover:text-on-surface dark:hover:text-on-surface transition-colors">Help</button>
+</nav>
+</div>
+<!-- Center: Source Badge Info -->
+<div class="hidden sm:flex items-center space-x-2 px-2.5 py-0.5 rounded-full bg-surface-container-high/60 border border-outline-variant/30 text-on-surface-variant font-label-mono-sm text-label-mono-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+<span>1080p 60fps</span>
+<span class="opacity-40">|</span>
+<span class="text-tertiary">ProRes RAW Cache</span>
+</div>
+<!-- Right: Trailing Actions -->
+<div class="flex items-center space-x-space-sm font-system-menu text-system-menu">
+<div class="flex items-center space-x-1 text-on-surface-variant">
+<button class="p-1 rounded hover:bg-surface-container-high/60 hover:text-on-surface transition-colors" title="Timer Settings">
+<span class="material-symbols-outlined text-[17px] leading-none" data-icon="timer">timer</span>
+</button>
+<button class="p-1 rounded hover:bg-surface-container-high/60 hover:text-on-surface transition-colors" title="Color &amp; Tuning">
+<span class="material-symbols-outlined text-[17px] leading-none" data-icon="tune">tune</span>
+</button>
+<button class="p-1 rounded hover:bg-surface-container-high/60 hover:text-on-surface transition-colors" title="Preferences">
+<span class="material-symbols-outlined text-[17px] leading-none" data-icon="settings">settings</span>
+</button>
+</div>
+<div class="h-3.5 w-px bg-outline-variant/40 mx-1"></div>
+<!-- Quick Export Trigger -->
+<button class="px-2.5 py-0.5 rounded-md bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 text-system-menu font-medium flex items-center space-x-1 active:scale-[0.98] transition-all">
+<span>Export</span>
+<span class="material-symbols-outlined text-[15px]" data-icon="file_upload">file_upload</span>
+</button>
+<!-- Status indicator badge -->
+<div class="w-5 h-5 rounded-full bg-surface-container-high border border-outline-variant/40 flex items-center justify-center" title="Status indicator badge">
+<span class="w-2 h-2 rounded-full bg-primary shadow-[0_0_6px_rgba(78,222,163,0.8)]"></span>
+</div>
+</div>
+</header>
+<!-- Main Stage Canvas -->
+<main class="relative z-10 flex-1 pt-[50px] pb-space-xl px-4 sm:px-6 md:px-margin flex flex-col items-center justify-start max-w-6xl mx-auto w-full">
+<!-- Skeuomorphic Native Window Container -->
+<div class="w-full bg-surface-container-lowest/95 backdrop-blur-2xl rounded-xl optic-border skeuo-window-shadow border border-white/10 flex flex-col overflow-hidden transition-all duration-300">
+<!-- Window Title Bar -->
+<div class="h-10 px-4 flex items-center justify-between border-b border-outline-variant/30 bg-surface-container-low/70">
+<!-- macOS Traffic Light controls -->
+<div class="flex items-center space-x-2">
+<button aria-label="Close" class="w-3 h-3 rounded-full bg-[#FF5F56] border border-[#E0443E] hover:opacity-80 active:opacity-60 flex items-center justify-center group">
+<span class="text-[8px] text-[#4C0000] opacity-0 group-hover:opacity-100 font-bold leading-none">×</span>
+</button>
+<button aria-label="Minimize" class="w-3 h-3 rounded-full bg-[#FFBD2E] border border-[#DEA123] hover:opacity-80 active:opacity-60 flex items-center justify-center group">
+<span class="text-[8px] text-[#5C3F00] opacity-0 group-hover:opacity-100 font-bold leading-none">-</span>
+</button>
+<button aria-label="Zoom" class="w-3 h-3 rounded-full bg-[#27C93F] border border-[#1AAB29] hover:opacity-80 active:opacity-60 flex items-center justify-center group">
+<span class="text-[7px] text-[#004C0A] opacity-0 group-hover:opacity-100 font-bold leading-none">+</span>
+</button>
+</div>
+<!-- Window Title with Lock and Audio Indicators -->
+<div class="flex items-center space-x-2 font-system-menu text-system-menu text-on-surface">
+<span class="material-symbols-outlined text-[15px] text-tertiary" data-icon="lock">lock</span>
+<span class="font-medium text-on-surface tracking-tight">录屏预览 2025-05-18_10-42.rec</span>
+<span class="material-symbols-outlined text-[15px] text-primary" data-icon="graphic_eq">graphic_eq</span>
+<span class="text-xs px-1.5 py-0.2 rounded bg-surface-container-high text-on-surface-variant font-label-mono-sm">RAW</span>
+</div>
+<!-- Zoom Indicator & Source Info -->
+<div class="flex items-center space-x-3 text-on-surface-variant font-label-mono-sm text-label-mono-sm">
+<div class="flex items-center space-x-1 bg-surface-container-high px-2 py-0.5 rounded border border-outline-variant/30">
+<span class="material-symbols-outlined text-[13px]" data-icon="aspect_ratio">aspect_ratio</span>
+<span>100%</span>
+<span class="text-tertiary opacity-40">·</span>
+<span class="text-primary">16:9</span>
+</div>
+<span class="hidden sm:inline text-tertiary">1920 × 1080 · 60fps (源)</span>
+</div>
+</div>
+<!-- Main Video Screen Recording Preview Area -->
+<div class="relative w-full bg-[#07080B] flex items-center justify-center overflow-hidden aspect-[16/9] max-h-[520px]">
+<!-- Video Preview Feed using Attached Setup Asset -->
+<img alt="macOS screen recording dashboard environment with dual-pane code and project atlas interface" class="w-full h-full object-cover object-center select-none" src="https://lh3.googleusercontent.com/aida/AEtjO1VmTWFXUWU96nBZ08gEv9oHjGPlY3Yg1ddQdLd24qek97yGlaF4ZndLy90twIS-LmO0xE4fjf_FHStxtl7kJtkyJOBFd3MaZtAKxPU1Q2L1rxQ-z0yLlbm5EaHhuzPD21GrjB7C5yMPsPCEUsf7SnN3-KCjmcMDx7OiuWaF1DUXgKRBplwfsdf13rxLhPN4EdMEmSPmMwf_se5bo88T92bwdyuVzPCkWW_wzMW7yBw8VPTLLor_5BTxj40"/>
+<!-- Ambient Inset Shadow & Dark Glass Edge Overlay -->
+<div class="absolute inset-0 pointer-events-none shadow-[inset_0_0_40px_rgba(0,0,0,0.85)] border-y border-outline-variant/20"></div>
+<!-- Centered Play Button Overlay -->
+<div class="absolute inset-0 flex items-center justify-center pointer-events-auto">
+<button aria-label="Play Recording" class="w-16 h-16 rounded-full bg-surface-container-lowest/80 backdrop-blur-md border border-white/20 text-on-surface flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_10px_30px_rgba(0,0,0,0.8)] group hover:border-primary/50">
+<span class="material-symbols-outlined text-4xl text-primary pl-1 group-hover:scale-110 transition-transform" data-icon="play_arrow" data-weight="fill">play_arrow</span>
+</button>
+</div>
+<!-- Live Crop Mask Overlay Indicator (Active recording zone) -->
+<div class="absolute top-4 left-4 flex items-center space-x-2 bg-surface-container-lowest/70 backdrop-blur-md px-2.5 py-1 rounded-md border border-white/10 text-on-surface font-label-mono-sm text-label-mono-sm">
+<span class="w-2 h-2 rounded-full bg-error animate-ping"></span>
+<span>录制选区锁定</span>
+<span class="text-tertiary">(全屏双窗口模式)</span>
+</div>
+<!-- Timecode Pill Badge Bottom Center -->
+<div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center space-x-3 px-3.5 py-1.5 rounded-full bg-surface-container-lowest/85 backdrop-blur-xl border border-white/15 text-on-surface font-label-mono-md text-label-mono-md shadow-2xl">
+<div class="flex items-center space-x-1">
+<span class="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(78,222,163,0.9)]"></span>
+<span class="text-primary font-semibold">00:04.28</span>
+<span class="text-tertiary">/</span>
+<span class="text-on-surface-variant">00:12.50</span>
+</div>
+<span class="w-px h-3 bg-outline-variant"></span>
+<span class="text-tertiary font-label-mono-sm text-label-mono-sm">128 / 375 帧</span>
+</div>
+</div>
+<!-- Precision Filmstrip Trim Timeline Area -->
+<div class="bg-surface-container-low px-4 sm:px-6 pt-3 pb-4 border-b border-outline-variant/30 flex flex-col space-y-2">
+<!-- Timeline Header: Ruler & Timestamps -->
+<div class="flex items-center justify-between text-tertiary font-label-mono-sm text-label-mono-sm px-1">
+<span>00:00.0</span>
+<span>00:02.0</span>
+<span>00:04.0</span>
+<span class="text-primary font-medium">00:06.0</span>
+<span>00:08.0</span>
+<span>00:10.0</span>
+<span>00:12.5</span>
+</div>
+<!-- Filmstrip Track & Draggable Handles Layer -->
+<div class="relative h-14 w-full bg-surface-container-lowest rounded-lg border border-outline-variant/50 overflow-hidden flex items-center shadow-inner">
+<!-- Miniature Frame Strip Background Thumbnails -->
+<div class="absolute inset-0 flex divide-x divide-white/5 opacity-55">
+<div class="flex-1 bg-surface-container-high/40 flex items-center justify-center text-[9px] text-tertiary/40">F1</div>
+<div class="flex-1 bg-surface-container-high/60 flex items-center justify-center text-[9px] text-tertiary/40">F30</div>
+<div class="flex-1 bg-surface-container-high/50 flex items-center justify-center text-[9px] text-tertiary/40">F60</div>
+<div class="flex-1 bg-surface-container-high/70 flex items-center justify-center text-[9px] text-tertiary/40">F90</div>
+<div class="flex-1 bg-surface-container-high/60 flex items-center justify-center text-[9px] text-tertiary/40">F120</div>
+<div class="flex-1 bg-surface-container-high/80 flex items-center justify-center text-[9px] text-tertiary/40">F150</div>
+<div class="flex-1 bg-surface-container-high/60 flex items-center justify-center text-[9px] text-tertiary/40">F180</div>
+<div class="flex-1 bg-surface-container-high/50 flex items-center justify-center text-[9px] text-tertiary/40">F210</div>
+<div class="flex-1 bg-surface-container-high/70 flex items-center justify-center text-[9px] text-tertiary/40">F240</div>
+<div class="flex-1 bg-surface-container-high/50 flex items-center justify-center text-[9px] text-tertiary/40">F300</div>
+<div class="flex-1 bg-surface-container-high/60 flex items-center justify-center text-[9px] text-tertiary/40">F360</div>
+</div>
+<!-- Unselected Dimming Scrim Left -->
+<div class="absolute top-0 bottom-0 left-0 w-[14.4%] bg-black/75 backdrop-blur-[1px] z-10 border-r border-yellow-500/30"></div>
+<!-- Selected Trim Range Highlight Window (Yellow Scrim & Gold Border) -->
+<div class="absolute top-0 bottom-0 left-[14.4%] w-[52.8%] border-y-2 border-yellow-400 bg-yellow-400/10 z-10 shadow-[0_0_15px_rgba(250,204,21,0.15)] flex items-center justify-between">
+<!-- Left In-Point Handle (Skeuomorphic Yellow Ribbed Grip) -->
+<div class="h-full w-4 skeuo-handle-yellow rounded-l-md flex flex-col items-center justify-center cursor-ew-resize -ml-0.5 z-20 hover:brightness-110 active:brightness-95 transition-all shadow-md" title="Drag to trim Start">
+<div class="w-1.5 h-0.5 bg-yellow-950/60 rounded mb-0.5"></div>
+<div class="w-1.5 h-0.5 bg-yellow-950/60 rounded mb-0.5"></div>
+<div class="w-1.5 h-0.5 bg-yellow-950/60 rounded"></div>
+</div>
+<!-- Active Playhead Needle (Emerald/Teal indicator) -->
+<div class="absolute left-[38%] top-0 bottom-0 w-0.5 bg-primary z-20 shadow-[0_0_8px_#4edea3]">
+<!-- Playhead Cap -->
+<div class="absolute -top-1 -left-[5px] w-3 h-3 bg-primary rotate-45 rounded-sm shadow-md"></div>
+</div>
+<!-- Right Out-Point Handle (Skeuomorphic Yellow Ribbed Grip) -->
+<div class="h-full w-4 skeuo-handle-yellow rounded-r-md flex flex-col items-center justify-center cursor-ew-resize -mr-0.5 z-20 hover:brightness-110 active:brightness-95 transition-all shadow-md" title="Drag to trim End">
+<div class="w-1.5 h-0.5 bg-yellow-950/60 rounded mb-0.5"></div>
+<div class="w-1.5 h-0.5 bg-yellow-950/60 rounded mb-0.5"></div>
+<div class="w-1.5 h-0.5 bg-yellow-950/60 rounded"></div>
+</div>
+</div>
+<!-- Unselected Dimming Scrim Right -->
+<div class="absolute top-0 bottom-0 right-0 w-[32.8%] bg-black/75 backdrop-blur-[1px] z-10 border-l border-yellow-500/30"></div>
+</div>
+<!-- Trim Range Status Subtext & Alignment -->
+<div class="flex flex-wrap items-center justify-between pt-1 font-body-sm text-body-sm text-on-surface-variant">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-[15px] text-yellow-400" data-icon="content_cut">content_cut</span>
+<span class="font-label-mono-sm text-label-mono-sm text-on-surface">已选片段: <strong class="text-yellow-400">00:01.80</strong> 至 <strong class="text-yellow-400">00:08.40</strong></span>
+<span class="text-tertiary">·</span>
+<span class="text-primary font-medium">持续 6.6 秒</span>
+</div>
+<label class="flex items-center space-x-1.5 cursor-pointer text-tertiary hover:text-on-surface transition-colors">
+<input checked="" class="rounded border-outline-variant bg-surface-container text-primary focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5" type="checkbox"/>
+<span class="font-label-mono-sm text-label-mono-sm">对齐关键帧 (I-Frame Snap)</span>
+</label>
+</div>
+</div>
+<!-- Bottom Action Controls & Export Settings Panel -->
+<div class="p-4 sm:p-5 bg-surface-container-lowest flex flex-col gap-4">
+<!-- Controls Grid: Formats, Dither, and File Location -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+<!-- Segmented Format Picker (GIF | MP4 | WebM) -->
+<div class="md:col-span-4 flex flex-col space-y-1">
+<label class="font-label-mono-sm text-label-mono-sm text-on-surface-variant flex items-center space-x-1">
+<span>导出格式</span>
+<span class="text-tertiary">(Target Container)</span>
+</label>
+<div class="flex rounded-lg bg-surface-container-high/80 p-0.5 border border-outline-variant/40">
+<button class="flex-1 py-1 px-2.5 rounded-md bg-surface-container-lowest text-primary font-medium text-body-sm shadow border border-primary/20 flex items-center justify-center space-x-1">
+<span>GIF</span>
+<span class="text-[10px] opacity-70">●</span>
+</button>
+<button class="flex-1 py-1 px-2.5 rounded-md text-on-surface-variant hover:text-on-surface font-body-sm flex items-center justify-center space-x-1 transition-colors">
+<span>MP4</span>
+<span class="text-[9px] text-tertiary font-label-mono-sm">60f</span>
+</button>
+<button class="flex-1 py-1 px-2.5 rounded-md text-on-surface-variant hover:text-on-surface font-body-sm flex items-center justify-center transition-colors">
+<span>WebM</span>
+</button>
+</div>
+<!-- Format Details Pill -->
+<div class="flex items-center space-x-1.5 font-label-mono-sm text-label-mono-sm text-on-surface-variant pl-0.5">
+<span class="text-primary">15 fps</span>
+<span class="opacity-40">·</span>
+<span>宽 800</span>
+<span class="opacity-40">·</span>
+<span class="text-yellow-400">约 6.2 MB</span>
+</div>
+</div>
+<!-- Dither / Quality Preset Picker -->
+<div class="md:col-span-3 flex flex-col space-y-1">
+<label class="font-label-mono-sm text-label-mono-sm text-on-surface-variant">抖动算法 (Dither)</label>
+<div class="relative">
+<select class="w-full bg-surface-container-high/90 border border-outline-variant/40 rounded-lg py-1.5 pl-3 pr-8 text-on-surface font-body-sm focus:border-primary focus:ring-0 appearance-none cursor-pointer">
+<option selected="">高质量 (Floyd-Steinberg)</option>
+<option>无抖动 (Nearest Exact)</option>
+<option>轻度平滑 (Bayer 4x4)</option>
+<option>自适应调色板 (Adaptive 256)</option>
+</select>
+<span class="material-symbols-outlined text-tertiary text-base absolute right-2.5 top-2 pointer-events-none" data-icon="unfold_more">unfold_more</span>
+</div>
+<span class="font-label-mono-sm text-label-mono-sm text-tertiary pl-0.5">256 色域优化</span>
+</div>
+<!-- Destination File Path Pill -->
+<div class="md:col-span-5 flex flex-col space-y-1">
+<label class="font-label-mono-sm text-label-mono-sm text-on-surface-variant">存储路径</label>
+<div class="flex items-center justify-between bg-surface-container-high/60 border border-outline-variant/40 rounded-lg px-3 py-1.5">
+<div class="flex items-center space-x-1.5 overflow-hidden text-on-surface font-label-mono-sm text-label-mono-sm">
+<span class="material-symbols-outlined text-[16px] text-tertiary flex-shrink-0" data-icon="folder_open">folder_open</span>
+<span class="truncate" title="~/Desktop/Rubick-Clips/screen_0518.gif">~/Desktop/Rubick-Clips/screen_0518.gif</span>
+</div>
+<button class="text-primary hover:underline text-body-sm font-medium flex-shrink-0 ml-2">更改...</button>
+</div>
+<span class="font-label-mono-sm text-label-mono-sm text-tertiary pl-0.5">系统剪贴板支持即时粘贴</span>
+</div>
+</div>
+<!-- Horizontal Divider -->
+<div class="w-full h-px bg-outline-variant/30"></div>
+<!-- Action Buttons Footer -->
+<div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+<!-- Left: Secondary Reset / Discard Actions -->
+<div class="flex items-center space-x-2 w-full sm:w-auto">
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-high/70 hover:bg-surface-container-high border border-outline-variant/40 text-on-surface-variant hover:text-on-surface font-body-sm flex items-center justify-center space-x-1.5 transition-colors active:scale-[0.98]">
+<span class="material-symbols-outlined text-[16px]" data-icon="replay">replay</span>
+<span>重新录制</span>
+</button>
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-high/40 hover:bg-error-container/40 border border-outline-variant/30 text-on-surface-variant hover:text-error font-body-sm flex items-center justify-center space-x-1 transition-colors active:scale-[0.98]">
+<span class="material-symbols-outlined text-[16px]" data-icon="delete_outline">delete_outline</span>
+<span>丢弃</span>
+</button>
+</div>
+<!-- Right: Clipboard Copy & Vibrant Emerald Primary Action -->
+<div class="flex items-center space-x-2.5 w-full sm:w-auto justify-end">
+<button class="px-3.5 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-variant border border-outline-variant/50 text-on-surface font-body-sm flex items-center justify-center space-x-1.5 transition-colors active:scale-[0.98]">
+<span class="material-symbols-outlined text-[16px] text-tertiary" data-icon="content_copy">content_copy</span>
+<span>复制到剪贴板</span>
+</button>
+<!-- Primary Emerald Export Button -->
+<button class="px-5 py-2 rounded-lg bg-primary-container hover:bg-secondary-container text-on-primary-container font-headline-md text-headline-md flex items-center justify-center space-x-2 font-semibold shadow-[0_4px_14px_rgba(16,185,129,0.35)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.5)] active:scale-[0.98] transition-all">
+<span class="material-symbols-outlined text-[20px]" data-icon="file_download">file_download</span>
+<span>导出 GIF</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Quick Keyboard Shortcut Bar below window -->
+<div class="mt-4 flex items-center space-x-4 text-tertiary font-label-mono-sm text-label-mono-sm">
+<span class="flex items-center space-x-1">
+<kbd class="px-1.5 py-0.5 rounded bg-surface-container-high border border-outline-variant/40 text-on-surface">Space</kbd>
+<span>播放 / 暂停</span>
+</span>
+<span>·</span>
+<span class="flex items-center space-x-1">
+<kbd class="px-1.5 py-0.5 rounded bg-surface-container-high border border-outline-variant/40 text-on-surface">I</kbd>
+<span>设置起点</span>
+</span>
+<span>·</span>
+<span class="flex items-center space-x-1">
+<kbd class="px-1.5 py-0.5 rounded bg-surface-container-high border border-outline-variant/40 text-on-surface">O</kbd>
+<span>设置终点</span>
+</span>
+<span>·</span>
+<span class="flex items-center space-x-1">
+<kbd class="px-1.5 py-0.5 rounded bg-surface-container-high border border-outline-variant/40 text-on-surface">⌘ + E</kbd>
+<span>快速导出</span>
+</span>
+</div>
+</main>
+</body></html>

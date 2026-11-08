@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>macOS Sonoma - Rubick Menu Bar</title>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Inter & JetBrains Mono Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS with custom configuration -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "inverse-surface": "#e3e1e9",
+            "surface-container-high": "#292a2f",
+            "outline-variant": "#3c4a42",
+            "on-background": "#e3e1e9",
+            "surface-container-highest": "#34343a",
+            "on-tertiary": "#30312e",
+            "tertiary": "#c8c6c3",
+            "on-surface-variant": "#bbcabf",
+            "surface-variant": "#34343a",
+            "primary-container": "#10b981",
+            "on-primary-container": "#00422b",
+            "tertiary-fixed": "#e4e2de",
+            "background": "#121318",
+            "surface-dim": "#121318",
+            "surface-bright": "#38393f",
+            "error": "#ffb4ab",
+            "primary-fixed-dim": "#4edea3",
+            "on-surface": "#e3e1e9",
+            "surface-container-lowest": "#0d0e13",
+            "secondary": "#45dfa4",
+            "surface-container-low": "#1a1b21",
+            "tertiary-container": "#a4a39f",
+            "on-tertiary-fixed": "#1b1c1a",
+            "on-secondary-fixed": "#002114",
+            "on-tertiary-container": "#393937",
+            "secondary-fixed": "#68fcbf",
+            "on-error-container": "#ffdad6",
+            "secondary-container": "#00bd85",
+            "on-primary": "#003824",
+            "on-primary-fixed": "#002113",
+            "on-secondary-container": "#00452e",
+            "on-secondary-fixed-variant": "#005137",
+            "surface-container": "#1e1f25",
+            "primary-fixed": "#6ffbbe",
+            "inverse-primary": "#006c49",
+            "surface-tint": "#4edea3",
+            "outline": "#86948a",
+            "inverse-on-surface": "#2f3036",
+            "error-container": "#93000a",
+            "on-secondary": "#003825",
+            "tertiary-fixed-dim": "#c8c6c3",
+            "secondary-fixed-dim": "#45dfa4",
+            "on-tertiary-fixed-variant": "#474744",
+            "primary": "#4edea3",
+            "on-primary-fixed-variant": "#005236",
+            "on-error": "#690005",
+            "surface": "#121318"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-xl": "2rem",
+            "margin": "1.5rem",
+            "gutter": "1rem",
+            "space-md": "0.75rem",
+            "space-sm": "0.5rem",
+            "space-xs": "0.25rem",
+            "space-lg": "1.25rem"
+          },
+          "fontFamily": {
+            "body-lg": ["Inter"],
+            "body-sm": ["Inter"],
+            "label-mono-md": ["JetBrains Mono"],
+            "headline-xl-mobile": ["Inter"],
+            "headline-lg": ["Inter"],
+            "label-mono-sm": ["JetBrains Mono"],
+            "system-menu": ["Inter"],
+            "body-md": ["Inter"],
+            "headline-md": ["Inter"],
+            "headline-xl": ["Inter"]
+          },
+          "fontSize": {
+            "body-lg": ["15px", { "lineHeight": "22px", "fontWeight": "400" }],
+            "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "label-mono-md": ["13px", { "lineHeight": "18px", "letterSpacing": "-0.02em", "fontWeight": "500" }],
+            "headline-xl-mobile": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "label-mono-sm": ["11px", { "lineHeight": "14px", "fontWeight": "400" }],
+            "system-menu": ["13.5px", { "lineHeight": "18px", "letterSpacing": "-0.005em", "fontWeight": "500" }],
+            "body-md": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+            "headline-md": ["18px", { "lineHeight": "26px", "letterSpacing": "-0.01em", "fontWeight": "500" }],
+            "headline-xl": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "600" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 18;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface antialiased overflow-hidden select-none min-h-screen relative font-body-md text-body-md">
+<!-- ==================== DESKTOP CANVAS BACKGROUND (Arcane Obsidian Studio) ==================== -->
+<div class="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#090A0F]">
+<!-- Radial Emerald Caustic Atmosphere Lighting -->
+<div class="absolute -top-32 left-1/4 w-[750px] h-[550px] rounded-full bg-primary/10 blur-[130px] opacity-40"></div>
+<div class="absolute top-1/3 -right-24 w-[600px] h-[600px] rounded-full bg-secondary-container/10 blur-[140px] opacity-30"></div>
+<div class="absolute bottom-0 left-10 w-[500px] h-[400px] rounded-full bg-surface-container-high/40 blur-[120px] opacity-60"></div>
+<!-- IDE Studio Window in Background (Context Window) -->
+<div class="absolute inset-x-12 top-20 bottom-12 rounded-xl border border-white/5 bg-surface-container-lowest/80 backdrop-blur-[40px] shadow-2xl flex flex-col overflow-hidden">
+<!-- Window Titlebar -->
+<div class="h-10 px-4 flex items-center justify-between border-b border-white/5 bg-surface-container-low/40">
+<div class="flex items-center space-x-2">
+<div class="w-3 h-3 rounded-full bg-[#FF5F56] border border-black/20"></div>
+<div class="w-3 h-3 rounded-full bg-[#FFBD2E] border border-black/20"></div>
+<div class="w-3 h-3 rounded-full bg-[#27C93F] border border-black/20"></div>
+<span class="ml-4 text-xs font-label-mono-sm text-tertiary-container flex items-center space-x-1.5">
+<span class="w-2 h-2 rounded-full bg-primary/80 inline-block"></span>
+<span>workspace/arcane-canvas.ts</span>
+<span class="text-tertiary/40">— 2400 × 1600</span>
+</span>
+</div>
+<div class="flex items-center space-x-3 text-tertiary text-xs font-label-mono-sm">
+<span class="px-2 py-0.5 rounded bg-surface-container-highest/40 text-on-surface-variant text-[11px]">Git: main</span>
+<span class="text-primary font-medium">TypeScript</span>
+</div>
+</div>
+<!-- IDE Editor Mock Lines & Skeuomorphic Hanging Canvas Backdrop -->
+<div class="flex-1 p-8 grid grid-cols-12 gap-8 relative overflow-hidden">
+<!-- Code line numbers & ambient syntax -->
+<div class="col-span-7 font-label-mono-sm text-xs space-y-2 opacity-35 select-none leading-relaxed text-tertiary">
+<p><span class="text-surface-container-highest select-none pr-4">01</span><span class="text-secondary">import</span> { DeskEngine, TensionSpring } <span class="text-secondary">from</span> <span class="text-primary-fixed-dim">'@rubick/catenary'</span>;</p>
+<p><span class="text-surface-container-highest select-none pr-4">02</span><span class="text-secondary">import</span> type { PolaroidArtifact, FastenerHinge } <span class="text-secondary">from</span> <span class="text-primary-fixed-dim">'@rubick/skeuo'</span>;</p>
+<p><span class="text-surface-container-highest select-none pr-4">03</span></p>
+<p><span class="text-surface-container-highest select-none pr-4">04</span><span class="text-outline">/** Hyperbolic suspension curve generator */</span></p>
+<p><span class="text-surface-container-highest select-none pr-4">05</span><span class="text-secondary">export const</span> <span class="text-primary">renderSuspensionPlane</span> = (canvas: DeskEngine): <span class="text-secondary-fixed">void</span> =&gt; {</p>
+<p><span class="text-surface-container-highest select-none pr-4">06</span> <span class="text-tertiary-fixed">const</span> sagInflection = Math.cosh(24 / 48) * 32.0;</p>
+<p><span class="text-surface-container-highest select-none pr-4">07</span>  canvas.mountPinCluster({ coordinate: [512, 128], fastener: <span class="text-primary-fixed-dim">'vintage-brass'</span> });</p>
+<p><span class="text-surface-container-highest select-none pr-4">08</span>  canvas.applyAmbientLighting({ causticRayColor: <span class="text-primary-fixed-dim">'#4edea3'</span>, intensity: 0.18 });</p>
+<p><span class="text-surface-container-highest select-none pr-4">09</span>};</p>
+<p><span class="text-surface-container-highest select-none pr-4">10</span></p>
+<p><span class="text-surface-container-highest select-none pr-4">11</span><span class="text-outline">// System ready: Rubick daemon daemonized in tray</span></p>
+<p><span class="text-surface-container-highest select-none pr-4">12</span><span class="text-secondary">console</span>.log(<span class="text-primary-fixed-dim">'Rubick ready.'</span>);</p>
+</div>
+<!-- Suspended Polaroid Preview Card (Physical Artifact Mock) -->
+<div class="col-span-5 flex justify-center items-start pt-6 opacity-30">
+<div class="w-64 bg-[#FBF9F5] p-3 pb-8 rounded-sm shadow-2xl rotate-2 border border-black/10">
+<div class="w-full h-44 bg-surface-container-lowest rounded-sm overflow-hidden relative border border-black/15">
+<img class="w-full h-full object-cover" data-alt="A nocturnal architectural studio desktop dimly illuminated by emerald monitor cast reflections, showcasing mechanical brass pins, drafting instruments, and subtle warm desk lamp accents in a cinematic deep shadow palette." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqC1D11DfFrB_VK-yeF4wAKIynSn7mWBhgN7g6QPjm6wAuecEW0TbfMYm7Rkl-TZ7TJlYk_rvZE25q05SF_kD1YY5gMtKqvkQHnSPt_AsKcAyOXMw5F-2muHaeRiERVg0BUo0zJfvKw5SRLMyk4D8EdLVHXJsoqnsDIqxnJnTfqECsUWM6WPFy2uiQXL9BdHx8Ae7IL65x-Ojuwfl5RU56-3P-E1qrzY4xPbePRwnoPeltWOcXNn0wGBh_OpcJrcLVl-fAPEQEces"/>
+<div class="absolute inset-0 bg-primary/5 mix-blend-overlay"></div>
+</div>
+<div class="mt-3 text-[11px] font-label-mono-sm text-surface-container-lowest font-semibold tracking-wider">
+              SCREENSHOT_2023-10-23
+            </div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- ==================== macOS TOP MENU BAR (Shared Components Token) ==================== -->
+<header class="fixed top-0 inset-x-0 h-[38px] z-50 bg-surface-container-lowest/80 backdrop-blur-2xl border-b border-outline-variant/30 shadow-sm">
+<div class="flex justify-between items-center px-4 w-full h-[38px]">
+<!-- Left: Apple Logo & App System Menus -->
+<nav aria-label="System Menu" class="flex items-center space-x-1 font-system-menu text-system-menu">
+<!-- Apple Mark -->
+<button class="px-2 py-0.5 rounded-md hover:bg-surface-container-high/50 hover:text-on-surface transition-colors duration-150 text-on-surface flex items-center justify-center focus:outline-none">
+<svg class="w-3.5 h-3.5 fill-current mb-0.5" viewbox="0 0 170 170">
+<path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.69-3.04-7.67-7.81-11.96-14.34-6.41-9.78-11.48-20.73-15.19-32.84-3.7-12.11-5.56-23.75-5.56-34.91 0-14.24 3.73-26.04 11.19-35.39 7.46-9.35 16.71-14.12 27.75-14.34 5.33 0 11.2 1.34 17.62 4.02 6.42 2.68 10.42 4.08 12.01 4.21 2.05-.27 6.13-1.67 12.24-4.21 6.11-2.54 11.75-3.72 16.92-3.55 12.74.54 22.88 4.97 30.42 13.28-11.09 6.74-16.52 16.14-16.3 28.2 0 10.22 4.02 18.89 12.07 26.01 4.12 3.69 8.87 6.41 14.24 8.16-2.39 7.28-5.33 14.56-8.81 21.84zM119.22 33.15c0-7.72 2.82-14.95 8.46-21.68 5.64-6.73 12.56-10.83 20.76-12.3 0 1.09.07 2.18.07 3.27 0 7.5-2.93 14.84-8.8 22.02-5.87 7.18-12.87 11.23-21 12.15-.33-1.19-.49-2.35-.49-3.46z"></path>
+</svg>
+</button>
+<!-- App Brand: Rubick (拉比克) -->
+<button class="px-2 py-0.5 rounded-md hover:bg-surface-container-high/50 text-on-surface font-semibold flex items-center space-x-1.5 focus:outline-none">
+<span class="tracking-tight">Rubick</span>
+<span class="text-xs opacity-75 font-normal">(拉比克)</span>
+</button>
+<!-- Navigation Menus -->
+<button class="px-2 py-0.5 rounded-md text-on-surface-variant font-normal hover:bg-surface-container-high/50 hover:text-on-surface transition-colors duration-150">File</button>
+<button class="px-2 py-0.5 rounded-md text-on-surface-variant font-normal hover:bg-surface-container-high/50 hover:text-on-surface transition-colors duration-150">Edit</button>
+<button class="px-2 py-0.5 rounded-md text-on-surface-variant font-normal hover:bg-surface-container-high/50 hover:text-on-surface transition-colors duration-150">View</button>
+<button class="px-2 py-0.5 rounded-md text-on-surface-variant font-normal hover:bg-surface-container-high/50 hover:text-on-surface transition-colors duration-150">Window</button>
+<button class="px-2 py-0.5 rounded-md text-on-surface-variant font-normal hover:bg-surface-container-high/50 hover:text-on-surface transition-colors duration-150">Help</button>
+</nav>
+<!-- Right: macOS Sonoma Tray / Status Cluster -->
+<div class="flex items-center space-x-1 font-system-menu text-system-menu text-on-surface">
+<!-- Standard Sonoma Status Tray Icons -->
+<div class="flex items-center space-x-0.5 mr-1">
+<!-- WiFi -->
+<button class="px-1.5 py-1 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-colors" title="Wi-Fi: Connected">
+<span class="material-symbols-outlined text-[16px]">wifi</span>
+</button>
+<!-- Battery -->
+<button class="px-1.5 py-1 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-colors flex items-center space-x-1" title="Battery: 98% Charging">
+<span class="text-[11px] font-label-mono-sm">98%</span>
+<span class="material-symbols-outlined text-[17px] text-primary">battery_charging_full</span>
+</button>
+<!-- Search (Spotlight) -->
+<button class="px-1.5 py-1 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-colors" title="Spotlight">
+<span class="material-symbols-outlined text-[15px]">search</span>
+</button>
+<!-- Control Center -->
+<button class="px-1.5 py-1 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-colors" title="Control Center">
+<span class="material-symbols-outlined text-[15px]">tune</span>
+</button>
+</div>
+<!-- Prominently Highlighted & ACTIVE Rubick Emerald Gem Icon (Anchor) -->
+<div class="relative">
+<button class="px-2.5 py-1 rounded-md bg-primary/20 text-primary border border-primary/40 shadow-[0_0_12px_rgba(78,222,163,0.35)] flex items-center space-x-1.5 transition-all duration-200" id="gem-anchor">
+<!-- Emerald Sparkle Glyph / Gem -->
+<span class="material-symbols-outlined text-[16px] text-primary font-bold animate-pulse" data-weight="fill" style="font-variation-settings: 'FILL' 1;">diamond</span>
+<span class="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_6px_#4edea3]"></span>
+</button>
+</div>
+<!-- Date & Time -->
+<button class="px-2 py-1 rounded-md hover:bg-surface-container-high/50 hover:text-on-surface transition-colors font-system-menu text-[13px] ml-1 text-on-surface">
+          Mon Oct 23 9:41 AM
+        </button>
+</div>
+</div>
+</header>
+<!-- ==================== macOS SONOMA NATIVE FROSTED GLASS POPOVER MENU ==================== -->
+<main class="relative z-50">
+<!-- Popover Positioning Container -->
+<div class="fixed top-[44px] right-[105px] w-[326px] select-none pointer-events-auto transition-transform duration-200 ease-out origin-top">
+<!-- Native Apple Triangle Popover Indicator Arrow -->
+<div class="w-full flex justify-end pr-[38px] -mb-[1px] relative z-20">
+<div class="w-3.5 h-2 overflow-hidden flex items-end justify-center">
+<div class="w-2.5 h-2.5 bg-[#171922]/90 border-t border-l border-primary/30 rotate-45 transform translate-y-1.5 backdrop-blur-2xl shadow-sm"></div>
+</div>
+</div>
+<!-- Popover Body Glass Window -->
+<div class="w-full rounded-2xl bg-[#14161F]/80 backdrop-blur-2xl border border-white/10 shadow-[0_20px_45px_-8px_rgba(0,0,0,0.8),0_0_30px_rgba(78,222,163,0.12)] p-1.5 text-on-surface relative overflow-hidden">
+<!-- Subtle Top Specular Rim Reflection -->
+<div class="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent"></div>
+<!-- ================= SECTION 1: 捕捉 (CAPTURE) ================= -->
+<div class="px-2.5 pt-2 pb-1 flex items-center justify-between">
+<div class="flex items-center space-x-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-primary/70"></span>
+<span class="text-[10.5px] font-label-mono-sm tracking-wider uppercase text-on-surface-variant/80 font-medium">捕捉 · CAPTURE</span>
+</div>
+<span class="text-[10px] font-label-mono-sm text-outline/60">Quick Tools</span>
+</div>
+<div class="space-y-0.5 mt-0.5">
+<!-- 区域截图 -->
+<div class="group flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-surface-container-high/60 transition-colors duration-150 cursor-pointer">
+<div class="flex items-center space-x-2.5">
+<span class="material-symbols-outlined text-[17px] text-tertiary group-hover:text-primary transition-colors">crop_free</span>
+<span class="font-body-md text-[13px] text-on-surface">区域截图</span>
+</div>
+<kbd class="font-label-mono-sm text-[11px] text-tertiary-container group-hover:text-on-surface tracking-tighter opacity-70">⌘⇧A</kbd>
+</div>
+<!-- 划图取字 (OCR) -->
+<div class="group flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-surface-container-high/60 transition-colors duration-150 cursor-pointer">
+<div class="flex items-center space-x-2.5">
+<span class="material-symbols-outlined text-[17px] text-tertiary group-hover:text-primary transition-colors">text_fields</span>
+<span class="font-body-md text-[13px] text-on-surface">划图取字</span>
+<span class="px-1.5 py-0.2 rounded text-[9.5px] font-label-mono-sm bg-primary/10 text-primary border border-primary/20">OCR</span>
+</div>
+<kbd class="font-label-mono-sm text-[11px] text-tertiary-container group-hover:text-on-surface tracking-tighter opacity-70">⌘⇧X</kbd>
+</div>
+<!-- 延时截图 -->
+<div class="group flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-surface-container-high/60 transition-colors duration-150 cursor-pointer">
+<div class="flex items-center space-x-2.5">
+<span class="material-symbols-outlined text-[17px] text-tertiary group-hover:text-primary transition-colors">timer</span>
+<span class="font-body-md text-[13px] text-on-surface">延时截图</span>
+</div>
+<kbd class="font-label-mono-sm text-[11px] text-tertiary-container group-hover:text-on-surface tracking-tighter opacity-70">⌘⇧G</kbd>
+</div>
+</div>
+<!-- Hairline Divider -->
+<div class="my-1.5 border-t border-white/[0.08] mx-1"></div>
+<!-- ================= SECTION 2: 剪贴板 (CLIPBOARD) ================= -->
+<div class="px-2.5 pt-1.5 pb-1 flex items-center space-x-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span class="text-[10.5px] font-label-mono-sm tracking-wider uppercase text-on-surface-variant/80 font-medium">剪贴板 · CLIPBOARD</span>
+</div>
+<div class="space-y-0.5 mt-0.5">
+<!-- 打开主面板 (Active / Hovered Featured Item State) -->
+<div class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-primary/15 border border-primary/30 shadow-[0_0_12px_rgba(78,222,163,0.15)] cursor-pointer text-on-surface transition-all">
+<div class="flex items-center space-x-2.5">
+<span class="w-5 h-5 rounded-md bg-primary flex items-center justify-center text-on-primary shadow-sm">
+<span class="material-symbols-outlined text-[14px] font-bold" data-weight="fill" style="font-variation-settings: 'FILL' 1;">content_paste</span>
+</span>
+<span class="font-body-md text-[13px] font-medium text-primary-fixed">打开主面板</span>
+</div>
+<div class="flex items-center space-x-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-ping"></span>
+<kbd class="font-label-mono-sm text-[11px] text-primary-fixed tracking-tighter font-semibold">⇧⌘Z</kbd>
+</div>
+</div>
+<!-- 钉贴图 -->
+<div class="group flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-surface-container-high/60 transition-colors duration-150 cursor-pointer">
+<div class="flex items-center space-x-2.5">
+<span class="material-symbols-outlined text-[17px] text-tertiary group-hover:text-primary transition-colors">push_pin</span>
+<span class="font-body-md text-[13px] text-on-surface">钉贴图</span>
+</div>
+<kbd class="font-label-mono-sm text-[11px] text-tertiary-container group-hover:text-on-surface tracking-tighter opacity-70">⌥⌘P</kbd>
+</div>
+</div>
+<!-- Hairline Divider -->
+<div class="my-1.5 border-t border-white/[0.08] mx-1"></div>
+<!-- ================= SECTION 3: 随手夹 (HANGING SHELF) ================= -->
+<div class="px-2.5 pt-1.5 pb-1 flex items-center justify-between">
+<div class="flex items-center space-x-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span>
+<span class="text-[10.5px] font-label-mono-sm tracking-wider uppercase text-on-surface-variant/80 font-medium">随手夹 · HANGING SHELF</span>
+</div>
+<span class="text-[10px] font-label-mono-sm text-primary/80">3 items pinned</span>
+</div>
+<div class="space-y-0.5 mt-0.5">
+<!-- 显示晾衣架 -->
+<div class="group flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-surface-container-high/60 transition-colors duration-150 cursor-pointer">
+<div class="flex items-center space-x-2.5">
+<span class="material-symbols-outlined text-[17px] text-tertiary group-hover:text-primary transition-colors">view_carousel</span>
+<span class="font-body-md text-[13px] text-on-surface">显示晾衣架</span>
+</div>
+<span class="px-2 py-0.5 rounded-full text-[10px] font-label-mono-sm bg-surface-container-highest/80 text-on-surface-variant border border-white/5">
+              Active
+            </span>
+</div>
+<!-- 自动收绳 with Native macOS Switch -->
+<div class="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-surface-container-high/60 transition-colors duration-150">
+<div class="flex items-center space-x-2.5">
+<span class="material-symbols-outlined text-[17px] text-tertiary">cable</span>
+<div class="flex flex-col">
+<span class="font-body-md text-[13px] text-on-surface">自动收绳</span>
+<span class="text-[10px] text-outline font-body-sm leading-none">无操作 5 分钟后收起</span>
+</div>
+</div>
+<!-- macOS Native Styled Emerald Toggle Switch -->
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-8 h-4.5 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-3.5 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3.5 after:w-3.5 after:transition-all after:shadow-sm peer-checked:bg-primary border border-white/10 shadow-inner"></div>
+</label>
+</div>
+</div>
+<!-- Hairline Divider -->
+<div class="my-1.5 border-t border-white/[0.08] mx-1"></div>
+<!-- ================= SECTION 4: 管理 (MANAGEMENT) ================= -->
+<div class="px-2.5 pt-1.5 pb-1 flex items-center space-x-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+<span class="text-[10.5px] font-label-mono-sm tracking-wider uppercase text-on-surface-variant/80 font-medium">管理 · MANAGEMENT</span>
+</div>
+<div class="space-y-0.5 mt-0.5">
+<!-- 偏好设置… -->
+<div class="group flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-surface-container-high/60 transition-colors duration-150 cursor-pointer">
+<div class="flex items-center space-x-2.5">
+<span class="material-symbols-outlined text-[17px] text-tertiary group-hover:text-primary transition-colors">settings</span>
+<span class="font-body-md text-[13px] text-on-surface">偏好设置…</span>
+</div>
+<kbd class="font-label-mono-sm text-[11px] text-tertiary-container group-hover:text-on-surface tracking-tighter opacity-70">⌘,</kbd>
+</div>
+<!-- 清空历史记录… (Destructive Soft Red) -->
+<div class="group flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-error-container/20 hover:text-error transition-colors duration-150 cursor-pointer text-error/90">
+<div class="flex items-center space-x-2.5">
+<span class="material-symbols-outlined text-[17px] text-error/70 group-hover:text-error transition-colors">delete_sweep</span>
+<span class="font-body-md text-[13px]">清空历史记录…</span>
+</div>
+<span class="text-[10.5px] font-label-mono-sm text-error/60 group-hover:text-error">Clean</span>
+</div>
+<!-- 退出拉比克 -->
+<div class="group flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-surface-container-high/60 transition-colors duration-150 cursor-pointer">
+<div class="flex items-center space-x-2.5">
+<span class="material-symbols-outlined text-[17px] text-tertiary group-hover:text-on-surface transition-colors">logout</span>
+<span class="font-body-md text-[13px] text-on-surface">退出拉比克</span>
+</div>
+<kbd class="font-label-mono-sm text-[11px] text-tertiary-container group-hover:text-on-surface tracking-tighter opacity-70">⌘Q</kbd>
+</div>
+</div>
+<!-- Bottom Footer Meta & Engine Health -->
+<div class="mt-2 pt-2 pb-1 px-2.5 border-t border-white/[0.05] flex items-center justify-between text-[10.5px] font-label-mono-sm text-outline">
+<div class="flex items-center space-x-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+<span>Rubick v3.8.4</span>
+</div>
+<span class="text-tertiary/50">Sonoma Arm64</span>
+</div>
+</div>
+</div>
+</main>
+<!-- Interactive micro-script for native-feel clicking and tray feedback -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const gemAnchor = document.getElementById('gem-anchor');
+      let isBlinking = false;
+
+      // Small haptic click feedback for buttons in the menu
+      const menuItems = document.querySelectorAll('.cursor-pointer');
+      menuItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+          item.classList.add('scale-[0.98]');
+          setTimeout(() => {
+            item.classList.remove('scale-[0.98]');
+          }, 120);
+        });
+      });
+    });
+  </script>
+</body></html>

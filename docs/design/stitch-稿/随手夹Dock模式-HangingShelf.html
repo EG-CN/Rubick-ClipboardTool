@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Rubick 拉比克 - Workspace Dock Mode</title>
+<!-- Google Fonts: Inter & JetBrains Mono -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Theme Configuration Verbatim -->
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "secondary-fixed": "#68fcbf",
+            "tertiary": "#c8c6c3",
+            "surface": "#121318",
+            "inverse-primary": "#006c49",
+            "surface-dim": "#121318",
+            "on-secondary-fixed": "#002114",
+            "on-background": "#e3e1e9",
+            "secondary-fixed-dim": "#45dfa4",
+            "on-tertiary-container": "#393937",
+            "on-secondary-fixed-variant": "#005137",
+            "secondary-container": "#00bd85",
+            "surface-container": "#1e1f25",
+            "surface-bright": "#38393f",
+            "on-tertiary": "#30312e",
+            "on-surface": "#e3e1e9",
+            "on-primary-fixed": "#002113",
+            "primary-fixed": "#6ffbbe",
+            "tertiary-container": "#a4a39f",
+            "on-secondary-container": "#00452e",
+            "on-primary-container": "#00422b",
+            "on-primary-fixed-variant": "#005236",
+            "error-container": "#93000a",
+            "on-error-container": "#ffdad6",
+            "tertiary-fixed-dim": "#c8c6c3",
+            "primary-fixed-dim": "#4edea3",
+            "secondary": "#45dfa4",
+            "tertiary-fixed": "#e4e2de",
+            "outline-variant": "#3c4a42",
+            "on-primary": "#003824",
+            "error": "#ffb4ab",
+            "on-secondary": "#003825",
+            "on-tertiary-fixed": "#1b1c1a",
+            "surface-container-lowest": "#0d0e13",
+            "on-tertiary-fixed-variant": "#474744",
+            "inverse-surface": "#e3e1e9",
+            "surface-container-highest": "#34343a",
+            "surface-container-high": "#292a2f",
+            "primary": "#4edea3",
+            "outline": "#86948a",
+            "surface-container-low": "#1a1b21",
+            "primary-container": "#10b981",
+            "surface-tint": "#4edea3",
+            "on-surface-variant": "#bbcabf",
+            "on-error": "#690005",
+            "surface-variant": "#34343a",
+            "background": "#121318",
+            "inverse-on-surface": "#2f3036"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-sm": "0.5rem",
+            "space-md": "0.75rem",
+            "space-lg": "1.25rem",
+            "gutter": "1rem",
+            "space-xs": "0.25rem",
+            "space-xl": "2rem",
+            "margin": "1.5rem"
+          },
+          "fontFamily": {
+            "headline-xl": [
+              "Inter"
+            ],
+            "label-mono-sm": [
+              "JetBrains Mono"
+            ],
+            "headline-xl-mobile": [
+              "Inter"
+            ],
+            "label-mono-md": [
+              "JetBrains Mono"
+            ],
+            "headline-md": [
+              "Inter"
+            ],
+            "body-lg": [
+              "Inter"
+            ],
+            "body-md": [
+              "Inter"
+            ],
+            "headline-lg": [
+              "Inter"
+            ],
+            "body-sm": [
+              "Inter"
+            ],
+            "system-menu": [
+              "Inter"
+            ]
+          },
+          "fontSize": {
+            "headline-xl": [
+              "36px",
+              {
+                "lineHeight": "44px",
+                "letterSpacing": "-0.02em",
+                "fontWeight": "600"
+              }
+            ],
+            "label-mono-sm": [
+              "11px",
+              {
+                "lineHeight": "14px",
+                "fontWeight": "400"
+              }
+            ],
+            "headline-xl-mobile": [
+              "28px",
+              {
+                "lineHeight": "34px",
+                "letterSpacing": "-0.01em",
+                "fontWeight": "600"
+              }
+            ],
+            "label-mono-md": [
+              "13px",
+              {
+                "lineHeight": "18px",
+                "letterSpacing": "-0.02em",
+                "fontWeight": "500"
+              }
+            ],
+            "headline-md": [
+              "18px",
+              {
+                "lineHeight": "26px",
+                "letterSpacing": "-0.01em",
+                "fontWeight": "500"
+              }
+            ],
+            "body-lg": [
+              "15px",
+              {
+                "lineHeight": "22px",
+                "fontWeight": "400"
+              }
+            ],
+            "body-md": [
+              "13px",
+              {
+                "lineHeight": "18px",
+                "fontWeight": "400"
+              }
+            ],
+            "headline-lg": [
+              "24px",
+              {
+                "lineHeight": "32px",
+                "letterSpacing": "-0.015em",
+                "fontWeight": "600"
+              }
+            ],
+            "body-sm": [
+              "12px",
+              {
+                "lineHeight": "16px",
+                "fontWeight": "400"
+              }
+            ],
+            "system-menu": [
+              "13.5px",
+              {
+                "lineHeight": "18px",
+                "letterSpacing": "-0.005em",
+                "fontWeight": "500"
+              }
+            ]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    /* Custom Skeuomorphic & Ray-tracing Depth Helpers */
+    .polaroid-shadow {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 20px 35px -5px rgba(0, 0, 0, 0.65), 0 0 40px -10px rgba(16, 185, 129, 0.08);
+    }
+    .active-card-shadow {
+      box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.75), 0 0 32px 2px rgba(16, 185, 129, 0.35);
+    }
+    .clip-metal-chrome {
+      background: linear-gradient(135deg, #F8FAFC 0%, #94A3B8 50%, #475569 100%);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.8);
+    }
+    .clip-vintage-brass {
+      background: linear-gradient(135deg, #FDE68A 0%, #D4AF37 50%, #92400E 100%);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.7);
+    }
+    .clip-emerald-enamel {
+      background: linear-gradient(135deg, #34D399 0%, #059669 60%, #064E3B 100%);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.5);
+    }
+    .hairline-glass {
+      border: 0.5px solid rgba(255, 255, 255, 0.12);
+    }
+    .hairline-dock {
+      border: 0.5px solid rgba(78, 222, 163, 0.22);
+    }
+    .grain-overlay {
+      background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 0);
+      background-size: 24px 24px;
+    }
+  </style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface font-body-md antialiased overflow-hidden h-screen w-screen relative select-none">
+<!-- Ambient Deep Obsidian Atmosphere & Emerald Caustic Rays -->
+<div class="absolute inset-0 pointer-events-none overflow-hidden">
+<div class="absolute -top-[15%] -left-[10%] w-[65vw] h-[65vw] rounded-full bg-primary-container/15 blur-[140px]"></div>
+<div class="absolute top-[40%] -right-[15%] w-[55vw] h-[55vw] rounded-full bg-secondary-container/10 blur-[160px]"></div>
+<div class="absolute bottom-[-10%] left-[25%] w-[50vw] h-[35vw] rounded-full bg-primary/10 blur-[130px]"></div>
+<!-- Desktop Grid Grain -->
+<div class="absolute inset-0 grain-overlay opacity-60"></div>
+</div>
+<!-- ========================================================================= -->
+<!-- SHARED COMPONENT: TopNavBar (macOS Menu Bar) Executed Exactly via JSON     -->
+<!-- ========================================================================= -->
+<nav class="fixed top-0 inset-x-0 h-[38px] z-50 bg-surface/80 dark:bg-surface/80 backdrop-blur-md border-b border-outline-variant/30 dark:border-outline-variant/30 shadow-sm backdrop-blur-xl flex justify-between items-center w-full px-margin h-[38px] select-none">
+<!-- Left Navigation Items & Brand -->
+<div class="flex items-center space-x-1">
+<!-- Rubick Gem Logo -->
+<div class="flex items-center space-x-2 mr-2">
+<div class="w-3.5 h-3.5 rounded bg-primary flex items-center justify-center shadow-[0_0_10px_rgba(78,222,163,0.5)]">
+<span class="material-symbols-outlined text-[10px] text-on-primary font-bold">diamond</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary dark:text-primary font-bold tracking-tight">Rubick</span>
+</div>
+<!-- JSON navigation_links: ["File", "Edit", "View", "Workspace", "Window", "Help"] -->
+<!-- Workspace is ACTIVE intent for Desktop Workspace mode -->
+<a class="text-on-surface-variant dark:text-on-surface-variant font-system-menu hover:text-on-surface dark:hover:text-on-surface px-2 py-0.5 transition-colors hover:bg-surface-container/60 dark:hover:bg-surface-container/60 active:scale-[0.98] transition-transform duration-100" href="#">File</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant font-system-menu hover:text-on-surface dark:hover:text-on-surface px-2 py-0.5 transition-colors hover:bg-surface-container/60 dark:hover:bg-surface-container/60 active:scale-[0.98] transition-transform duration-100" href="#">Edit</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant font-system-menu hover:text-on-surface dark:hover:text-on-surface px-2 py-0.5 transition-colors hover:bg-surface-container/60 dark:hover:bg-surface-container/60 active:scale-[0.98] transition-transform duration-100" href="#">View</a>
+<a class="text-on-surface dark:text-on-surface font-system-menu bg-surface-container-high/60 dark:bg-surface-container-high/60 rounded px-2 py-0.5 active:scale-[0.98] transition-transform duration-100" href="#">Workspace</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant font-system-menu hover:text-on-surface dark:hover:text-on-surface px-2 py-0.5 transition-colors hover:bg-surface-container/60 dark:hover:bg-surface-container/60 active:scale-[0.98] transition-transform duration-100" href="#">Window</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant font-system-menu hover:text-on-surface dark:hover:text-on-surface px-2 py-0.5 transition-colors hover:bg-surface-container/60 dark:hover:bg-surface-container/60 active:scale-[0.98] transition-transform duration-100" href="#">Help</a>
+<!-- Pinned items status pill on menu bar -->
+<div class="ml-3 px-2 py-0.5 bg-surface-container-high/70 rounded-full border border-primary/20 flex items-center space-x-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+<span class="font-label-mono-sm text-label-mono-sm text-primary tracking-wide">PINNED (5)</span>
+</div>
+</div>
+<!-- Right Trailing Actions (JSON trailing_icon_actions: ["terminal", "palette", "notifications", "account_circle"] + macOS System indicators) -->
+<div class="flex items-center space-x-2.5">
+<button class="p-1 text-on-surface-variant hover:text-on-surface rounded hover:bg-surface-container/60 transition-colors">
+<span class="material-symbols-outlined text-[15px]" data-icon="terminal">terminal</span>
+</button>
+<button class="p-1 text-on-surface-variant hover:text-on-surface rounded hover:bg-surface-container/60 transition-colors">
+<span class="material-symbols-outlined text-[15px]" data-icon="palette">palette</span>
+</button>
+<button class="p-1 text-on-surface-variant hover:text-on-surface rounded hover:bg-surface-container/60 transition-colors relative">
+<span class="material-symbols-outlined text-[15px]" data-icon="notifications">notifications</span>
+<span class="absolute top-1 right-1 w-1.5 h-1.5 bg-primary rounded-full"></span>
+</button>
+<!-- System status cluster -->
+<div class="h-3.5 w-[1px] bg-outline-variant/40 mx-1"></div>
+<div class="flex items-center space-x-2 text-on-surface-variant text-[13px]">
+<span class="material-symbols-outlined text-[14px]">wifi</span>
+<span class="material-symbols-outlined text-[14px]">battery_charging_full</span>
+<span class="font-system-menu text-system-menu text-on-surface ml-1">Sun May 18 10:42 AM</span>
+</div>
+<button class="ml-1 p-0.5 text-on-surface-variant hover:text-on-surface rounded hover:bg-surface-container/60 transition-colors">
+<span class="material-symbols-outlined text-[17px]" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</nav>
+<!-- ========================================================================= -->
+<!-- BACKGROUND DESKTOP WORKSPACE (Muted code windows, files, subtle canvas)  -->
+<!-- ========================================================================= -->
+<main class="relative w-full h-full pt-[38px] pb-[160px] px-margin flex items-center justify-center">
+<!-- Background Window 1: Deep obsidian code editor canvas (Muted depth) -->
+<div class="w-[880px] h-[520px] rounded-xl bg-surface-container-lowest/80 backdrop-blur-[36px] hairline-glass shadow-2xl flex flex-col overflow-hidden opacity-45 pointer-events-none transform -translate-y-4">
+<!-- Window header -->
+<div class="h-9 px-4 bg-surface-container-low/70 border-b border-outline-variant/20 flex items-center justify-between">
+<div class="flex items-center space-x-2">
+<div class="w-3 h-3 rounded-full bg-[#ff5f56]/70"></div>
+<div class="w-3 h-3 rounded-full bg-[#ffbd2e]/70"></div>
+<div class="w-3 h-3 rounded-full bg-[#27c93f]/70"></div>
+<span class="font-label-mono-sm text-label-mono-sm text-on-surface-variant ml-3 flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[13px]">code</span> workspace_kernel.rs — Rubick Core
+          </span>
+</div>
+<div class="flex items-center space-x-3 text-on-surface-variant">
+<span class="font-label-mono-sm text-label-mono-sm">UTF-8</span>
+<span class="font-label-mono-sm text-label-mono-sm">Arcane Obsidian</span>
+</div>
+</div>
+<!-- Window Body with Code Lines -->
+<div class="p-6 font-label-mono-sm text-label-mono-sm space-y-2 text-on-surface-variant">
+<div class="flex gap-4"><span class="text-outline w-6 text-right">01</span><span class="text-primary">// Rubick Hyper-refraction Core Daemon</span></div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">02</span><span><span class="text-secondary">pub struct</span> <span class="text-on-surface font-semibold">WorkspaceShelf</span> {</span></div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">03</span><span class="pl-4">pub pinned_cards: <span class="text-secondary-fixed">Vec</span>&lt;ClipboardArtifact&gt;,</span></div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">04</span><span class="pl-4">pub dock_state: <span class="text-primary">PresentationMode::Dock</span>,</span></div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">05</span><span class="pl-4">pub refraction_blur: <span class="text-secondary-fixed-dim">f32</span>,</span></div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">06</span><span>}</span></div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">07</span><span><span class="text-secondary">impl</span> WorkspaceShelf {</span></div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">08</span><span class="pl-4"><span class="text-primary">pub fn</span> <span class="text-on-surface">project_dock_shelf</span>(&amp;mut self) -&gt; <span class="text-secondary-fixed">Result</span>&lt;Stage, GlError&gt; {</span></div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">09</span><span class="pl-8">self.pinned_cards.retain(|c| c.in_shelf());</span></div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">10</span><span class="pl-8"><span class="text-secondary">Ok</span>(Stage::render_active_tray())</span></div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">11</span><span class="pl-4">}</span></div>
+<div class="flex gap-4"><span class="text-outline w-6 text-right">12</span><span>}</span></div>
+</div>
+</div>
+<!-- Background Desktop Floating Badges (Subtle ambient icons) -->
+<div class="absolute right-12 top-20 flex flex-col items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
+<div class="w-14 h-14 rounded-2xl bg-surface-container/70 hairline-glass flex items-center justify-center shadow-lg backdrop-blur-md">
+<span class="material-symbols-outlined text-[28px] text-primary">folder_special</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant font-medium">Rubick_Store</span>
+</div>
+<div class="absolute right-12 top-44 flex flex-col items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
+<div class="w-14 h-14 rounded-2xl bg-surface-container/70 hairline-glass flex items-center justify-center shadow-lg backdrop-blur-md">
+<span class="material-symbols-outlined text-[28px] text-secondary">memory</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant font-medium">RAM_Cache</span>
+</div>
+</main>
+<!-- ========================================================================= -->
+<!-- DOCK PRESENTATION MODE: Bottom Floating Card Shelf Tray                   -->
+<!-- ========================================================================= -->
+<div class="fixed bottom-7 inset-x-0 flex flex-col items-center z-40 pointer-events-auto">
+<!-- Translucent Pill Hint Label floating directly above the shelf -->
+<div class="mb-3 px-3 py-1 rounded-full bg-surface-container-lowest/80 backdrop-blur-xl border border-primary/20 shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center space-x-2 transition-all">
+<span class="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_6px_#4edea3]"></span>
+<span class="font-system-menu text-body-sm text-on-surface font-medium">随手夹 · Dock 模式</span>
+<span class="h-2.5 w-[1px] bg-outline-variant/40"></span>
+<span class="font-label-mono-sm text-label-mono-sm text-on-surface-variant">⌥ Space 展开 · 拖拽卡片至任意应用</span>
+</div>
+<!-- Main Dock Glass Tray Container -->
+<div class="relative bg-surface-container-lowest/85 backdrop-blur-2xl rounded-2xl hairline-dock shadow-[0_24px_60px_-10px_rgba(0,0,0,0.95)] p-2.5 flex items-center transition-all duration-300">
+<!-- Top Subtle Emerald Rim Glow Line -->
+<div class="absolute -top-[1px] inset-x-8 h-[1.5px] bg-gradient-to-r from-transparent via-primary/70 to-transparent"></div>
+<!-- Dock Left Hub: Rubick Emblem & Mode Badge -->
+<div class="flex items-center pl-2 pr-3 space-x-2 border-r border-outline-variant/30">
+<div class="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-container to-surface-container-high p-[1px] shadow-[0_0_12px_rgba(16,185,129,0.35)]">
+<div class="w-full h-full bg-surface rounded-[11px] flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[18px]">diamond</span>
+</div>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-md text-[13px] font-bold text-on-surface leading-tight">拉比克</span>
+<span class="font-label-mono-sm text-[10px] text-primary tracking-wider leading-none">DOCK</span>
+</div>
+</div>
+<!-- Center Horizontal Sequence: Skeuomorphic Clipboard Pinned Cards -->
+<div class="flex items-end space-x-3 px-3 overflow-visible">
+<!-- CARD 1: Polaroid Analytics Screenshot -->
+<div class="group relative w-32 bg-[#FBF9F5] rounded-lg p-2 pb-5 polaroid-shadow transform rotate-[-1.5deg] hover:rotate-0 transition-transform duration-200 cursor-grab">
+<!-- Chrome Tension Clip -->
+<div class="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-3.5 clip-metal-chrome rounded-[2px] z-20"></div>
+<!-- Image Frame with debossed border -->
+<div class="w-full h-20 rounded bg-surface-container-lowest overflow-hidden border border-outline-variant/30 relative">
+<img class="w-full h-full object-cover" data-alt="A dark-mode high-tech analytics dashboard interface with glowing emerald telemetry graphs, neon chart metrics, and clean data typography on a sleek obsidian glass background. Cohesive nocturnal modern UI workspace aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6QdS1tCGAKkAYTVBC0oR74Q9MxPmey1WpWedvuE3F27tUVxXjI91SLkc34-cxrsTckxAyPjYI2HsC5cfitwWanRngvCR5XfMjcfs7sKRf_dmabPpgbUvpa5Xb2_22YLwO0OO6jGIO73CrU0sGP7Nfjk_Uub2ycNAeerZIL_PEQNXoUCkzl_WBc6drRmgtEI9tN-s9dfaaBvzbmaj_IMHpVj_xj3U6xprcKLwYy4BldbA5MUdvL27cpwFstK_vHDgH7CKH1EeTIXQ"/>
+<div class="absolute top-1 left-1 px-1 py-0.5 rounded bg-surface/80 backdrop-blur-sm text-[9px] font-label-mono-sm text-primary">v2</div>
+</div>
+<!-- Polaroid Bottom Label -->
+<div class="mt-1.5 flex flex-col">
+<span class="font-system-menu text-[11px] font-semibold text-[#1A1A1A] truncate">Analytics v2</span>
+<span class="font-label-mono-sm text-[9px] text-[#666666]">10:24 AM</span>
+</div>
+</div>
+<!-- CARD 2: ACTIVE / HOVERED Code Screenshot (Lifted & Radiant Emerald Glow) -->
+<div class="group relative w-36 bg-[#FBF9F5] rounded-lg p-2 pb-5 active-card-shadow transform -translate-y-3.5 rotate-[-1deg] transition-all duration-200 cursor-grab z-30 ring-2 ring-primary">
+<!-- Emerald Enameled Clothespin Clip -->
+<div class="absolute -top-2.5 left-1/2 -translate-x-1/2 w-4 h-4 clip-emerald-enamel rounded-[2px] z-20 shadow-sm flex items-center justify-center">
+<div class="w-1 h-2 bg-on-primary-fixed-variant/40 rounded-full"></div>
+</div>
+<!-- Quick Action Toolbar on Active Card -->
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-surface-container-high/90 backdrop-blur-md rounded-full hairline-glass shadow-lg flex items-center space-x-1.5 z-40 whitespace-nowrap">
+<button class="p-0.5 text-on-surface hover:text-primary transition-colors" title="复制">
+<span class="material-symbols-outlined text-[13px]">content_copy</span>
+</button>
+<button class="p-0.5 text-primary" title="置顶">
+<span class="material-symbols-outlined text-[13px]" style="font-variation-settings: 'FILL' 1;">push_pin</span>
+</button>
+<button class="p-0.5 text-on-surface hover:text-primary transition-colors" title="全屏">
+<span class="material-symbols-outlined text-[13px]">open_in_full</span>
+</button>
+</div>
+<!-- Image Frame Preview -->
+<div class="w-full h-22 rounded bg-surface-container-lowest overflow-hidden border border-primary/40 relative">
+<img class="w-full h-full object-cover" data-alt="A macro screenshot view of a modern TypeScript code editor with vivid syntax highlighting, emerald keyword tokens, clean dark theme, and structured architectural code on deep charcoal background. Technical nocturnal software atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBRJ5wERk4SnwZuw5sxRgoIAzjSOMRi2u7fWtkxvyzWzvA964nD9nPzJzpE-iYfrgMDfG6jxHFCUqnN8FXralVM_L_Zu9_BmFPUt5sbsRoT2F-LMdLQl0QTGilHWuxHO_bkmwgUW3QZs8rCCH4Seez-AobGa4xdvInXEWsGbkzuEolkmL6KeD2bYakuL30qSabrPTndZKesQDwR2u-1TvSATMDmHRzHg9NacJkT8S_3DWo_IEx9B5tS_G4WFpc4dP8FWEkX1UHawH4"/>
+<div class="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-primary text-on-primary text-[9px] font-label-mono-sm font-semibold">Code.ts</div>
+</div>
+<!-- Polaroid Caption -->
+<div class="mt-1.5 flex items-center justify-between">
+<div class="flex flex-col">
+<span class="font-system-menu text-[11px] font-bold text-[#111827]">dock_render.ts</span>
+<span class="font-label-mono-sm text-[9px] text-[#4B5563]">98 lines · Pinned</span>
+</div>
+<span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+</div>
+</div>
+<!-- CARD 3: Text Note Card (Crisp Monospace Code Snippet) -->
+<div class="group relative w-32 bg-surface-container-high rounded-lg p-2.5 polaroid-shadow transform rotate-[1.5deg] hover:rotate-0 transition-transform duration-200 cursor-grab hairline-glass">
+<!-- Chrome Spring Clip -->
+<div class="absolute -top-2 left-1/2 -translate-x-1/2 w-3.5 h-3 clip-metal-chrome rounded-[2px] z-20"></div>
+<div class="w-full h-20 rounded bg-surface-container-lowest p-2 border border-outline-variant/30 flex flex-col justify-between">
+<div class="font-label-mono-sm text-[10px] text-primary flex items-center justify-between">
+<span>auth_jwt.rs</span>
+<span class="material-symbols-outlined text-[11px]">terminal</span>
+</div>
+<p class="font-label-mono-sm text-[9px] text-on-surface-variant leading-tight truncate">let token = issue_jwt(user)?;</p>
+<p class="font-label-mono-sm text-[8px] text-outline">Bearer rubick_arcane...</p>
+</div>
+<div class="mt-1.5 flex flex-col">
+<span class="font-system-menu text-[11px] font-medium text-on-surface truncate">auth_handshake</span>
+<span class="font-label-mono-sm text-[9px] text-on-surface-variant">Snippet · Rust</span>
+</div>
+</div>
+<!-- CARD 4: Kraft Paper Note Card (Warm cream/paper note with brass pin) -->
+<div class="group relative w-32 bg-[#EFE8D8] rounded-lg p-2.5 polaroid-shadow transform rotate-[-2deg] hover:rotate-0 transition-transform duration-200 cursor-grab">
+<!-- Vintage Brass Clamp Pin -->
+<div class="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-3.5 clip-vintage-brass rounded-[2px] z-20"></div>
+<div class="w-full h-20 rounded bg-[#E8DFC8]/60 p-2 border border-[#D5C9AC] flex flex-col justify-between">
+<span class="font-label-mono-sm text-[9px] text-[#7C6544] tracking-wide">MEMO ⌘⌥R</span>
+<p class="font-body-sm text-[11px] text-[#3E3424] font-medium leading-snug">Quick snippet: sync cloud state before demo.</p>
+<span class="font-label-mono-sm text-[8px] text-[#8C7A5E] text-right">#TODO</span>
+</div>
+<div class="mt-1.5 flex flex-col">
+<span class="font-system-menu text-[11px] font-medium text-[#292218] truncate">Quick snippet</span>
+<span class="font-label-mono-sm text-[9px] text-[#695B44]">Manual Note</span>
+</div>
+</div>
+<!-- CARD 5: File Card (Polaroid with Red PDF Tag) -->
+<div class="group relative w-32 bg-[#FBF9F5] rounded-lg p-2 pb-5 polaroid-shadow transform rotate-[1.2deg] hover:rotate-0 transition-transform duration-200 cursor-grab">
+<!-- Vintage Chrome Clip -->
+<div class="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-3.5 clip-metal-chrome rounded-[2px] z-20"></div>
+<div class="w-full h-20 rounded bg-surface-container-lowest p-2 border border-outline-variant/30 flex flex-col items-center justify-center relative">
+<div class="w-8 h-8 rounded bg-error-container/40 flex items-center justify-center mb-1">
+<span class="material-symbols-outlined text-error text-[20px]">picture_as_pdf</span>
+</div>
+<span class="font-label-mono-sm text-[9px] text-error font-semibold uppercase">PDF DOC</span>
+<div class="absolute bottom-1 right-1 text-[8px] font-label-mono-sm text-outline">14.8 MB</div>
+</div>
+<div class="mt-1.5 flex flex-col">
+<span class="font-system-menu text-[11px] font-semibold text-[#1A1A1A] truncate">Strategy_Over...</span>
+<span class="font-label-mono-sm text-[9px] text-[#666666]">May 18, 2025</span>
+</div>
+</div>
+<!-- CARD 6: Drop Zone / Action Slot -->
+<div class="w-28 h-[122px] rounded-lg border-2 border-dashed border-primary/35 hover:border-primary/80 bg-surface-container-low/40 hover:bg-surface-container/60 transition-all flex flex-col items-center justify-center cursor-pointer p-2 group">
+<div class="w-7 h-7 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-primary text-[18px]">add</span>
+</div>
+<span class="font-system-menu text-[11px] text-on-surface-variant group-hover:text-primary mt-1.5 transition-colors font-medium">拖入暂存</span>
+<span class="font-label-mono-sm text-[8px] text-outline mt-0.5">Drag to shelf</span>
+</div>
+</div>
+<!-- Dock Right Edge: Utilities & Management Cluster -->
+<div class="flex items-center pl-3 pr-2 space-x-1.5 border-l border-outline-variant/30 ml-1">
+<!-- Total Count Badge -->
+<div class="px-2 py-0.5 rounded bg-surface-container-high text-on-surface-variant font-label-mono-sm text-[11px] mr-1">
+          5 项
+        </div>
+<!-- Search / Filter -->
+<button class="w-7 h-7 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors" title="筛选卡片">
+<span class="material-symbols-outlined text-[16px]">filter_list</span>
+</button>
+<!-- Clean / Trash -->
+<button class="w-7 h-7 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-error transition-colors flex items-center justify-center" title="清空全部">
+<span class="material-symbols-outlined text-[16px]">delete_sweep</span>
+</button>
+<!-- Settings Cog -->
+<button class="w-7 h-7 rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center" title="Dock 偏好设置">
+<span class="material-symbols-outlined text-[16px]">settings</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Micro-interaction script for dragging or toggling card highlights -->
+<script>
+    // Lightweight atmospheric hover card elevation interaction
+    document.querySelectorAll('.cursor-grab').forEach(card => {
+      card.addEventListener('mouseenter', () => {
+        card.style.zIndex = '35';
+      });
+      card.addEventListener('mouseleave', () => {
+        if (!card.classList.contains('active-card-shadow')) {
+          card.style.zIndex = '';
+        }
+      });
+    });
+  </script>
+</body></html>

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Rubick 拉比克 - Screen Studio Pro</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface-variant": "#34343a",
+            "on-secondary-fixed": "#002114",
+            "primary-fixed-dim": "#4edea3",
+            "primary-fixed": "#6ffbbe",
+            "primary-container": "#10b981",
+            "tertiary": "#c8c6c3",
+            "surface-container-low": "#1a1b21",
+            "outline-variant": "#3c4a42",
+            "surface-container": "#1e1f25",
+            "surface": "#121318",
+            "surface-bright": "#38393f",
+            "secondary-fixed-dim": "#45dfa4",
+            "inverse-on-surface": "#2f3036",
+            "surface-container-highest": "#34343a",
+            "on-tertiary-container": "#393937",
+            "on-tertiary-fixed": "#1b1c1a",
+            "on-secondary": "#003825",
+            "on-surface": "#e3e1e9",
+            "on-error-container": "#ffdad6",
+            "tertiary-fixed-dim": "#c8c6c3",
+            "on-tertiary": "#30312e",
+            "error-container": "#93000a",
+            "background": "#121318",
+            "inverse-primary": "#006c49",
+            "secondary": "#45dfa4",
+            "outline": "#86948a",
+            "on-surface-variant": "#bbcabf",
+            "on-primary-fixed-variant": "#005236",
+            "surface-container-lowest": "#0d0e13",
+            "on-secondary-container": "#00452e",
+            "on-primary-container": "#00422b",
+            "inverse-surface": "#e3e1e9",
+            "tertiary-fixed": "#e4e2de",
+            "tertiary-container": "#a4a39f",
+            "surface-container-high": "#292a2f",
+            "on-secondary-fixed-variant": "#005137",
+            "surface-dim": "#121318",
+            "error": "#ffb4ab",
+            "primary": "#4edea3",
+            "on-background": "#e3e1e9",
+            "on-tertiary-fixed-variant": "#474744",
+            "secondary-container": "#00bd85",
+            "surface-tint": "#4edea3",
+            "on-primary": "#003824",
+            "on-error": "#690005",
+            "on-primary-fixed": "#002113",
+            "secondary-fixed": "#68fcbf"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "space-xl": "2rem",
+            "space-lg": "1.25rem",
+            "gutter": "1rem",
+            "space-xs": "0.25rem",
+            "space-md": "0.75rem",
+            "margin": "1.5rem",
+            "space-sm": "0.5rem"
+          },
+          "fontFamily": {
+            "headline-md": ["Inter"],
+            "headline-lg": ["Inter"],
+            "label-mono-md": ["JetBrains Mono"],
+            "headline-xl-mobile": ["Inter"],
+            "body-sm": ["Inter"],
+            "body-md": ["Inter"],
+            "body-lg": ["Inter"],
+            "system-menu": ["Inter"],
+            "label-mono-sm": ["JetBrains Mono"],
+            "headline-xl": ["Inter"]
+          },
+          "fontSize": {
+            "headline-md": ["18px", { "lineHeight": "26px", "letterSpacing": "-0.01em", "fontWeight": "500" }],
+            "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "label-mono-md": ["13px", { "lineHeight": "18px", "letterSpacing": "-0.02em", "fontWeight": "500" }],
+            "headline-xl-mobile": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "body-md": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+            "body-lg": ["15px", { "lineHeight": "22px", "fontWeight": "400" }],
+            "system-menu": ["13.5px", { "lineHeight": "18px", "letterSpacing": "-0.005em", "fontWeight": "500" }],
+            "label-mono-sm": ["11px", { "lineHeight": "14px", "fontWeight": "400" }],
+            "headline-xl": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "600" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 15px;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .material-symbols-outlined.fill {
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+    }
+
+    /* Custom Glass & Shadows conforming to tokens */
+    .macos-glass {
+      background: rgba(18, 19, 24, 0.78);
+      backdrop-filter: blur(32px) saturate(190%);
+      -webkit-backdrop-filter: blur(32px) saturate(190%);
+      box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 0 0.5px rgba(255, 255, 255, 0.12), inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+    }
+    
+    .capture-viewport-shadow {
+      box-shadow: 0 0 0 1px #10b981, 0 0 35px -5px rgba(16, 185, 129, 0.25), 0 30px 60px -15px rgba(0, 0, 0, 0.85);
+    }
+
+    .pulse-record {
+      animation: record-pulse 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes record-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.85); }
+    }
+
+    /* Audio Equalizer animation */
+    .eq-bar-1 { animation: eq-wave 0.8s ease-in-out infinite alternate; }
+    .eq-bar-2 { animation: eq-wave 0.6s ease-in-out 0.2s infinite alternate; }
+    .eq-bar-3 { animation: eq-wave 0.9s ease-in-out 0.4s infinite alternate; }
+    .eq-bar-4 { animation: eq-wave 0.7s ease-in-out 0.1s infinite alternate; }
+    @keyframes eq-wave {
+      0% { height: 3px; }
+      100% { height: 14px; }
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface antialiased overflow-hidden select-none w-screen h-screen relative flex flex-col justify-between">
+<!-- ==================== DESKTOP MACOS MENUBAR (TOPNAVBAR) ==================== -->
+<header class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-margin h-[38px] w-full select-none bg-surface-container-lowest/75 dark:bg-surface-container-lowest/75 backdrop-blur-md border-b border-outline-variant/30 backdrop-blur-xl shadow-sm text-system-menu font-system-menu">
+<!-- Left Navigation Cluster -->
+<div class="flex items-center gap-space-sm h-full">
+<!-- Brand Logo / Rubick Gem -->
+<a class="text-system-menu font-system-menu font-semibold text-on-surface dark:text-on-surface flex items-center gap-1.5 hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 active:scale-[0.98]" href="#">
+<span class="inline-block w-2.5 h-2.5 rounded-sm bg-primary rotate-45 shadow-[0_0_10px_rgba(78,222,163,0.7)]"></span>
+<span>Rubick 拉比克</span>
+</a>
+<!-- Menu Items -->
+<nav class="hidden md:flex items-center gap-0.5 text-on-surface-variant dark:text-on-surface-variant font-system-menu text-system-menu">
+<a class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 active:scale-[0.98] text-on-surface font-medium" href="#">File</a>
+<a class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 active:scale-[0.98]" href="#">Edit</a>
+<a class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 active:scale-[0.98]" href="#">View</a>
+<a class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 active:scale-[0.98]" href="#">Window</a>
+<a class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 active:scale-[0.98]" href="#">Help</a>
+</nav>
+</div>
+<!-- Right Tray & Status Cluster -->
+<div class="flex items-center gap-space-md text-on-surface-variant font-system-menu text-system-menu">
+<!-- Active Recording Status Pill in Menubar -->
+<div class="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-container-highest/60 border border-outline-variant/40 text-on-surface shadow-inner">
+<span class="w-1.5 h-1.5 rounded-full bg-error pulse-record"></span>
+<span class="font-label-mono-sm text-label-mono-sm font-medium tracking-tight text-on-surface">REC 00:42</span>
+<span class="material-symbols-outlined text-primary text-[14px]" data-icon="graphic_eq">graphic_eq</span>
+</div>
+<!-- System Trailing Icon Actions -->
+<div class="flex items-center gap-2">
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded p-1 flex items-center justify-center text-on-surface-variant" title="Network">
+<span class="material-symbols-outlined text-[15px]" data-icon="wifi">wifi</span>
+</button>
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded p-1 flex items-center justify-center text-on-surface-variant" title="Battery Charging">
+<span class="material-symbols-outlined text-[15px]" data-icon="battery_charging_full">battery_charging_full</span>
+</button>
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded p-1 flex items-center justify-center text-on-surface-variant" title="Spotlight">
+<span class="material-symbols-outlined text-[15px]" data-icon="search">search</span>
+</button>
+<button class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded p-1 flex items-center justify-center text-on-surface-variant" title="Control Center">
+<span class="material-symbols-outlined text-[15px]" data-icon="control_point">control_point</span>
+</button>
+</div>
+<!-- Time Display -->
+<div class="hover:bg-surface-container-highest/40 hover:text-on-surface transition-colors duration-150 rounded px-2 py-0.5 flex items-center gap-1.5 text-on-surface text-system-menu font-system-menu">
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant" data-icon="schedule">schedule</span>
+<span>周四 14:32</span>
+</div>
+</div>
+</header>
+<!-- ==================== DESKTOP CANVAS WITH DIMMED BACKDROP ==================== -->
+<main class="relative w-full h-full pt-[38px] flex flex-col items-center justify-center overflow-hidden">
+<!-- Obsidian Backdrop Glow & Radial Aurora Blur -->
+<div class="absolute inset-0 pointer-events-none bg-surface-container-lowest/90 backdrop-blur-[6px]">
+<div class="absolute top-1/4 left-1/5 w-[560px] h-[560px] bg-primary/10 rounded-full blur-[140px] pointer-events-none"></div>
+<div class="absolute bottom-1/4 right-1/4 w-[420px] h-[420px] bg-secondary-container/10 rounded-full blur-[120px] pointer-events-none"></div>
+</div>
+<!-- Background Simulated Desktop Application / Workspace (Dimmed Outer Context) -->
+<div class="absolute inset-8 rounded-xl border border-outline-variant/20 bg-surface/40 overflow-hidden pointer-events-none opacity-25 filter blur-[1.5px]">
+<div class="h-8 border-b border-outline-variant/20 px-4 flex items-center gap-2">
+<div class="w-2.5 h-2.5 rounded-full bg-surface-variant"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-surface-variant"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-surface-variant"></div>
+</div>
+</div>
+<!-- ==================== EMERALD CAPTURE REGION ==================== -->
+<section class="relative z-20 w-[940px] h-[528px] max-w-[92vw] max-h-[655px] rounded-lg capture-viewport-shadow bg-surface border border-primary flex flex-col overflow-hidden transition-all duration-200">
+<!-- Top Edge Red Buffer/Progress Line Indicator -->
+<div class="absolute top-0 left-0 right-0 h-[2px] bg-error/90 z-40 shadow-[0_1px_6px_rgba(255,180,171,0.6)]">
+<div class="h-full bg-error w-3/4 animate-pulse"></div>
+</div>
+<!-- Telemetry Badge (Top Left of active boundary) -->
+<div class="absolute top-2.5 left-3 z-40 flex items-center gap-2 px-2.5 py-1 rounded bg-surface-container-lowest/85 backdrop-blur-md border border-outline-variant/40 shadow-sm">
+<span class="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(78,222,163,0.8)]"></span>
+<span class="font-label-mono-sm text-label-mono-sm font-medium tracking-tight text-on-surface">1280 × 720 HD</span>
+<span class="text-outline-variant">|</span>
+<span class="font-label-mono-sm text-label-mono-sm text-primary font-medium">60 FPS</span>
+</div>
+<!-- Hardware Corner Sizing Brackets / Reticle Handles -->
+<div class="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-primary z-50 pointer-events-none"></div>
+<div class="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-primary z-50 pointer-events-none"></div>
+<div class="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-primary z-50 pointer-events-none"></div>
+<div class="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-primary z-50 pointer-events-none"></div>
+<!-- Viewport Inner App Bar -->
+<div class="h-10 bg-surface-container-low border-b border-outline-variant/30 px-4 flex items-center justify-between select-none">
+<div class="flex items-center gap-2">
+<div class="flex items-center gap-1.5">
+<span class="w-3 h-3 rounded-full bg-[#ff5f56]/80 inline-block border border-black/20"></span>
+<span class="w-3 h-3 rounded-full bg-[#ffbd2e]/80 inline-block border border-black/20"></span>
+<span class="w-3 h-3 rounded-full bg-[#27c93f]/80 inline-block border border-black/20"></span>
+</div>
+<div class="ml-4 flex items-center gap-2 px-2.5 py-1 rounded bg-surface-container-high/60 text-on-surface-variant font-label-mono-sm text-label-mono-sm border border-outline-variant/20">
+<span class="material-symbols-outlined text-[13px] text-primary" data-icon="folder_open">folder_open</span>
+<span>~/workspace/rubick-engine/src/core/render.ts</span>
+</div>
+</div>
+<!-- Live System Metric Indicators Inside Viewport -->
+<div class="flex items-center gap-3 text-on-surface-variant font-label-mono-sm text-label-mono-sm">
+<span class="hidden sm:inline-flex items-center gap-1 text-[10px] text-tertiary">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span> Display P3
+          </span>
+<span class="bg-surface-container-highest/60 px-2 py-0.5 rounded text-on-surface">18.4 Mbps</span>
+<span class="text-tertiary">Buffer: 108.4 MB</span>
+</div>
+</div>
+<!-- Viewport Inner Content Body (Code Studio + PiP) -->
+<div class="relative flex-1 bg-surface-container-lowest p-5 overflow-hidden flex gap-4 font-label-mono-sm text-label-mono-sm">
+<!-- Code Window Content -->
+<div class="flex-1 font-label-mono-md text-label-mono-md leading-6 text-on-surface-variant/90 select-text">
+<div class="flex gap-4">
+<div class="text-outline select-none text-right font-label-mono-sm text-label-mono-sm opacity-40 pr-2 border-r border-outline-variant/30 flex flex-col">
+<span>01</span><span>02</span><span>03</span><span>04</span><span>05</span><span>06</span><span>07</span><span>08</span><span>09</span><span>10</span><span>11</span><span>12</span><span>13</span>
+</div>
+<div class="space-y-0.5">
+<p><span class="text-primary font-medium">import</span> { <span class="text-secondary-fixed">ScreenEngine</span>, <span class="text-secondary-fixed">AudioMixer</span> } <span class="text-primary font-medium">from</span> <span class="text-on-secondary-fixed-variant">"@rubick/media-kit"</span>;</p>
+<p><span class="text-primary font-medium">export class</span> <span class="text-secondary font-semibold">ActiveSessionController</span> {</p>
+<p class="pl-4"><span class="text-outline font-medium">// Hardware accelerated AVFoundation capture loop</span></p>
+<p class="pl-4"><span class="text-primary-fixed">private</span> streamBuffer = <span class="text-primary font-medium">new</span> <span class="text-secondary-fixed">RingBuffer</span>(1024 * 1024 * 128);</p>
+<p class="pl-4"><span class="text-primary-fixed">public async</span> <span class="text-primary">startLosslessRecording</span>(targetFPS: <span class="text-primary-fixed-dim">number</span> = 60) {</p>
+<p class="pl-8 text-on-surface">console.<span class="text-primary">info</span>(<span class="text-on-secondary-fixed-variant">`[Rubick] Active stream lock acquired at ${targetFPS} FPS`</span>);</p>
+<p class="pl-8"><span class="text-primary font-medium">await this</span>.audioMixer.<span class="text-primary">bindInputChannels</span>({</p>
+<p class="pl-12">internalAudio: <span class="text-secondary">true</span>,</p>
+<p class="pl-12">microphoneGain: <span class="text-secondary-fixed-dim">1.25</span>,</p>
+<p class="pl-12">noiseSuppression: <span class="text-primary-fixed">"studio_crisp"</span></p>
+<p class="pl-8">});</p>
+<p class="pl-4">}</p>
+<p>}</p>
+</div>
+</div>
+</div>
+<!-- Floating Webcam Facecam PiP (Top-Right inside Viewport) -->
+<div class="absolute top-4 right-4 w-48 h-32 rounded-lg overflow-hidden border border-primary/60 shadow-2xl bg-surface-container-high flex flex-col justify-between p-2 z-30 group backdrop-blur-md">
+<!-- Background image for Webcam PiP -->
+<div class="absolute inset-0 bg-cover bg-center" data-alt="A cinematic medium close-up shot of a modern creative professional software engineer wearing dark studio headphones in a moody nocturnal workspace. The background glows with subtle emerald and deep navy ambient desk illumination, reflecting crisp glass surfaces and high-tech desktop setups. The lighting is soft and flattering, highlighting detailed skin tones with a sleek dark-mode aesthetic." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCfEbM9i72cRPvzfiYfCkDLn0qLzlJKS94XcEiMwcXciuqhN0m9W57aUfO6aw2BNII3Rv88IDNC8cdBl38EkAw1_2C17q3buNJFa_BzP0tdwQ--m0fSV92ayGicUdc-UR_E4aBg9Cp2rNcBcITvWKbLJS0DmsfLS3O4U35oLpsLCQXKbHBsrNBf87sGps5--AT7a4KqAtOkR7daVJMLoMfIg1bFQETVJmi3S18gIf0tZUTmiHYhjPN_TYW6250BszF5-c5WIx1k5r8')"></div>
+<!-- PiP Top Indicator Strip -->
+<div class="relative z-10 flex items-center justify-between w-full">
+<span class="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-container-lowest/80 text-[10px] text-primary font-label-mono-sm backdrop-blur-sm border border-primary/30">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span> CAM LIVE
+            </span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container-lowest/80 text-[10px] text-on-surface font-label-mono-sm backdrop-blur-sm border border-outline-variant/30">
+              -12 dB
+            </span>
+</div>
+<!-- PiP Bottom Hardware Info -->
+<div class="relative z-10 flex items-center justify-between text-[9px] text-on-surface-variant font-label-mono-sm bg-surface-container-lowest/70 backdrop-blur-sm px-1.5 py-0.5 rounded">
+<span>FaceTime HD 1080p</span>
+<span class="text-primary font-medium">30 FPS</span>
+</div>
+</div>
+</div>
+<!-- Viewport Bottom Status Bar -->
+<div class="h-6 bg-surface-container-low border-t border-outline-variant/20 px-3 flex items-center justify-between text-[11px] text-outline font-label-mono-sm">
+<div class="flex items-center gap-3">
+<span class="text-on-surface-variant">UTF-8</span>
+<span>TypeScript 5.4</span>
+<span class="text-primary">Git: main*</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span>Target: 1920 × 1080 @ 2x Retina</span>
+</div>
+</div>
+</section>
+<!-- ==================== RECORDING TOOLBAR PILL & CONTROLS ==================== -->
+<div class="relative z-30 mt-4 flex flex-col items-center">
+<!-- Primary Frosted Glass Floating Dock Pill -->
+<div class="macos-glass rounded-full px-4 py-2 flex items-center gap-space-lg transition-transform duration-150">
+<!-- Left Section: Recording Timer & Live Equalizer -->
+<div class="flex items-center gap-3 pr-3 border-r border-outline-variant/40">
+<!-- Crimson Pulse Dot -->
+<div class="relative flex items-center justify-center">
+<span class="w-3 h-3 rounded-full bg-error inline-block pulse-record shadow-[0_0_10px_rgba(255,180,171,0.8)]"></span>
+<span class="absolute w-4 h-4 rounded-full bg-error/30 animate-ping"></span>
+</div>
+<!-- Timer Display -->
+<div class="flex flex-col">
+<span class="font-label-mono-md text-label-mono-md font-semibold tracking-tight text-on-surface">00:42.18</span>
+<span class="text-[9px] font-label-mono-sm text-outline tracking-wider uppercase">REC TIME</span>
+</div>
+<!-- Live Green Audio Equalizer Bars -->
+<div class="flex items-end gap-[2.5px] h-4 px-1.5 py-0.5 rounded bg-surface-container-lowest/60 border border-outline-variant/30">
+<span class="w-[2px] bg-primary rounded-full eq-bar-1"></span>
+<span class="w-[2px] bg-primary rounded-full eq-bar-2"></span>
+<span class="w-[2px] bg-primary-fixed rounded-full eq-bar-3"></span>
+<span class="w-[2px] bg-primary rounded-full eq-bar-4"></span>
+</div>
+</div>
+<!-- Center Controls: Action Buttons -->
+<div class="flex items-center gap-2">
+<!-- Pause Button -->
+<button class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container-highest/60 active:scale-95 transition-all duration-150 border border-outline-variant/30" title="暂停 (Pause)">
+<span class="material-symbols-outlined text-[17px]" data-icon="pause">pause</span>
+</button>
+<!-- Stop Recording Button (Prominent Crimson Anchor) -->
+<button class="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-error-container text-on-error-container hover:brightness-110 active:scale-95 transition-all duration-150 shadow-[0_4px_12px_rgba(147,0,10,0.4)] border border-error/40 font-headline-md text-system-menu font-medium">
+<span class="w-2.5 h-2.5 rounded-sm bg-on-error-container inline-block"></span>
+<span>完成录制</span>
+</button>
+<!-- Restart Button -->
+<button class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container-highest/60 active:scale-95 transition-all duration-150 border border-outline-variant/30" title="重新开始 (Restart)">
+<span class="material-symbols-outlined text-[17px]" data-icon="restart_alt">restart_alt</span>
+</button>
+<div class="h-4 w-[1px] bg-outline-variant/40 mx-0.5"></div>
+<!-- Microphone Toggle Pill -->
+<button class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container-high hover:bg-surface-container-highest/70 active:scale-95 transition-all text-primary border border-primary/30" title="麦克风输入 (MacBook Pro 麦克风)">
+<span class="material-symbols-outlined text-[15px] fill" data-icon="mic">mic</span>
+<span class="font-system-menu text-body-sm font-medium">麦克风</span>
+</button>
+<!-- System Audio Toggle Pill -->
+<button class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container-high hover:bg-surface-container-highest/70 active:scale-95 transition-all text-secondary border border-secondary/30" title="系统内录已启用">
+<span class="material-symbols-outlined text-[15px] fill" data-icon="volume_up">volume_up</span>
+<span class="font-system-menu text-body-sm font-medium">系统声</span>
+</button>
+</div>
+<!-- Right Section: Camera PiP & Video Format Picker -->
+<div class="flex items-center gap-2 pl-3 border-l border-outline-variant/40">
+<!-- PiP Toggle Badge Button -->
+<button class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/15 text-primary border border-primary/40 hover:bg-primary/25 active:scale-95 transition-all" title="人脸镜头画中画">
+<span class="material-symbols-outlined text-[15px] fill" data-icon="videocam">videocam</span>
+<span class="font-system-menu text-body-sm font-semibold">PiP 开</span>
+</button>
+<!-- Video Format / FPS Dropdown Menu Trigger -->
+<button class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container-low hover:bg-surface-container-high text-on-surface-variant font-label-mono-sm text-label-mono-sm border border-outline-variant/40 active:scale-95 transition-all">
+<span>MP4 / 60 FPS</span>
+<span class="material-symbols-outlined text-[13px] text-outline" data-icon="expand_more">expand_more</span>
+</button>
+</div>
+</div>
+<!-- Floating Keyboard Shortcut Capsule -->
+<div class="mt-2.5 px-3 py-1 rounded-full bg-surface-container-lowest/80 backdrop-blur-md border border-outline-variant/30 text-on-surface-variant font-system-menu text-body-sm tracking-normal shadow-sm flex items-center gap-2">
+<span class="font-label-mono-sm text-primary font-medium">⌘ ⌥ R</span>
+<span>开始/停止录制</span>
+<span class="text-outline-variant">•</span>
+<span class="font-label-mono-sm text-primary font-medium">Esc</span>
+<span>取消并放弃</span>
+</div>
+</div>
+</main>
+<!-- Bottom System Anchor (Hidden on desktop as per macOS specification, maintaining structural semantic balance) -->
+<footer class="h-2 w-full pointer-events-none select-none"></footer>
+</body></html>
