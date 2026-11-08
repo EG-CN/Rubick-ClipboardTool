@@ -226,6 +226,9 @@ struct SettingsView: View {
     @State private var ignorePassword = ClipboardMonitor.shared.ignorePasswordManagers
     @State private var pasteAuto = UserDefaults.standard.object(forKey: "pasteAuto") as? Bool ?? true
     @State private var panelForm = UserDefaults.standard.string(forKey: "panel.form") ?? "panel"
+    @State private var autoRetract = UserDefaults.standard.object(forKey: "clothesline.autoRetract") as? Bool ?? true
+    @State private var ropeMaxWidth = UserDefaults.standard.object(forKey: "clothesline.maxWidth") as? Double ?? 60
+    @State private var cardTilt = UserDefaults.standard.object(forKey: "clothesline.tilt") as? Double ?? 3
     @State private var keepOpen = UserDefaults.standard.object(forKey: "keepPanelOpen") as? Bool ?? true
     @State private var limit: Int = HistoryStore.shared.limit
     @State private var trusted = AXIsProcessTrusted()
@@ -700,7 +703,45 @@ struct SettingsView: View {
                             .onChange(of: rememberPosition) { v in
                                 UserDefaults.standard.set(v, forKey: "panel.rememberPosition")
                             }
-                        Text("原生：双栏历史；Dock：底部卡片；随手夹：有新内容时绳子自动垂下，取完自动收起，平时不留任何入口。\(HotkeyManager.shared.panelShortcutDisplay) 随时呼出。")
+                        Text("原生：双栏历史；Dock：底部卡片；随手夹：拖文件到刘海触发，平时不留任何入口。\(HotkeyManager.shared.panelShortcutDisplay) 随时呼出。")
+                            .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
+                    }
+                }
+
+                settingCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle("取空自动收绳", isOn: $autoRetract)
+                            .toggleStyle(toggleStyle).tint(RubickTheme.emerald)
+                            .onChange(of: autoRetract) { v in
+                                UserDefaults.standard.set(v, forKey: "clothesline.autoRetract")
+                            }
+                        HStack {
+                            Text("绳子最大宽度").font(.system(size: 13))
+                            Spacer()
+                            Slider(value: $ropeMaxWidth, in: 30...95, step: 5)
+                                .frame(width: 180).tint(RubickTheme.emerald)
+                                .onChange(of: ropeMaxWidth) { v in
+                                    UserDefaults.standard.set(v, forKey: "clothesline.maxWidth")
+                                }
+                            Text("\(Int(ropeMaxWidth))%")
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(RubickTheme.emerald)
+                                .frame(width: 40, alignment: .trailing)
+                        }
+                        HStack {
+                            Text("卡片倾斜幅度").font(.system(size: 13))
+                            Spacer()
+                            Slider(value: $cardTilt, in: 0...8, step: 1)
+                                .frame(width: 180).tint(RubickTheme.emerald)
+                                .onChange(of: cardTilt) { v in
+                                    UserDefaults.standard.set(v, forKey: "clothesline.tilt")
+                                }
+                            Text("±\(Int(cardTilt))°")
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(RubickTheme.emerald)
+                                .frame(width: 40, alignment: .trailing)
+                        }
+                        Text("随手夹：拖文件到刘海触发，平时不留任何入口。复制/截图不会自动触发。")
                             .font(.system(size: 12)).foregroundStyle(RubickTheme.muted(scheme))
                     }
                 }

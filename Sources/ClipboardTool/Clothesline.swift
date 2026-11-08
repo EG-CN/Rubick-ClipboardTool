@@ -23,7 +23,9 @@ struct ClotheslineLayout {
     /// 挂绳面板：绳铺满可见区横向（左右各留 8pt），贴屏幕上缘；高度随卡片缩小收窄。
     /// 收起分支（96×26）仅为 ClotheslinePreview 兼容保留，运行时不再有常驻入口。
     static func frame(screen: CGRect, visible: CGRect, expanded: Bool, cutout: CGRect? = nil) -> CGRect {
-        let width = expanded ? max(560, visible.width - 16) : 96
+        // 绳宽百分比可在设置里调（30~95%）
+        let maxSpan = UserDefaults.standard.object(forKey: "clothesline.maxWidth") as? Double ?? 60
+        let width = expanded ? max(560, visible.width * maxSpan / 100) : 96
         let height = expanded ? min(320, visible.height - 8) : 26
         let top = visible.maxY - 4
         let x = min(max(visible.midX - width / 2, visible.minX), visible.maxX - width)
@@ -561,13 +563,15 @@ final class ClotheslineView: NSView, NSDraggingSource {
         wind = wind.filter { known.contains($0.key) }
         for item in items where !tilt.keys.contains(item.id) {
             let h = abs(item.id.hashValue)
-            tilt[item.id] = CGFloat(h % 60) / 10 - 3
+            let amp = UserDefaults.standard.object(forKey: "clothesline.tilt") as? Double ?? 3
+            tilt[item.id] = CGFloat(h % 60) / 10 * (amp / 3)
             swayPhase[item.id] = Double(h % 628) / 100
         }
         tilt = tilt.filter { known.contains($0.key) }
         swayPhase = swayPhase.filter { known.contains($0.key) }
-        // 取空自动收绳：历史清空（或最后一条被移除）时绳子立刻收走，不等下一帧。
-        if items.isEmpty, expanded, !dragging {
+        // 取空自动收绳（可在设置关闭）：历史清空时绳子立刻收走。
+        if items.isEmpty, expanded, !dragging,
+           UserDefaults.standard.object(forKey: "clothesline.autoRetract") as? Bool ?? true {
             interaction.showManually(false)
             controller?.setExpanded(false, view: self, manual: false)
         }
