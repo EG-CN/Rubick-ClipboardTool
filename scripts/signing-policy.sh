@@ -8,6 +8,15 @@ rubick_require_signing_identity() {
         echo "更新已停止：请用 RUBICK_SIGN_IDENTITY 指定固定代码签名证书。不会自动退回临时签名。" >&2
         return 1
     fi
+    # 统一为 SHA-1 哈希形式：钥匙串 ACL 把「证书名」和「哈希」当作两条独立授权，
+    # 混用会各自弹窗；固定哈希后一次「始终允许」永久生效。
+    if ! printf '%s' "$RUBICK_SIGN_IDENTITY" | grep -qE '^[0-9A-Fa-f]{40}$'; then
+        local resolved
+        resolved=$(security find-identity -v -p codesigning 2>/dev/null | grep -F "\"$RUBICK_SIGN_IDENTITY\"" | awk '{print $2}' | head -1)
+        if [ -n "$resolved" ]; then
+            RUBICK_SIGN_IDENTITY="$resolved"
+        fi
+    fi
 }
 
 rubick_sign_app() {

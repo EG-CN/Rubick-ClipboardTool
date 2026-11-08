@@ -245,6 +245,11 @@ final class InlineScreenshotController {
             panel.setFrame(frame, display: false)
             canvas.onCancel = { [weak self] in self?.close(restoreFocus: true) }
             canvas.onOutput = { [weak self, weak canvas] action in self?.activeCanvas = canvas; self?.output(action) }
+            canvas.onLongShot = { [weak self] rect in
+                guard let self else { return }
+                self.close(restoreFocus: false)
+                LongScreenshot.shared.start(rect: rect)
+            }
             canvas.onWillInteract = { [weak self, weak canvas] in
                 guard let self, let canvas else { return }
                 for peer in self.canvases where peer !== canvas { peer.commitEditing() }
@@ -350,6 +355,8 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
     private var remoteMagnifier: InlineMagnifier?
     var onCancel: (() -> Void)?
     var onOutput: ((Output) -> Void)?
+    /// 把当前选区交给长截图引擎（AppKit 全局坐标）
+    var onLongShot: ((CGRect) -> Void)?
     var onWillInteract: (() -> Void)?
     var onSceneChange: (() -> Void)?
     private var remoteEditingID: UUID?
@@ -440,6 +447,7 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         main.addArrangedSubview(undoButton)
         main.addArrangedSubview(redoButton)
         main.addArrangedSubview(iconButton("viewfinder", title: "重新框选", action: #selector(reselect)))
+        main.addArrangedSubview(iconButton("scroll", title: "长截图（自动滚动拼接）", action: #selector(longShotAction)))
         main.addArrangedSubview(iconButton("pin", title: "钉图", action: #selector(pinAction)))
         main.addArrangedSubview(iconButton("square.and.arrow.down", title: "保存", action: #selector(saveAction)))
         let copy = NSButton(title: "复制", target: self, action: #selector(copyAction))
@@ -578,6 +586,18 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         onWillInteract?()
         commitEditing(); let old = document.state; document.state.selection = nil; document.checkpoint(old)
         tool = .select; selectedID = nil; refresh()
+    }
+    /// 工具条「长截图」：当前选区交给长截图引擎（滚动采集 + 拼接）
+    @objc private func longShotAction() {
+        onWillInteract?()
+        commitEditing()
+        guard let sel = document.state.selection, sel.width > 3, sel.height > 3 else {
+            showMessage("先框选区域，再点长截图")
+            return
+        }
+        let global = CGRect(x: sel.minX + union.minX, y: sel.minY + union.minY,
+                            width: sel.width, height: sel.height)
+        onLongShot?(global)
     }
     @objc private func pinAction() { onOutput?(.pin) }
     @objc private func saveAction() { onOutput?(.save) }
