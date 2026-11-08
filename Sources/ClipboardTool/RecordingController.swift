@@ -38,23 +38,36 @@ final class RecordingController: NSObject, SCStreamDelegate {
 
     /// rect：AppKit 全局坐标（左下原点）的录制区域
     private var pendingRect: CGRect?
+    private var controlEscMonitor: Any?
 
     /// 选区完成 → 武装态：呈现「开始录制」控制条，等用户显式开始
     func arm(rect: CGRect) {
         guard stream == nil else { return }
         pendingRect = rect
         showControlBar(rect: rect, mode: .armed)
+        // 武装条是无激活后台面板，收不到键盘事件：⎋ 取消走全局监听
+        if controlEscMonitor == nil {
+            controlEscMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                if event.keyCode == 53 { self?.cancelArmed() }
+            }
+        }
     }
 
     func startArmed() {
         guard let r = pendingRect else { return }
         pendingRect = nil
+        removeControlEscMonitor()
         start(rect: r)
     }
 
     func cancelArmed() {
         pendingRect = nil
+        removeControlEscMonitor()
         controlPanel?.orderOut(nil); controlPanel = nil; controlView = nil
+    }
+
+    private func removeControlEscMonitor() {
+        if let m = controlEscMonitor { NSEvent.removeMonitor(m); controlEscMonitor = nil }
     }
 
     func start(rect: CGRect) {
@@ -136,6 +149,7 @@ final class RecordingController: NSObject, SCStreamDelegate {
         guard let stream = stream else { return }
         self.stream = nil
         timer?.invalidate(); timer = nil
+        removeControlEscMonitor()
         controlPanel?.orderOut(nil); controlPanel = nil
         controlView = nil
         let url = movieURL
@@ -162,6 +176,8 @@ final class RecordingController: NSObject, SCStreamDelegate {
     // MARK: 控制条（效果图 ③）
 
     private func showControlBar(rect: CGRect, mode: RecordControlView.Mode) {
+        // 先收旧条：武装→录制切换时不收，旧武装面板会成孤儿（用户点取消/开始全无反应的根因）
+        controlPanel?.orderOut(nil); controlPanel = nil; controlView = nil
         guard let screen = NSScreen.screens.first(where: {
             $0.frame.contains(CGPoint(x: rect.midX, y: rect.midY))
         }) else { return }
