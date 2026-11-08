@@ -107,23 +107,58 @@ final class ClotheslineDragCatcherView: NSView {
     var isRopeVisible: (() -> Bool)?
     /// 拖拽会话进行中（由控制器的全局鼠标监听翻转）；此静态标记必须走主线程。
     static var dragSessionActive = false
+    private var pulseTimer: Timer?
+    private var dashPhase: CGFloat = 0
+    deinit { pulseTimer?.invalidate() }
+
+    /// 引导框呼吸动画：仅拖拽会话进行时运转，会话结束自动停表
+    private func ensurePulse() {
+        guard pulseTimer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            if self.receptive {
+                self.dashPhase += 0.7
+                self.needsDisplay = true
+            } else {
+                timer.invalidate(); self.pulseTimer = nil
+            }
+        }
+        pulseTimer = timer; RunLoop.main.add(timer, forMode: .common)
+    }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         (Self.dragSessionActive && !(isRopeVisible?() ?? false)) ? self : nil
     }
     override func draw(_ dirtyRect: NSRect) {
         guard Self.dragSessionActive, !(isRopeVisible?() ?? false) else { return }
+        ensurePulse()
         let pill = bounds.insetBy(dx: 10, dy: 6)
         let path = NSBezierPath(roundedRect: pill, xRadius: 13, yRadius: 13)
         NSColor(calibratedWhite: 0.05, alpha: 0.88).setFill(); path.fill()
+        // 呼吸辉光：外圈柔光随相位起伏
+        let breathe = 0.5 + 0.5 * sin(dashPhase * 0.18)
+        NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.08 + 0.10 * CGFloat(breathe)).setStroke()
+        let glow = NSBezierPath(roundedRect: pill.insetBy(dx: -2.5, dy: -2.5), xRadius: 15, yRadius: 15)
+        glow.lineWidth = 5; glow.stroke()
+        // 蚂蚁线：虚线相位行进
         let dash = NSBezierPath(roundedRect: pill.insetBy(dx: 1.5, dy: 1.5), xRadius: 12, yRadius: 12)
         NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.9).setStroke()
-        dash.lineWidth = 1.2; dash.setLineDash([4, 3], count: 2, phase: 0); dash.stroke()
+        dash.lineWidth = 1.2; dash.setLineDash([4, 3], count: 2, phase: dashPhase); dash.stroke()
         let text = "松手把文件挂到绳上" as NSString
         let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 14, weight: .semibold),
                                                          .foregroundColor: NSColor(calibratedRed: 0.45, green: 0.93, blue: 0.71, alpha: 1)]
         let size = text.size(withAttributes: attributes)
-        text.draw(at: CGPoint(x: pill.midX - size.width / 2, y: pill.midY - size.height / 2), withAttributes: attributes)
+        let textY = pill.midY - size.height / 2 + 4
+        text.draw(at: CGPoint(x: pill.midX - size.width / 2, y: textY), withAttributes: attributes)
+        // 文案上方下落箭头，亮度随呼吸
+        let arrow = NSBezierPath()
+        let ax = pill.midX, ay = textY - 14
+        arrow.move(to: CGPoint(x: ax - 5, y: ay + 4))
+        arrow.line(to: CGPoint(x: ax, y: ay + 8))
+        arrow.line(to: CGPoint(x: ax + 5, y: ay + 4))
+        arrow.lineWidth = 1.6; arrow.lineCapStyle = .round
+        NSColor(calibratedRed: 0.45, green: 0.93, blue: 0.71, alpha: 0.7 + 0.3 * CGFloat(breathe)).setStroke()
+        arrow.stroke()
     }
     private var receptive: Bool { Self.dragSessionActive && !(isRopeVisible?() ?? false) }
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
@@ -311,10 +346,11 @@ final class ClotheslineController {
         let wasExpanded = view.expanded
         if feedback && wasExpanded != expanded { InteractionHaptics.perform(expanded ? .alignment : .levelChange) }
         view.expanded = expanded
-        // 只在真实过渡时播淡入，绳已垂下时补挂新内容不得整面闪断。
-        if expanded != wasExpanded { view.reveal(expanded) }
         let frame = ClotheslineLayout.frame(screen: entry.screen.frame, visible: entry.screen.visibleFrame, expanded: expanded)
-        if expanded {
+        // 只在真实过渡时播垂下/收绳动画；绳已垂下时补挂新内容不得整面闪断。
+        if expanded != wasExpanded {
+            view.reveal(expanded, frame: frame)   // 动画内负责 setFrame / orderFront / orderOut
+        } else if expanded {
             entry.panel.setFrame(frame, display: true)
             entry.panel.orderFrontRegardless()
         } else {
@@ -432,6 +468,8 @@ final class ClotheslineView: NSView, NSDraggingSource {
     private var undoTimer: Timer?
     private var revealTimer: Timer?
     private var revealAlpha: CGFloat = 1
+    /// 收绳动画进行中（面板仍需绘制，draw 不能因 expanded=false 直接返回）
+    private var isRetracting = false
     private var hoverTimer: Timer?
     private var shade: [String: CGFloat] = [:]
     private var outlineAlpha: [String: CGFloat] = [:]
@@ -450,18 +488,66 @@ final class ClotheslineView: NSView, NSDraggingSource {
         interaction.finishTaking(accepted: accepted, at: ProcessInfo.processInfo.systemUptime)
         needsDisplay = true
     }
-    func reveal(_ expanded: Bool) {
-        revealTimer?.invalidate(); revealTimer = nil; revealAlpha = 1
-        guard expanded, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { needsDisplay = true; return }
-        revealAlpha = 0
-        let began = ProcessInfo.processInfo.systemUptime
-        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
-            guard let self else { timer.invalidate(); return }
-            let t = min(1, (ProcessInfo.processInfo.systemUptime - began) / 0.18)
-            self.revealAlpha = CGFloat(1 - pow(1 - t, 3)); self.needsDisplay = true
-            if t >= 1 { timer.invalidate(); self.revealTimer = nil }
+    /// 绳子垂下/收起：整窗从屏幕上缘滑入（轻回弹，像绳落到位置后坠一下）或上滑淡出，
+    /// 替代旧的整面淡入淡出。动画内负责 setFrame / orderFront / orderOut。
+    func reveal(_ expanded: Bool, frame: CGRect) {
+        revealTimer?.invalidate(); revealTimer = nil
+        guard let panel = window as? NSPanel else {
+            isRetracting = false; revealAlpha = 1
+            if expanded { window?.setFrame(frame, display: true); window?.orderFrontRegardless() }
+            else { window?.orderOut(nil) }
+            needsDisplay = true
+            return
         }
-        revealTimer = timer; RunLoop.main.add(timer, forMode: .common)
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            isRetracting = false; revealAlpha = 1
+            if expanded { panel.setFrame(frame, display: true); panel.orderFrontRegardless() }
+            else { panel.orderOut(nil) }
+            needsDisplay = true
+            return
+        }
+        let raised = CGRect(x: frame.minX, y: frame.maxY, width: frame.width, height: frame.height)
+        if expanded {
+            isRetracting = false; revealAlpha = 1
+            panel.setFrame(raised, display: false)
+            panel.orderFrontRegardless()
+            let began = ProcessInfo.processInfo.systemUptime
+            let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
+                guard let self else { timer.invalidate(); return }
+                let t = min(1, (ProcessInfo.processInfo.systemUptime - began) / 0.45)
+                let k = Self.easeOutBack(t)
+                panel.setFrame(CGRect(x: frame.minX, y: raised.minY + (frame.minY - raised.minY) * CGFloat(k),
+                                      width: frame.width, height: frame.height), display: false)
+                if t >= 1 { timer.invalidate(); self.revealTimer = nil }
+                self.needsDisplay = true
+            }
+            revealTimer = timer; RunLoop.main.add(timer, forMode: .common)
+        } else {
+            isRetracting = true
+            let from = panel.frame
+            let began = ProcessInfo.processInfo.systemUptime
+            let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
+                guard let self else { timer.invalidate(); return }
+                let t = min(1, (ProcessInfo.processInfo.systemUptime - began) / 0.26)
+                let k = t * t
+                panel.setFrame(CGRect(x: from.minX, y: from.minY + (raised.minY - from.minY) * CGFloat(k),
+                                      width: from.width, height: from.height), display: false)
+                self.revealAlpha = max(0, 1 - t * 1.5)
+                self.needsDisplay = true
+                if t >= 1 {
+                    timer.invalidate(); self.revealTimer = nil
+                    self.isRetracting = false; self.revealAlpha = 1
+                    panel.orderOut(nil)
+                }
+            }
+            revealTimer = timer; RunLoop.main.add(timer, forMode: .common)
+        }
+        needsDisplay = true
+    }
+    /// easeOutBack（c1=0.9，峰值约 3% 过冲：绳坠到位后轻弹回）
+    private static func easeOutBack(_ t: Double) -> Double {
+        let c1 = 0.9, c3 = c1 + 1
+        return 1 + c3 * pow(t - 1, 3) + c1 * pow(t - 1, 2)
     }
     private func animateHover() {
         hoverTimer?.invalidate()
@@ -687,6 +773,9 @@ final class ClotheslineView: NSView, NSDraggingSource {
         let body = NSBezierPath(roundedRect: CGRect(x: 2, y: 9, width: 28, height: 16), xRadius: 3, yRadius: 3)
         NSGradient(colors: metal)?.draw(in: body, angle: 90)
         NSColor.black.withAlphaComponent(0.45).setStroke(); body.lineWidth = 0.7; body.stroke()
+        // 金属高光斜划
+        NSColor.white.withAlphaComponent(0.35 * (1 - dim)).setFill()
+        NSBezierPath(roundedRect: CGRect(x: 5, y: 21.5, width: 15, height: 2.0), xRadius: 1, yRadius: 1).fill()
         NSColor.black.withAlphaComponent(0.35 * (1 - dim)).setStroke()
         let seam = NSBezierPath(); seam.move(to: CGPoint(x: 8, y: 17)); seam.line(to: CGPoint(x: 24, y: 17)); seam.lineWidth = 1
         seam.stroke()
@@ -703,21 +792,71 @@ final class ClotheslineView: NSView, NSDraggingSource {
         return captionTimeFormatter.string(from: date)
     }
 
+    /// 麻绳质感：沿绳弧采样，三股纤维带捻转波动（相位互差 2π/3），叠斜向捻痕与落影。
+    private func drawHempRope(fromX: CGFloat, toX: CGFloat) {
+        let p0 = CGPoint(x: fromX, y: 44)
+        let p1 = CGPoint(x: fromX + (toX - fromX) * 0.35, y: 60)
+        let p2 = CGPoint(x: fromX + (toX - fromX) * 0.65, y: 60)
+        let p3 = CGPoint(x: toX, y: 44)
+        let count = max(24, Int((toX - fromX) / 4))
+        var pts: [CGPoint] = [], tans: [CGPoint] = []
+        for i in 0...count {
+            let t = CGFloat(i) / CGFloat(count), mt = 1 - t
+            let x = mt * mt * mt * p0.x + 3 * mt * mt * t * p1.x + 3 * mt * t * t * p2.x + t * t * t * p3.x
+            let y = mt * mt * mt * p0.y + 3 * mt * mt * t * p1.y + 3 * mt * t * t * p2.y + t * t * t * p3.y
+            let dx = 3 * mt * mt * (p1.x - p0.x) + 6 * mt * t * (p2.x - p1.x) + 3 * t * t * (p3.x - p2.x)
+            let dy = 3 * mt * mt * (p1.y - p0.y) + 6 * mt * t * (p2.y - p1.y) + 3 * t * t * (p3.y - p2.y)
+            pts.append(CGPoint(x: x, y: y)); tans.append(CGPoint(x: dx, y: dy))
+        }
+        func normal(_ i: Int) -> CGPoint {
+            let d = tans[i], len = max(hypot(d.x, d.y), 0.001)
+            return CGPoint(x: -d.y / len, y: d.x / len)
+        }
+        let shadow = NSBezierPath()
+        for (i, p) in pts.enumerated() { i == 0 ? shadow.move(to: p) : shadow.line(to: p) }
+        shadow.lineWidth = 5.2
+        NSColor.black.withAlphaComponent(0.14).setStroke(); shadow.stroke()
+        let hempDark = NSColor(calibratedRed: 0.38, green: 0.30, blue: 0.18, alpha: 1)
+        let hemp = NSColor(calibratedRed: 0.56, green: 0.48, blue: 0.34, alpha: 1)
+        let hempLight = NSColor(calibratedRed: 0.79, green: 0.71, blue: 0.55, alpha: 1)
+        for (k, strand) in [(offset: CGFloat(-1.15), color: hempDark),
+                            (offset: CGFloat(0), color: hemp),
+                            (offset: CGFloat(1.15), color: hempLight)].enumerated() {
+            let path = NSBezierPath()
+            let phase = Double(k) * 2.0 * Double.pi / 3.0
+            for (i, p) in pts.enumerated() {
+                let n = normal(i)
+                let twist = sin(Double(i) * 1.5 + phase) * 0.85
+                let q = CGPoint(x: p.x + n.x * (strand.offset + CGFloat(twist)),
+                                y: p.y + n.y * (strand.offset + CGFloat(twist)))
+                i == 0 ? path.move(to: q) : path.line(to: q)
+            }
+            path.lineWidth = 1.7; strand.color.setStroke(); path.stroke()
+        }
+        // 斜向捻痕：短刻线沿法向横跨绳身，倾角交替，读出「拧过的绳」
+        let tick = NSBezierPath()
+        var i = 4
+        while i < pts.count - 4 {
+            let n = normal(i), d = tans[i], len = max(hypot(d.x, d.y), 0.001)
+            let t = CGPoint(x: d.x / len, y: d.y / len)
+            let lean: CGFloat = (i / 6) % 2 == 0 ? 1 : -1
+            tick.move(to: CGPoint(x: pts[i].x - n.x * 2.0 + t.x * 1.3 * lean, y: pts[i].y - n.y * 2.0 + t.y * 1.3 * lean))
+            tick.line(to: CGPoint(x: pts[i].x + n.x * 2.0 - t.x * 1.3 * lean, y: pts[i].y + n.y * 2.0 - t.y * 1.3 * lean))
+            i += 6
+        }
+        tick.lineWidth = 0.8
+        NSColor(calibratedRed: 0.30, green: 0.23, blue: 0.13, alpha: 0.5).setStroke(); tick.stroke()
+    }
+
     override func draw(_ dirtyRect: NSRect) {
-        guard expanded else { return }
+        guard expanded || isRetracting else { return }
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current?.cgContext.setAlpha(revealAlpha)
         let now = ProcessInfo.processInfo.systemUptime
         // 绳铺满面板全宽（左右各留 10pt），卡片沿绳滚动。
         let ropeStart: CGFloat = 10
         let ropeEnd = bounds.width - 10
-        let rope = NSBezierPath(); rope.move(to: CGPoint(x: ropeStart, y: 44))
-        rope.curve(to: CGPoint(x: ropeEnd, y: 44), controlPoint1: CGPoint(x: ropeStart + (ropeEnd - ropeStart) * 0.35, y: 60), controlPoint2: CGPoint(x: ropeStart + (ropeEnd - ropeStart) * 0.65, y: 60))
-        rope.lineWidth = 2.4
-        NSColor(calibratedRed: 0.59, green: 0.55, blue: 0.45, alpha: 1).setStroke(); rope.stroke()
-        let thread = rope.copy() as! NSBezierPath
-        thread.lineWidth = 0.9; thread.setLineDash([2, 3], count: 2, phase: 0)
-        NSColor(calibratedRed: 0.88, green: 0.84, blue: 0.74, alpha: 1).setStroke(); thread.stroke()
+        drawHempRope(fromX: ropeStart, toX: ropeEnd)
         for x in [ropeStart, ropeEnd] {
             let peg = NSBezierPath(ovalIn: CGRect(x: x - 5, y: 39, width: 10, height: 10))
             NSGradient(colors: [NSColor(calibratedRed: 0.88, green: 0.74, blue: 0.34, alpha: 1),
@@ -737,14 +876,21 @@ final class ClotheslineView: NSView, NSDraggingSource {
             transform.translateX(by: -anchor.x, yBy: -anchor.y)
             transform.concat()
             let shadow = NSShadow(); shadow.shadowBlurRadius = 10; shadow.shadowOffset = NSSize(width: 0, height: -4); shadow.shadowColor = NSColor.black.withAlphaComponent(0.28); shadow.set()
+            // 相纸：纵向受光渐变替代平涂，外缘细描边 + 内嵌细线模拟纸厚
             let paper = NSBezierPath(roundedRect: rect, xRadius: 2.5, yRadius: 2.5)
-            NSColor(calibratedRed: 0.980, green: 0.973, blue: 0.957, alpha: 1).setFill(); paper.fill()
+            NSGradient(colors: [NSColor(calibratedWhite: 0.988, alpha: 1),
+                                NSColor(calibratedRed: 0.958, green: 0.948, blue: 0.928, alpha: 1)])?.draw(in: paper, angle: 90)
             NSGraphicsContext.restoreGraphicsState()
             NSGraphicsContext.saveGraphicsState()
             transform.concat()
             NSColor(calibratedRed: 0.918, green: 0.898, blue: 0.867, alpha: 1).setStroke(); paper.lineWidth = 0.6; paper.stroke()
+            let innerEdge = NSBezierPath(roundedRect: rect.insetBy(dx: 1.4, dy: 1.4), xRadius: 1.8, yRadius: 1.8)
+            NSColor.black.withAlphaComponent(0.05).setStroke(); innerEdge.lineWidth = 1; innerEdge.stroke()
             let content = CGRect(x: rect.minX + 10, y: rect.minY + 10, width: rect.width - 20, height: rect.height - 54)
-            NSColor(calibratedWhite: 0.94, alpha: 1).setFill(); content.fill()
+            NSGradient(colors: [NSColor(calibratedWhite: 0.948, alpha: 1), NSColor(calibratedWhite: 0.926, alpha: 1)])?.draw(in: content, angle: 90)
+            // 内容区上缘压一条内阴影线：照片嵌进相纸的凹槽感
+            NSColor.black.withAlphaComponent(0.06).setFill()
+            CGRect(x: content.minX, y: content.minY, width: content.width, height: 1).fill()
             if item.kind == .image, let image = store.thumbnail(for: item, maxPixel: 320) {
                 let scale = min(content.width / max(image.size.width, 1), content.height / max(image.size.height, 1))
                 let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
@@ -763,6 +909,9 @@ final class ClotheslineView: NSView, NSDraggingSource {
             }
             // 拍立得图注：标题 + 元信息 + 状态点，占卡片底部 34pt。
             let captionTop = rect.maxY - 34
+            NSColor.black.withAlphaComponent(0.07).setStroke()
+            let capSep = NSBezierPath(); capSep.move(to: CGPoint(x: rect.minX + 8, y: captionTop - 1))
+            capSep.line(to: CGPoint(x: rect.maxX - 8, y: captionTop - 1)); capSep.lineWidth = 0.8; capSep.stroke()
             var captionTitle: String
             var captionMeta: String
             var metaColor = NSColor(calibratedWhite: 0.49, alpha: 1)

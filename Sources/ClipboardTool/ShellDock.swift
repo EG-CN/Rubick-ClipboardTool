@@ -33,7 +33,7 @@ final class ShellDockController {
             let host = NSHostingView(rootView: ShellDockView()
                 .environmentObject(store)
                 .environmentObject(panelState))
-            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 720, height: 72),
+            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 720, height: 76),
                             styleMask: [.borderless, .nonactivatingPanel],
                             backing: .buffered, defer: false)
             p.level = .floating
@@ -54,7 +54,7 @@ final class ShellDockController {
             let vis = screen.visibleFrame
             let width = min(720, vis.width - 24)
             let frame = CGRect(x: vis.midX - width / 2, y: vis.minY + 10,
-                               width: width, height: 72)
+                               width: width, height: 76)
             p.setFrame(frame, display: true)
         }
         ActivationPolicyKeeper.shared.acquire("dock")
@@ -127,14 +127,21 @@ struct ShellDockView: View {
         .padding(.horizontal, 14)
         .padding(.top, 8)
         .padding(.bottom, 0)
-        .frame(height: 72)
+        .frame(height: 76)
         .background(.ultraThinMaterial)
+        // 深黑曜石压层（Arcane Obsidian：rgba(11,15,20,.88) 玻璃底）
+        .background(Color(red: 0.043, green: 0.059, blue: 0.078).opacity(0.72))
         .background(RubickTheme.panelAurora(scheme))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: 16)
                 .strokeBorder(RubickTheme.panelGradientBorder(scheme), lineWidth: 0.8)
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
         // 手动关闭（悬停时右上角浮现）：必须用 overlay——之前是 HStack 子元素，
         // 出现时被挤到 720pt 面板边界外裁掉，永远看不见
         .overlay(alignment: .topTrailing) {
@@ -195,6 +202,20 @@ struct ShellDockView: View {
         )
         // 标签页「升起」感：激活卡下缘探到底线之下（更高的卡片 + 负底边距）
         .offset(y: isActive ? 4 : 0)
+        .overlay(alignment: .bottomTrailing) {
+            // ⌘N 直取键帽徽章（底部动作轨快捷键心智）
+            if index < 9 {
+                Text("⌘\(index + 1)")
+                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(isActive ? RubickTheme.emeraldBright : Color.white.opacity(0.4))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1.5)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(isActive ? 0.1 : 0.05)))
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.white.opacity(0.12), lineWidth: 0.6))
+                    .padding(.trailing, 3)
+                    .padding(.bottom, 2)
+            }
+        }
         .contentShape(Rectangle())
         // 非激活面板永不成为 key，onTapGesture 在其中不触发（点卡片全无反应的根因）；
         // DragGesture(0) 不依赖 key 窗口，位移 <6pt 视为点击

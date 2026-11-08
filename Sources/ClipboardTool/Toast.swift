@@ -67,13 +67,23 @@ struct ToastView: View {
     let text: String
 
     var body: some View {
-        Text(text)
-            .font(.system(size: 12))
-            .foregroundStyle(.white)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .frame(maxWidth: 420)
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color.black.opacity(0.78)))
+        HStack(spacing: 7) {
+            // 祖母绿状态点：与全局荧光语言一致
+            Circle()
+                .fill(Color(red: 0.063, green: 0.725, blue: 0.506))
+                .frame(width: 6, height: 6)
+                .shadow(color: Color(red: 0.063, green: 0.725, blue: 0.506).opacity(0.8), radius: 3)
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundStyle(Color(red: 0.945, green: 0.961, blue: 0.976))
+                .multilineTextAlignment(.leading)
+                .lineLimit(3)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(maxWidth: 440)
+        .background(RoundedRectangle(cornerRadius: 13).fill(Color(red: 0.051, green: 0.063, blue: 0.078).opacity(0.94)))
+        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Color.white.opacity(0.1), lineWidth: 0.8))
+        .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
     }
 }

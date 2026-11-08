@@ -124,6 +124,30 @@ final class AnnotateModel: ObservableObject {
         }
     }
 
+    /// 识图并整段翻译（工具栏「翻译」按钮）：对合成画面 OCR，成功后自动接整段翻译
+    func ocrThenTranslate(on image: NSImage) {
+        closeSidePanel()
+        Toast.shared.show("正在识别文字…")
+        OCRService.shared.recognize(image: image) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                switch result {
+                case .success(let r):
+                    let text = r.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !text.isEmpty else {
+                        Toast.shared.show("未识别到文字")
+                        return
+                    }
+                    self.ocrText = text
+                    self.translatedText = nil
+                    self.translateSideSelection()
+                case .failure(let err):
+                    Toast.shared.show("识别失败：\(err.localizedDescription)")
+                }
+            }
+        }
+    }
+
     /// 翻译：优先翻译侧面板文本视图中选中的文字，否则翻译全部识别文本
     func translateSideSelection() {
         let whole = sidePanelText
@@ -667,6 +691,7 @@ struct AnnotateEditorView: View {
     @State private var penPath: [CGPoint] = []
     @State private var grabOffset: CGPoint?
     @State private var hoveredHelp: String?
+    @State private var hoveredButton: String?
     @State private var dragTextID: UUID?
     @State private var dragTextStart: CGPoint?
     @FocusState private var textFocused: Bool
@@ -1077,31 +1102,67 @@ struct AnnotateEditorView: View {
         }
     }
 
-    // MARK: 工具栏（定宽两段式：第一行工具恒定不抖，属性控件固定在第二行左槽）
+    // MARK: 工具栏（照效果图② 1:1：单行近黑玻璃药丸 + 右下角键帽 + 属性细条 + 提示行）
 
     private var toolbar: some View {
-        VStack(spacing: 6) {
-            // 第一行（恒定）：工具 + 识图 + 颜色 + 线宽 + 撤销重做
-            HStack(spacing: 6) {
+        VStack(spacing: 7) {
+            // 主药丸行：工具(带键帽) | 识图·翻译 | 撤销·重做 | 取消·确认
+            HStack(spacing: 4) {
                 ForEach(visibleTools, id: \.self) { t in
                     toolButton(t)
                 }
                 divider
-                Button {
+                pillAction("text.viewfinder", tag: "ocr", help: "识图当前画面（\(keyDisplay(.ocr))）") {
                     ocrOnComposite()
+                }
+                pillAction("translate", tag: "translate", help: "识图并翻译（\(keyDisplay(.translate))）") {
+                    model.ocrThenTranslate(on: AnnotationController.flatten(image: image, annotations: model.annotations) ?? image)
+                }
+                divider
+                pillAction("arrow.uturn.backward", tag: "undo", help: "撤销 \(keyDisplay(.undo))", enabled: !model.annotations.isEmpty) {
+                    model.undo()
+                }
+                pillAction("arrow.uturn.forward", tag: "redo", help: "重做 \(keyDisplay(.redo))", enabled: !model.redoStack.isEmpty) {
+                    model.redo()
+                }
+                divider
+                // 取消：灰块 ×；确认：祖母绿块 ✓（效果图② 38×34 方块）
+                Button {
+                    onCancel()
                 } label: {
-                    Image(systemName: "text.viewfinder")
-                        .font(.system(size: 14))
-                        .frame(width: 32, height: 32)
-                        .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.06)))
-                        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.12), lineWidth: 1))
-                        .foregroundStyle(RubickTheme.emeraldBright)
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 38, height: 34)
+                        .background(RoundedRectangle(cornerRadius: 9).fill(.white.opacity(0.07)))
+                        .foregroundStyle(Color(red: 0.545, green: 0.584, blue: 0.631))
                 }
                 .buttonStyle(.plain)
                 .onHover { hovering in
-                    hoveredHelp = hovering ? "识图当前画面（\(keyDisplay(.ocr))）" : nil
+                    hoveredHelp = hovering ? "取消标注（⎋ 先撤当前图形再退出）" : nil
                 }
-                divider
+                Button {
+                    model.commitText()
+                    onConfirm(AnnotationController.flatten(image: image, annotations: model.annotations) ?? image)
+                } label: {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .frame(width: 38, height: 34)
+                        .background(RoundedRectangle(cornerRadius: 9).fill(Color(red: 0.063, green: 0.725, blue: 0.506)))
+                        .foregroundStyle(Color(red: 0.0, green: 0.22, blue: 0.14))
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.defaultAction)
+                .onHover { hovering in
+                    hoveredHelp = hovering ? "完成标注（↵）" : nil
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 13).fill(Color(red: 0.051, green: 0.063, blue: 0.078).opacity(0.94)))
+            .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(.white.opacity(0.12), lineWidth: 1))
+            .shadow(color: .black.opacity(0.55), radius: 16, y: 7)
+            // 属性细条：颜色 + 线宽 + 当前工具属性（固定槽位不抖动）
+            HStack(spacing: 8) {
                 ForEach(0..<AnnotationController.palette.count, id: \.self) { i in
                     colorDot(i)
                 }
@@ -1112,51 +1173,63 @@ struct AnnotateEditorView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 104)
-                Spacer()
-                toolbarAction("arrow.uturn.backward", help: "撤销 \(keyDisplay(.undo))", enabled: !model.annotations.isEmpty) {
-                    model.undo()
-                }
-                toolbarAction("arrow.uturn.forward", help: "重做 \(keyDisplay(.redo))", enabled: !model.redoStack.isEmpty) {
-                    model.redo()
-                }
-            }
-            // 第二行（恒定高度）：左槽=当前工具属性（不抖动），右=提示 + 确认/取消
-            HStack(spacing: 8) {
+                .fixedSize()
                 contextualControls
-                    .frame(minWidth: 240, alignment: .leading)
-                Text(hoveredHelp ?? "\(keyDisplay(.toolRect))–\(keyDisplay(.toolHighlight)) 工具 · \(keyDisplay(.ocr)) 识图 · \(keyDisplay(.undo)) 撤销 · ⎋ 取消")
-                    .font(.system(size: 9.5))
-                    .foregroundStyle(hoveredHelp != nil ? RubickTheme.emeraldBright : .white.opacity(0.55))
-                    .lineLimit(1)
                 Spacer()
-                Button {
-                    onCancel()
-                } label: {
-                    Label("取消", systemImage: "xmark")
-                        .font(.system(size: 11))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                Button {
-                    model.commitText()
-                    onConfirm(AnnotationController.flatten(image: image, annotations: model.annotations) ?? image)
-                } label: {
-                    Label("确认", systemImage: "checkmark")
-                        .font(.system(size: 11, weight: .semibold))
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .tint(RubickTheme.emerald)
-                .keyboardShortcut(.defaultAction)
+                Text(hoveredHelp ?? "")
+                    .font(.system(size: 10))
+                    .foregroundStyle(RubickTheme.emeraldBright)
+                    .lineLimit(1)
             }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(RoundedRectangle(cornerRadius: 10).fill(.black.opacity(0.42)))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.08), lineWidth: 0.8))
+            // 提示行（效果图② 底部文案样式）
+            hintLine
+                .font(.system(size: 11))
+                .lineLimit(1)
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(.black.opacity(0.55)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(RubickTheme.emerald.opacity(0.3), lineWidth: 0.8))
+    }
+
+    private var hintLine: Text {
+        let gray = Color(red: 0.545, green: 0.584, blue: 0.631)
+        let green = RubickTheme.emeraldBright
+        if let help = hoveredHelp { return Text(help).foregroundStyle(green) }
+        return Text("拖过箭头两端可调整指向").foregroundStyle(gray)
+            + Text(" · ").foregroundStyle(gray.opacity(0.6))
+            + Text("Esc 先撤当前图形再退出").foregroundStyle(green)
+            + Text(" · ").foregroundStyle(gray.opacity(0.6))
+            + Text("↵ 确认").foregroundStyle(green)
     }
 
     private var divider: some View {
-        Rectangle().fill(.white.opacity(0.12)).frame(width: 1, height: 20)
+        Rectangle().fill(.white.opacity(0.12)).frame(width: 1, height: 22).padding(.horizontal, 4)
+    }
+
+    /// 图② 主药丸钮：36×36 圆角 9，无描边；悬停白 8%；激活祖母绿 16% 底 + 内环；右下角键帽
+    private func pillButtonFrame(_ active: Bool, hovered: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 9)
+            .fill(active ? Color(red: 0.063, green: 0.725, blue: 0.506).opacity(0.16)
+                  : (hovered ? .white.opacity(0.08) : .clear))
+            .overlay(RoundedRectangle(cornerRadius: 9)
+                .strokeBorder(active ? Color(red: 0.31, green: 0.87, blue: 0.64).opacity(0.4) : .clear, lineWidth: 1))
+    }
+
+    private func pillAction(_ symbol: String, tag: String, help: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 14))
+                .frame(width: 36, height: 36)
+                .background(pillButtonFrame(false, hovered: hoveredButton == tag))
+                .foregroundStyle(enabled ? Color(red: 0.765, green: 0.796, blue: 0.831) : .white.opacity(0.28))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .onHover { hovering in
+            hoveredButton = hovering ? tag : (hoveredButton == tag ? nil : hoveredButton)
+            hoveredHelp = hovering ? help : nil
+        }
     }
 
     /// 当前工具的属性控件（固定槽位，切换工具只换内容不改变行高/布局）
@@ -1243,8 +1316,9 @@ struct AnnotateEditorView: View {
     }
 
     private func toolButton(_ t: Annotation.Tool) -> some View {
-        Button {
-            model.tool = (model.tool == t) ? nil : t
+        let active = model.tool == t
+        return Button {
+            model.tool = active ? nil : t
         } label: {
             Group {
                 if t == .text {
@@ -1263,16 +1337,23 @@ struct AnnotateEditorView: View {
                         .font(.system(size: 13))
                 }
             }
-            .frame(width: 32, height: 32)
-                .background(RoundedRectangle(cornerRadius: 7).fill(model.tool == t
-                                                                   ? RubickTheme.emerald.opacity(0.22)
-                                                                   : .white.opacity(0.06)))
-                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(
-                    model.tool == t ? RubickTheme.emerald : .white.opacity(0.12), lineWidth: 1))
-                .foregroundStyle(model.tool == t ? RubickTheme.emeraldBright : .white.opacity(0.85))
+            .frame(width: 36, height: 36)
+            .background(pillButtonFrame(active, hovered: hoveredButton == t.symbol))
+            .foregroundStyle(active ? RubickTheme.emeraldBright : Color(red: 0.765, green: 0.796, blue: 0.831))
+            .overlay(alignment: .bottomTrailing) {
+                // 右下角键帽徽章（效果图② .n 样式）
+                if let key = keyForTool(t) {
+                    Text(key)
+                        .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(active ? RubickTheme.emeraldBright : Color(red: 0.408, green: 0.451, blue: 0.494))
+                        .padding(.trailing, 3)
+                        .padding(.bottom, 2)
+                }
+            }
         }
         .buttonStyle(.plain)
         .onHover { hovering in
+            hoveredButton = hovering ? t.symbol : (hoveredButton == t.symbol ? nil : hoveredButton)
             hoveredHelp = hovering ? "\(t.label)（\(keyForTool(t) ?? "点击")）" : nil
         }
     }
@@ -1323,22 +1404,6 @@ struct AnnotateEditorView: View {
                    from: from, operation: .copy, fraction: 1)
         out.unlockFocus()
         return out
-    }
-
-    private func toolbarAction(_ symbol: String, help: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 12))
-                .frame(width: 26, height: 26)
-                .background(RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.06)))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.12), lineWidth: 1))
-                .foregroundStyle(enabled ? .white.opacity(0.85) : .white.opacity(0.3))
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .onHover { hovering in
-            hoveredHelp = hovering ? help : nil
-        }
     }
 }
 
