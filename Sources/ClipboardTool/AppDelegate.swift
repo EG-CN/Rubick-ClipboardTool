@@ -343,7 +343,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shotItem.target = self
         menu.addItem(shotItem)
 
-        let longShotItem = NSMenuItem(title: "长截图（手动滚动）", action: #selector(captureLongShot), keyEquivalent: "l")
+        let longShotItem = NSMenuItem(title: "长截图（实验）", action: #selector(captureLongShot), keyEquivalent: "l")
         longShotItem.keyEquivalentModifierMask = [.command, .shift]
         longShotItem.target = self
         menu.addItem(longShotItem)

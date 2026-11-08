@@ -207,7 +207,7 @@ func actionLabel(_ action: HotkeyManager.Action) -> String {
     case .dragTranslate: return "划图翻译（选区识别+翻译）"
     case .pinClipboard: return "钉剪贴板贴图（Snipaste F3 式）"
     case .dragOCR: return "划图取字（选区识别→复制）"
-    case .longScreenshot: return "长截图（滚动拼接 · ⌘⇧L 或普通截图工具条）"
+    case .longScreenshot: return "长截图（实验 · 默认关闭，在此开启后可用 ⌘⇧L）"
     case .screenRecord: return "录屏（区域录制 · 导出 GIF/MP4）"
     case .delayedScreenshot: return "延时截图（倒计时后框选）"
     }

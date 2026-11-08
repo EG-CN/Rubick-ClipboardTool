@@ -373,7 +373,7 @@ final class LongScreenshot {
 
     private init() {}
 
-    var enabled: Bool { UserDefaults.standard.object(forKey: "capture.longShot") as? Bool ?? true }
+    var enabled: Bool { UserDefaults.standard.object(forKey: "capture.longShot") as? Bool ?? false }
 
     /// rect：AppKit 全局坐标（左下原点）的框选区域；mode 本次采集的滚动控制模式
     func start(rect: CGRect, mode requested: LongShotMode = .manual) {
