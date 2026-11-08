@@ -75,9 +75,9 @@ struct ClotheslineLayout {
     /// 接取区位置：覆盖刘海本体及其下方缓冲（无刘海屏为顶部居中窄条）。
     /// 用户瞄准"刘海"甩文件即可命中；宽度略大于刘海，左右稍偏也接得住。
     static func catcherFrame(screen: CGRect, visible: CGRect, cutout: CGRect?) -> CGRect {
-        let width: CGFloat = 260
+        let width: CGFloat = 560
         let safeTop = screen.maxY - visible.maxY
-        let height: CGFloat = cutout != nil ? safeTop + 34 : 34
+        let height: CGFloat = cutout != nil ? safeTop + 96 : 96
         let center = cutout?.midX ?? screen.midX
         let x = min(max(center - width / 2, visible.minX), visible.maxX - width)
         return CGRect(x: x, y: screen.maxY - height, width: width, height: height)
@@ -111,14 +111,14 @@ final class ClotheslineDragCatcherView: NSView {
     }
     override func draw(_ dirtyRect: NSRect) {
         guard Self.dragSessionActive, !(isRopeVisible?() ?? false) else { return }
-        let pill = CGRect(x: bounds.midX - 110, y: bounds.maxY - 34, width: 220, height: 26)
+        let pill = bounds.insetBy(dx: 10, dy: 6)
         let path = NSBezierPath(roundedRect: pill, xRadius: 13, yRadius: 13)
         NSColor(calibratedWhite: 0.05, alpha: 0.88).setFill(); path.fill()
         let dash = NSBezierPath(roundedRect: pill.insetBy(dx: 1.5, dy: 1.5), xRadius: 12, yRadius: 12)
         NSColor(calibratedRed: 0.31, green: 0.87, blue: 0.64, alpha: 0.9).setStroke()
         dash.lineWidth = 1.2; dash.setLineDash([4, 3], count: 2, phase: 0); dash.stroke()
-        let text = "把文件拖到这里挂上绳" as NSString
-        let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 11.5, weight: .medium),
+        let text = "松手把文件挂到绳上" as NSString
+        let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 14, weight: .semibold),
                                                          .foregroundColor: NSColor(calibratedRed: 0.45, green: 0.93, blue: 0.71, alpha: 1)]
         let size = text.size(withAttributes: attributes)
         text.draw(at: CGPoint(x: pill.midX - size.width / 2, y: pill.midY - size.height / 2), withAttributes: attributes)
@@ -126,14 +126,16 @@ final class ClotheslineDragCatcherView: NSView {
     private var receptive: Bool { Self.dragSessionActive && !(isRopeVisible?() ?? false) }
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         guard receptive, !(sender.draggingSource is ClotheslineView), !FileTransfer.files(from: sender.draggingPasteboard).isEmpty else { return [] }
-        controller?.catcherCaughtDrag()
-        InteractionHaptics.perform(.alignment)
+        // 拖拽中只亮引导框，不弹绳：松手后绳子才带着新文件出现
+        needsDisplay = true
         return .copy
     }
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { receptive ? .copy : [] }
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let urls = FileTransfer.files(from: sender.draggingPasteboard)
         guard receptive, !urls.isEmpty else { return false }
+        Self.dragSessionActive = false
+        needsDisplay = true
         controller?.stageFilesAtMouse(urls)
         return true
     }
@@ -233,16 +235,24 @@ final class ClotheslineController {
     }
     /// 拖拽会话开始/结束时翻转接取区的实体态，并让引导框同步显隐。
     /// 配合拖拽剪贴板检查，只有文件拖拽才点亮，窗口移动/文字拖拽不干扰。
+    private var lastDragChangeCount = 0
+    /// 拖拽会话布防：仅当拖拽剪贴板出现"新的 fileURL 会话"才武装接取区。
+    /// 拖拽剪贴板会残留上一次的内容——没有 changeCount 门闩时，移动窗口的
+    /// 鼠标拖动也会被误判为新文件拖拽（用户实测"移动应用就触发"的真凶）。
     func noteDragSession(_ began: Bool) {
         guard ClipboardPresentation.current == .clothesline, !suspended else { return }
-        let fileDrag = began && (NSPasteboard(name: NSPasteboard.Name("Apple CFPasteboard drag")).types?.contains(.fileURL) == true)
-        guard ClotheslineDragCatcherView.dragSessionActive != fileDrag else { return }
-        ClotheslineDragCatcherView.dragSessionActive = fileDrag
-        catchers.forEach { $0.view.needsDisplay = true }
-    }
-    /// 接取区捕到拖拽：绳子立刻在当前屏幕垂下，绳面接管后续拖拽更新。
-    func catcherCaughtDrag() {
-        presentAtMouse()
+        let dragPB = NSPasteboard(name: NSPasteboard.Name("Apple CFPasteboard drag"))
+        if began {
+            guard dragPB.changeCount != lastDragChangeCount,
+                  dragPB.types?.contains(.fileURL) == true else { return }
+            lastDragChangeCount = dragPB.changeCount
+            ClotheslineDragCatcherView.dragSessionActive = true
+            catchers.forEach { $0.view.needsDisplay = true }
+        } else {
+            guard ClotheslineDragCatcherView.dragSessionActive else { return }
+            ClotheslineDragCatcherView.dragSessionActive = false
+            catchers.forEach { $0.view.needsDisplay = true }
+        }
     }
     /// 接取区兜底接收：光标停在接取区内松手时，走与绳面拖入一致的挂入路径。
     func stageFilesAtMouse(_ urls: [URL]) {

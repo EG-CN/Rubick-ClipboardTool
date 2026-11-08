@@ -117,7 +117,8 @@ struct ClotheslineTests {
         let visible = CGRect(x: screen.minX, y: screen.minY + 40, width: screen.width, height: screen.height - 78)
         let notchless = ClotheslineLayout.catcherFrame(screen: screen, visible: visible, cutout: nil)
         #expect(notchless.maxY == screen.maxY)
-        #expect(notchless.height == 34)
+        #expect(notchless.height == 96)
+        #expect(notchless.width == 560)
         #expect(notchless.midX == screen.midX)
         #expect(notchless.minX >= visible.minX)
         let cutout = CGRect(x: screen.midX - 90, y: screen.maxY - 38, width: 180, height: 38)
@@ -127,7 +128,8 @@ struct ClotheslineTests {
         #expect(notched.minY < cutout.minY)
         #expect(notched.contains(cutout))
         #expect(notched.midX == cutout.midX)
-        #expect(notched.width == 260)
+        #expect(notched.width == 560)
+        #expect(notched.minY < cutout.minY)
     }
     @Test func noPasteIntoButtonOrUnknownFocus() {
         #expect(!ClotheslineLayout.isEditable(role: "AXButton", valueSettable: false, explicitlyEditable: false))
