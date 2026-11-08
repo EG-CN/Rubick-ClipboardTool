@@ -152,25 +152,17 @@ final class ClotheslineController {
     private var suspended = false
     private var hidden = false
     private var eventMonitors: [Any] = []
-    private var lastItemCount = 0
-    private var lastFirstItemID: String?
     private var catchers: [(screen: NSScreen, panel: ClotheslineDragCatcher, view: ClotheslineDragCatcherView)] = []
     private init() {}
 
     func start() {
         guard timer == nil else { return }
-        let initial = ClotheslineLayout.items(HistoryStore.shared.items)
-        lastItemCount = initial.count
-        lastFirstItemID = initial.first?.id
         observers.append(NotificationCenter.default.addObserver(forName: .clipboardHistoryChanged, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
-            let current = ClotheslineLayout.items(HistoryStore.shared.items)
-            // 数量增长，或重复内容被去重置顶（数量不变但首项变化），都算"挂入新内容"。
-            let grew = current.count > self.lastItemCount
-                || (current.count == self.lastItemCount && current.first?.id != self.lastFirstItemID)
             self.entries.forEach { $0.view.reload() }
             // 触发策略（用户实测定稿）：复制/截图不自动弹绳，由用户 ⌘⇧Z 或菜单手动调出；
             // 唯一自动触发 = 拖文件到刘海投放区。
+        })
         observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in self?.refreshStyle() })
         if let monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown], handler: { [weak self] event in self?.handleDismissal(event) }) { eventMonitors.append(monitor) }
         if let monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp], handler: { [weak self] event in self?.noteDragSession(event.type == .leftMouseDragged) }) { eventMonitors.append(monitor) }
