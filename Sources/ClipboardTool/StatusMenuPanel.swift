@@ -17,7 +17,7 @@ struct StatusMenuSection {
     let zh: String
     let en: String
     let trailing: String?
-    let entries: [StatusMenuEntry]
+    var entries: [StatusMenuEntry]
 }
 
 /// 状态栏自绘菜单浮层：非激活面板、深色玻璃质感、行悬停高亮、点击执行并关闭。
