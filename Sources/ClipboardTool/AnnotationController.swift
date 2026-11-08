@@ -630,19 +630,26 @@ final class AnnotationController {
     }
 
     private static func drawArrow(from start: CGPoint, to tip: CGPoint, ctx: CGContext, color: NSColor, minHead: CGFloat = 12) {
+        ctx.saveGState()
         let angle = atan2(tip.y - start.y, tip.x - start.x)
-        let headLen = max(hypot(tip.x - start.x, tip.y - start.y) * 0.18, minHead)
+        let len = hypot(tip.x - start.x, tip.y - start.y)
+        let headLen = max(len * 0.22, minHead * 1.3)
         let headHalf = headLen * 0.5
         let base = CGPoint(x: tip.x - cos(angle) * headLen, y: tip.y - sin(angle) * headLen)
         let perp = angle + .pi / 2
-        // 三根线：箭杆 + 两根斜线（开口 V 形）
+        // 实心三角头（闭合填充，替代开口 V 线头）
+        ctx.move(to: tip)
+        ctx.addLine(to: CGPoint(x: base.x + cos(perp) * headHalf, y: base.y + sin(perp) * headHalf))
+        ctx.addLine(to: CGPoint(x: base.x - cos(perp) * headHalf, y: base.y - sin(perp) * headHalf))
+        ctx.closePath()
+        ctx.setFillColor(color.cgColor)
+        ctx.fillPath()
+        // 圆帽箭杆，接到头底
         ctx.move(to: start)
         ctx.addLine(to: base)
-        ctx.move(to: CGPoint(x: base.x + cos(perp) * headHalf, y: base.y + sin(perp) * headHalf))
-        ctx.addLine(to: tip)
-        ctx.move(to: CGPoint(x: base.x - cos(perp) * headHalf, y: base.y - sin(perp) * headHalf))
-        ctx.addLine(to: tip)
+        ctx.setLineCap(.round)
         ctx.strokePath()
+        ctx.restoreGState()
     }
 
     /// 共享 CI 上下文（每次新建会在多块马赛克时反复分配，卡顿+内存峰值）
@@ -1323,9 +1330,9 @@ struct AnnotateEditorView: View {
         model.runOCR(on: composite)
     }
 
-    /// 工具栏可见工具（规格 A2：序号 + 高亮回归）
+    /// 工具栏可见工具（序号已按用户决策移除；旧截图里的序号标注仍可渲染）
     private var visibleTools: [Annotation.Tool] {
-        [.rect, .ellipse, .arrow, .pen, .text, .step, .mosaic, .highlight]
+        [.rect, .ellipse, .arrow, .pen, .text, .mosaic, .highlight]
     }
 
     private func toolButton(_ t: Annotation.Tool) -> some View {

@@ -434,13 +434,14 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         main.spacing = 2
         main.alignment = .centerY
         let symbols = ["cursorarrow", "rectangle", "oval", "arrow.up.right", "pencil.tip", "textformat", "text.bubble", "square.dashed.inset.filled", "highlighter", "1.circle", "plus.magnifyingglass"]
-        for t in Tool.allCases {
+        for t in Tool.allCases where t != .step {
             let button = iconButton(symbols[t.rawValue], title: t.title, action: #selector(changeTool(_:)))
             button.tag = t.rawValue
             button.setButtonType(.toggle)
-            if t == .note { button.toolTip = "编号与说明：Enter换行，点击空白或⌘Enter完成；点击文字继续编辑" }
+            if t == .note { button.toolTip = "编号与说明：Enter换行，点击空白或⌘Enter完成；点击文字继续编辑（快捷键 8）" }
             if t == .text { button.toolTip = "文字：Enter换行，点击空白或⌘Enter完成；拖动文字可移动" }
-            if t == .magnifier { button.toolTip = "局部放大：点击放置，拖动调整范围，滚轮调整倍率" }
+            if t == .magnifier { button.toolTip = "局部放大：点击放置 · 点住拖动可移动 · 滚轮缩放 · ⌫ 删除" }
+            if let key = toolKeyBadge(t) { attachKeyBadge(key, to: button) }
             toolButtons.append(button)
             main.addArrangedSubview(button)
         }
@@ -452,22 +453,28 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         redoButton = iconButton("arrow.uturn.forward", title: "重做", action: #selector(redoAction))
         main.addArrangedSubview(undoButton)
         main.addArrangedSubview(redoButton)
-        main.addArrangedSubview(iconButton("viewfinder", title: "重新框选", action: #selector(reselect)))
+        // 识图/翻译（Redesign 稿 SECTION 3：对当前画面含已画标注直接识别）
+        main.addArrangedSubview(iconButton("text.viewfinder", title: "识图取字（当前画面）", action: #selector(ocrAction)))
+        main.addArrangedSubview(iconButton("translate", title: "识图并翻译", action: #selector(translateAction)))
+        let divider2 = NSBox(); divider2.boxType = .separator
+        divider2.widthAnchor.constraint(equalToConstant: 1).isActive = true
+        divider2.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        main.addArrangedSubview(divider2)
         main.addArrangedSubview(iconButton("scroll", title: "长截图（自动滚动拼接）", action: #selector(longShotAction)))
         main.addArrangedSubview(iconButton("pin", title: "钉图", action: #selector(pinAction)))
-        main.addArrangedSubview(iconButton("square.and.arrow.down", title: "保存", action: #selector(saveAction)))
-        let copy = NSButton(title: "复制", target: self, action: #selector(copyAction))
-        copy.bezelStyle = .rounded
-        copy.bezelColor = NSColor(srgbRed: 0.063, green: 0.725, blue: 0.506, alpha: 1)
-        copy.contentTintColor = NSColor(srgbRed: 0.0, green: 0.22, blue: 0.14, alpha: 1)
-        copy.font = .systemFont(ofSize: 13, weight: .semibold)
-        copy.widthAnchor.constraint(equalToConstant: 72).isActive = true
-        copy.heightAnchor.constraint(equalToConstant: 32).isActive = true
-        copy.wantsLayer = true
-        copy.layer?.cornerRadius = 10
-        copy.toolTip = "复制截图（选择工具下按Enter）"
-        main.addArrangedSubview(copy)
         main.addArrangedSubview(iconButton("xmark", title: "关闭截图", action: #selector(cancelAction)))
+        // 完成主钮（Redesign 稿 ✓ 完成；Enter 同效：成图进剪贴板与历史）
+        let done = NSButton(title: "完成", target: self, action: #selector(doneAction))
+        done.bezelStyle = .rounded
+        done.bezelColor = NSColor(srgbRed: 0.063, green: 0.725, blue: 0.506, alpha: 1)
+        done.contentTintColor = NSColor(srgbRed: 0.0, green: 0.22, blue: 0.14, alpha: 1)
+        done.font = .systemFont(ofSize: 13, weight: .semibold)
+        done.widthAnchor.constraint(equalToConstant: 72).isActive = true
+        done.heightAnchor.constraint(equalToConstant: 32).isActive = true
+        done.wantsLayer = true
+        done.layer?.cornerRadius = 10
+        done.toolTip = "完成截图（选择工具下按 Enter 同效）"
+        main.addArrangedSubview(done)
 
         parameterRow.orientation = .horizontal
         parameterRow.spacing = 10
@@ -540,6 +547,81 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         button.widthAnchor.constraint(equalToConstant: 32).isActive = true
         button.heightAnchor.constraint(equalToConstant: 32).isActive = true
         return button
+    }
+
+    /// 工具的真实键位（与 keyDown 绑定同源；编号说明固定 8）
+    private func toolKeyBadge(_ t: Tool) -> String? {
+        let map: [(AnnotateKeyConfig.Action, Tool)] = [(.toolRect, .rect), (.toolEllipse, .ellipse), (.toolArrow, .arrow),
+                                                       (.toolPen, .pen), (.toolText, .text), (.toolMosaic, .mosaic), (.toolHighlight, .highlight)]
+        if let action = map.first(where: { $0.1 == t })?.0, let key = AnnotateKeyConfig.shared.keys[action]?.display {
+            return key
+        }
+        return t == .note ? "8" : nil
+    }
+
+    /// 右下角键帽小方块（照 Redesign 稿角标样式）
+    private func attachKeyBadge(_ key: String, to button: NSButton) {
+        let badge = NSTextField(labelWithString: key)
+        badge.font = .systemFont(ofSize: 8.5, weight: .bold)
+        badge.textColor = NSColor.white.withAlphaComponent(0.6)
+        badge.alignment = .center
+        badge.wantsLayer = true
+        badge.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.12).cgColor
+        badge.layer?.cornerRadius = 4
+        badge.frame = NSRect(x: 19, y: -2, width: 15, height: 13)
+        button.addSubview(badge)
+    }
+
+    // MARK: 识图 / 翻译 / 完成（对含已画标注的当前画面操作）
+
+    @objc private func ocrAction() {
+        onWillInteract?()
+        guard let composite = InlineScreenshotRenderer.render(image: image, state: document.state) else { return }
+        Toast.shared.show("正在识别文字…")
+        OCRService.shared.recognize(image: composite) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let r):
+                    let text = r.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if text.isEmpty { Toast.shared.show("未识别到文字") }
+                    else { TextResultPanel.shared.show(kind: .ocr, source: "", result: text) }
+                case .failure(let err):
+                    Toast.shared.show("识别失败：\(err.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    @objc private func translateAction() {
+        onWillInteract?()
+        guard let composite = InlineScreenshotRenderer.render(image: image, state: document.state) else { return }
+        Toast.shared.show("正在识别文字…")
+        OCRService.shared.recognize(image: composite) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let r):
+                    let text = r.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !text.isEmpty else { Toast.shared.show("未识别到文字"); return }
+                    Toast.shared.show("翻译中…（\(TranslationService.shared.engineLabel)）")
+                    TranslationService.shared.translate(text) { tResult in
+                        DispatchQueue.main.async {
+                            switch tResult {
+                            case .success(let t): TextResultPanel.shared.show(kind: .translation, source: text, result: t)
+                            case .failure(let err): Toast.shared.show("翻译失败：\(err.localizedDescription)")
+                            }
+                        }
+                    }
+                case .failure(let err):
+                    Toast.shared.show("识别失败：\(err.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    /// 完成主钮：与 Enter 同一提交路径（成图进剪贴板与历史）
+    @objc private func doneAction() {
+        onWillInteract?()
+        onOutput?(.copy)
     }
 
     private func updateToolbarStyle() {
@@ -648,8 +730,8 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         if y < safe.minY { y = s.maxY + 10 }
         y = min(max(y, safe.minY), max(safe.minY, safe.maxY - fit.height))
         toolbar.setFrameOrigin(CGPoint(x: x, y: y)); toolbar.setFrameSize(fit)
-        message = (tool == .note || tool == .text) ? "Enter换行 · 点击空白完成 · 点击文字继续编辑" : "选择态Enter复制 · ⌘S保存 · Esc逐层返回"
-        if tool == .magnifier { message = "点击放置2倍放大镜 · 拖出圆形区域 · 选中后滚轮调整倍率" }
+        message = (tool == .note || tool == .text) ? "Enter换行 · 点击空白完成 · 点击文字继续编辑" : "Enter 完成 · Esc 逐层返回"
+        if tool == .magnifier { message = "点击放置放大镜 · 点住拖动可移动 · 滚轮缩放 · ⌫ 删除" }
     }
     private func normalized(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x / bounds.width, y: 1 - p.y / bounds.height) }
     private func clamped(_ p: CGPoint, to rect: CGRect) -> CGPoint {
@@ -695,6 +777,14 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
             sizeText.draw(at: CGPoint(x: selection.minX + 4, y: min(bounds.maxY - 24, selection.maxY + 5)), withAttributes: [.font:NSFont.monospacedDigitSystemFont(ofSize:11,weight:.medium), .foregroundColor:NSColor.white, .backgroundColor:NSColor.black.withAlphaComponent(0.7)])
             if let selectedID, let mark = document.state.marks.first(where: { $0.id == selectedID }) {
                 NSColor.systemGreen.setStroke(); NSBezierPath(rect: markBounds(mark).insetBy(dx: -3, dy: -3)).stroke()
+                if case .magnifier(let lens) = mark {
+                    // 选中放大镜下方显示当前倍率角标
+                    let chip = "\(String(format: "%.1f", lens.zoom))×" as NSString
+                    chip.draw(at: CGPoint(x: lens.rect.midX - 13, y: lens.rect.minY - 22),
+                              withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .semibold),
+                                               .foregroundColor: NSColor.white,
+                                               .backgroundColor: NSColor.black.withAlphaComponent(0.7)])
+                }
             }
         } else {
             NSColor.black.withAlphaComponent(0.48).setFill(); shade.fill()
@@ -733,7 +823,7 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
         if let mark = document.state.marks.reversed().first(where: {
             let editable: Bool
             switch $0 {
-            case .magnifier: editable = tool == .select
+            case .magnifier: editable = tool == .select || tool == .magnifier
             case .note(let n): editable = tool == .select || (tool == .note && n.number != nil) || (tool == .text && n.number == nil)
             case .drawing: editable = tool == .select
             }
@@ -951,19 +1041,19 @@ final class InlineScreenshotCanvas: NSView, NSTextViewDelegate {
     override func keyDown(with event:NSEvent) {
         onWillInteract?()
         let keys = AnnotateKeyConfig.shared
-        let bindings: [(AnnotateKeyConfig.Action, Tool)] = [(.toolRect,.rect),(.toolEllipse,.ellipse),(.toolArrow,.arrow),(.toolPen,.pen),(.toolText,.text),(.toolMosaic,.mosaic),(.toolHighlight,.highlight),(.toolStep,.step)]
+        let bindings: [(AnnotateKeyConfig.Action, Tool)] = [(.toolRect,.rect),(.toolEllipse,.ellipse),(.toolArrow,.arrow),(.toolPen,.pen),(.toolText,.text),(.toolMosaic,.mosaic),(.toolHighlight,.highlight)]
         if let binding = bindings.first(where: { keys.matches($0.0, event:event) }) {
             tool=binding.1;selectedID=nil;refresh();return
         }
-        if event.charactersIgnoringModifiers == "9", event.modifierFlags.intersection([.command,.option,.control,.shift]).isEmpty {
+        // 编号说明补位到 8（序号工具已按用户决策移除）
+        if event.charactersIgnoringModifiers == "8", event.modifierFlags.intersection([.command,.option,.control,.shift]).isEmpty {
             tool = .note;selectedID=nil;refresh();return
         }
         if keys.matches(.undo,event:event) {undoAction();return}
         if keys.matches(.redo,event:event) {redoAction();return}
         let command=event.modifierFlags.contains(.command)
         if command,event.charactersIgnoringModifiers == "z" {event.modifierFlags.contains(.shift) ? redoAction() : undoAction();return}
-        if command,event.charactersIgnoringModifiers == "s" {saveAction();return}
-        if command,event.charactersIgnoringModifiers == "c" {copyAction();return}
+        if command,event.charactersIgnoringModifiers == "c" {doneAction();return}
         if event.keyCode == 53 || keys.matches(.cancel,event:event) {
             if selectedID != nil {selectedID=nil;refresh()}
             else if tool != .select {tool = .select;refresh()}
