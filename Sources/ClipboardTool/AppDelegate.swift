@@ -343,10 +343,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shotItem.target = self
         menu.addItem(shotItem)
 
-        let longShotItem = NSMenuItem(title: "长截图", action: #selector(captureLongShot), keyEquivalent: "l")
+        let longShotItem = NSMenuItem(title: "长截图（手动滚动）", action: #selector(captureLongShot), keyEquivalent: "l")
         longShotItem.keyEquivalentModifierMask = [.command, .shift]
         longShotItem.target = self
         menu.addItem(longShotItem)
+
+        let longShotAutoItem = NSMenuItem(title: "长截图（自动滚动）", action: #selector(captureLongShotAuto), keyEquivalent: "")
+        longShotAutoItem.target = self
+        menu.addItem(longShotAutoItem)
 
         let recordItem = NSMenuItem(title: "录屏", action: #selector(captureScreenRecord), keyEquivalent: "r")
         recordItem.keyEquivalentModifierMask = [.command, .option]
@@ -398,6 +402,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func captureLongShot() {
         panelController.close()
         CaptureController.shared.captureForLong()
+    }
+
+    @objc private func captureLongShotAuto() {
+        panelController.close()
+        CaptureController.shared.captureForLong(auto: true)
     }
 
     @objc private func captureScreenRecord() {

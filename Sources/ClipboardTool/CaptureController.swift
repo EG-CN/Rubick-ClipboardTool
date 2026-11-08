@@ -131,14 +131,17 @@ final class CaptureController {
         beginCapture()
     }
 
-    /// 长截图：框选区域 → 滚动采集 → 行对齐拼接（⌘⇧L / 菜单「长截图」）
-    func captureForLong() {
-        FileTrace.log("captureForLong triggered")
+    private var pendingLongMode: LongShotMode = .manual
+
+    /// 长截图：框选区域 → 滚动采集 → 行对齐拼接（⌘⇧L 手动 / 菜单可选自动）
+    func captureForLong(auto: Bool = false) {
+        FileTrace.log("captureForLong triggered auto=\(auto)")
         if RecordingController.shared.isRecording {
             FileTrace.log("blocked: 录屏进行中")
             Toast.shared.showImportant("录屏进行中 · ⌘⌥R 停止后再长截图")
             return
         }
+        pendingLongMode = auto ? .auto : .manual
         pendingPurpose = .long
         beginCapture()
     }
@@ -493,7 +496,7 @@ final class CaptureController {
         if pendingPurpose == .long {
             FileTrace.log("finish→LongShot rect=\(NSStringFromRect(r))")
             // 长截图：首帧裁剪后交给滚动采集拼接（不经编辑器）
-            LongScreenshot.shared.start(rect: r)
+            LongScreenshot.shared.start(rect: r, mode: pendingLongMode)
             return
         }
         guard let cropped = ImageCompose.crop(composite, rectInUnion: r, union: unionRect) else {

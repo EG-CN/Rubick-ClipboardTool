@@ -126,8 +126,8 @@ final class LongShotPillView: NSView {
         // 文案
         let text: String
         if bottomReached { text = "已到页面底部 · 正在收尾" }
-        else if mode == .auto { text = "自动滚动中 · 已拼 \(stitchedCount) 屏 · 请勿移动鼠标 · 空格切回手动" }
-        else { text = "手动滚动中 · 你来滚页面 · 已拼 \(stitchedCount) 屏 · 空格切自动" }
+        else if mode == .auto { text = "自动滚动中 · 已拼 \(stitchedCount) 屏 · 单击完成" }
+        else { text = "手动滚动中 · 已拼 \(stitchedCount) 屏 · 单击完成 · Esc 取消" }
         let paragraph = NSMutableParagraphStyle(); paragraph.lineBreakMode = .byTruncatingTail
         (text as NSString).draw(at: CGPoint(x: 44, y: pill.height / 2 - 8), withAttributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .medium),
@@ -345,8 +345,9 @@ final class LongScreenshot {
     var enabled: Bool { UserDefaults.standard.object(forKey: "capture.longShot") as? Bool ?? true }
 
     /// rect：AppKit 全局坐标的框选区域
-    func start(rect: CGRect) {
-        FileTrace.log("start: rect=\(NSStringFromRect(rect)) enabled=\(self.enabled)")
+    func start(rect: CGRect, mode requested: LongShotMode = .manual) {
+        mode = requested   // 每次启动重置：上一轮的模式不带入
+        FileTrace.log("start: rect=\(NSStringFromRect(rect)) enabled=\(self.enabled) mode=\(mode == .auto ? "auto" : "manual")")
         guard !running else { FileTrace.log("start: 已在运行中，忽略"); return }
         defer { if !running { ClotheslineController.shared.resumeAfterCapture() } }
         guard enabled else {
@@ -385,16 +386,15 @@ final class LongScreenshot {
         LongShotHUD.shared.show(rect: rect, screen: screen)
         // ⎋ 取消（丢弃） / ↵ 提前完成（保留已拼内容）：全局监听，采集期间本应用非激活
         cancelled = false; finishNow = false
-        escMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 { FileTrace.log("keydown: Esc → 取消"); self?.cancelled = true }
-            if event.keyCode == 36 || event.keyCode == 76 { FileTrace.log("keydown: ↵ → 提前完成"); self?.finishNow = true }
-            if event.keyCode == 49 {
-                self?.mode = self?.mode == .auto ? .manual : .auto
-                if let m = self?.mode {
-                    FileTrace.log("mode → \(m == .auto ? "auto" : "manual")")
-                    LongShotHUD.shared.setMode(m)
-                }
+        // 结束手势 = 单击（滚动时手就在鼠标上，Shottr 同款）；Esc = 取消。
+        // 不监听空格/回车等字符键：它们与用户在其它应用的打字、翻页天然冲突。
+        escMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { [weak self] event in
+            if event.type == .leftMouseDown {
+                FileTrace.log("click → 提前完成")
+                self?.finishNow = true
+                return
             }
+            if event.keyCode == 53 { FileTrace.log("keydown: Esc → 取消"); self?.cancelled = true }
         }
 
         Task.detached(priority: .userInitiated) { [weak self] in
