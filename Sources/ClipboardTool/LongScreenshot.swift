@@ -555,6 +555,7 @@ final class LongScreenshot {
 
             frames.append((cropped, sampler))
             positions.append(pos)
+            captureAnchor = pos   // 关键：记录已采集位置，否则没滚动也会重复采集
             if frames.count > 1, mode == .auto { frames[frames.count - 2].sampler.data = [] }
 
             // ── 进度 HUD ──
